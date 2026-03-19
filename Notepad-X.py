@@ -10,6 +10,7 @@ import re
 import hashlib
 import secrets
 import tempfile
+import traceback
 from datetime import datetime
 from ctypes import wintypes
 
@@ -72,6 +73,8 @@ class NotepadX:
         self.editor_identity_path = os.path.join(self.app_dir, "Notepad-X.editor.json")
         if self.isolated_session:
             self.editor_identity_path = os.path.join(self.app_dir, f"Notepad-X.{os.getpid()}.editor.json")
+        self.recovery_path = os.path.join(self.app_dir, "Notepad-X.recovery.json")
+        self.crash_log_path = os.path.join(self.app_dir, "Notepad-X.crash.log")
         self.help_path = os.path.join(self.resource_dir, "Notepad-X-help.txt")
         self.max_recent_files = 10
         self.recent_files = []
@@ -96,6 +99,14 @@ class NotepadX:
         self.word_wrap_enabled = tk.BooleanVar(value=True)
         self.sound_enabled = tk.BooleanVar(value=True)
         self.status_bar_enabled = tk.BooleanVar(value=True)
+        self.search_all_tabs = tk.BooleanVar(value=False)
+        self.note_filter = tk.StringVar(value='all')
+        self.syntax_theme = tk.StringVar(value='Default')
+        self.recovery_job = None
+        self.compare_active = False
+        self.compare_source_tab = None
+        self.compare_refresh_job = None
+        self.compare_view = None
 
         # Panel visibility flags
         self.find_panel_visible = False
@@ -103,12 +114,15 @@ class NotepadX:
         self.fullscreen = False
         self.fullscreen_panel_restore = False
 
+        self.setup_exception_handling()
+
         # Create UI in logical order
         self.create_text_widget()
         self.create_bottom_panels()
         self.create_menu()
         self.create_status_bar()
         self.restore_session()
+        self.restore_recovery_state()
 
         self.bind_keys()
         self.update_font()  # initial font
@@ -220,6 +234,45 @@ class NotepadX:
         except Exception:
             pass
 
+    def log_exception(self, where, exc=None):
+        try:
+            timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            trace = traceback.format_exc()
+            if trace.strip() == 'NoneType: None':
+                trace = ''.join(traceback.format_stack(limit=12))
+            with open(self.crash_log_path, 'a', encoding='utf-8') as f:
+                f.write(f"[{timestamp}] {where}\n")
+                if exc is not None:
+                    f.write(f"{type(exc).__name__}: {exc}\n")
+                f.write(trace)
+                f.write("\n" + ("-" * 80) + "\n")
+        except Exception:
+            pass
+
+    def handle_unhandled_exception(self, exc_type, exc_value, exc_traceback):
+        try:
+            with open(self.crash_log_path, 'a', encoding='utf-8') as f:
+                f.write(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Unhandled exception\n")
+                f.write(''.join(traceback.format_exception(exc_type, exc_value, exc_traceback)))
+                f.write("\n" + ("-" * 80) + "\n")
+        except Exception:
+            pass
+        self.persist_recovery_state()
+        if exc_type is KeyboardInterrupt:
+            return
+        try:
+            messagebox.showerror("Notepad-X Crash", f"An unexpected error occurred.\nA crash log was written to:\n{self.crash_log_path}", parent=self.root)
+        except Exception:
+            pass
+
+    def setup_exception_handling(self):
+        sys.excepthook = self.handle_unhandled_exception
+
+        def tk_exception_handler(exc_type, exc_value, exc_traceback):
+            self.handle_unhandled_exception(exc_type, exc_value, exc_traceback)
+
+        tk.Tk.report_callback_exception = staticmethod(tk_exception_handler)
+
     def load_known_editor_ids(self):
         try:
             if os.path.exists(self.editor_identity_path):
@@ -250,8 +303,8 @@ class NotepadX:
                     'known_editor_ids': known_ids
                 }, f, indent=2)
             self.hide_support_file(self.editor_identity_path)
-        except OSError:
-            pass
+        except Exception as exc:
+            self.log_exception("save session", exc)
 
     def center_window(self, window, parent=None):
         window.update_idletasks()
@@ -289,11 +342,15 @@ class NotepadX:
         font_tuple = (self.font_family, self.current_font_size)
         for doc in self.documents.values():
             doc['text'].configure(font=font_tuple)
+        if self.compare_view:
+            self.compare_view['text'].configure(font=font_tuple)
 
     def update_word_wrap(self):
         wrap_mode = tk.WORD if self.word_wrap_enabled.get() else tk.NONE
         for doc in self.documents.values():
             doc['text'].configure(wrap=wrap_mode)
+        if self.compare_view:
+            self.compare_view['text'].configure(wrap=wrap_mode)
 
     def on_ctrl_mousewheel(self, event):
         if event.state & 0x4:  # Ctrl held
@@ -464,6 +521,16 @@ class NotepadX:
         self.find_entry.pack(side='left', padx=4, pady=6)
         tk.Button(self.find_frame, text="Find Next", command=self.find_next)\
             .pack(side='left', padx=4, pady=6)
+        tk.Checkbutton(
+            self.find_frame,
+            text="Search across all tabs",
+            variable=self.search_all_tabs,
+            bg=self.panel_bg,
+            fg=self.fg_color,
+            activebackground=self.panel_bg,
+            activeforeground='white',
+            selectcolor=self.panel_bg
+        ).pack(side='left', padx=(10, 4), pady=6)
         self.find_entry.bind('<Return>', lambda e: self.find_next())
         self.find_entry.bind('<KeyRelease>', self.on_find_entry_change)
         self.find_entry.bind('<Escape>', lambda e: self.show_find_panel())   # ← added
@@ -480,6 +547,16 @@ class NotepadX:
         self.replace_entry.pack(side='left', padx=4, pady=6)
         tk.Button(self.replace_frame, text="Replace All", command=self.replace_all)\
             .pack(side='left', padx=8, pady=6)
+        tk.Checkbutton(
+            self.replace_frame,
+            text="Search across all tabs",
+            variable=self.search_all_tabs,
+            bg=self.panel_bg,
+            fg=self.fg_color,
+            activebackground=self.panel_bg,
+            activeforeground='white',
+            selectcolor=self.panel_bg
+        ).pack(side='left', padx=(10, 4), pady=6)
 
         self.replace_find_entry.bind('<Return>', lambda e: self.find_next())     # ← added
         self.replace_find_entry.bind('<KeyRelease>', self.on_find_entry_change)
@@ -506,7 +583,7 @@ class NotepadX:
         if self.replace_panel_visible:
             self.replace_frame.grid_remove()
             self.replace_panel_visible = False
-            self.text.tag_remove(self.find_matches_tag, '1.0', tk.END)
+            self.clear_find_highlights()
 
         if not self.find_panel_visible:
             self.bottom_frame.grid()
@@ -518,8 +595,7 @@ class NotepadX:
             self.find_frame.grid_remove()
             self.find_panel_visible = False
             self.find_entry.delete(0, tk.END)
-            self.text.tag_remove(self.find_matches_tag, '1.0', tk.END)
-            self.text.tag_remove(self.find_current_tag, '1.0', tk.END)
+            self.clear_find_highlights()
             self.text.focus_set()           # ← important
 
         self.update_bottom_panel_visibility()
@@ -535,7 +611,7 @@ class NotepadX:
         if self.find_panel_visible:
             self.find_frame.grid_remove()
             self.find_panel_visible = False
-            self.text.tag_remove(self.find_matches_tag, '1.0', tk.END)
+            self.clear_find_highlights()
 
         if not self.replace_panel_visible:
             self.bottom_frame.grid()
@@ -547,8 +623,7 @@ class NotepadX:
             self.replace_panel_visible = False
             self.replace_find_entry.delete(0, tk.END)
             self.text.focus_set()           # ← important
-            self.text.tag_remove(self.find_matches_tag, '1.0', tk.END)
-            self.text.tag_remove(self.find_current_tag, '1.0', tk.END)
+            self.clear_find_highlights()
 
         self.update_bottom_panel_visibility()
 
@@ -566,6 +641,9 @@ class NotepadX:
         if not query:
             return
 
+        if self.search_all_tabs.get():
+            return self.find_next_across_tabs(query)
+
         start = self.text.index(tk.INSERT)
         pos = self.text.search(query, start, stopindex=tk.END, nocase=True, exact=False)
         if not pos:  # wrap around
@@ -577,9 +655,45 @@ class NotepadX:
             self.text.tag_add('sel', pos, end)
             self.text.tag_remove(self.find_current_tag, '1.0', tk.END)
             self.text.tag_add(self.find_current_tag, pos, end)
+            current_doc = self.get_current_doc()
+            if current_doc:
+                self.mirror_compare_current_match(current_doc, pos, end)
             self.text.mark_set(tk.INSERT, end)
             self.text.see(pos)
             self.update_status()
+
+    def find_next_across_tabs(self, query):
+        tab_ids = list(self.notebook.tabs())
+        if not tab_ids:
+            return "break"
+        current_tab = self.notebook.select()
+        try:
+            start_index = tab_ids.index(current_tab)
+        except ValueError:
+            start_index = 0
+        search_order = tab_ids[start_index:] + tab_ids[:start_index]
+        first_pass = True
+        for tab_id in search_order:
+            doc = self.documents.get(str(tab_id))
+            if not doc or doc.get('virtual_mode') or doc.get('preview_mode'):
+                continue
+            self.notebook.select(doc['frame'])
+            self.set_active_document(doc['frame'])
+            start = self.text.index(tk.INSERT) if first_pass else '1.0'
+            pos = self.text.search(query, start, stopindex=tk.END, nocase=True, exact=False)
+            if pos:
+                end = f"{pos}+{len(query)}c"
+                self.text.tag_remove('sel', '1.0', tk.END)
+                self.text.tag_add('sel', pos, end)
+                self.text.tag_remove(self.find_current_tag, '1.0', tk.END)
+                self.text.tag_add(self.find_current_tag, pos, end)
+                self.mirror_compare_current_match(doc, pos, end)
+                self.text.mark_set(tk.INSERT, end)
+                self.text.see(pos)
+                self.update_status()
+                return "break"
+            first_pass = False
+        return "break"
 
     def goto_next_unread_note(self):
         doc = self.get_current_doc()
@@ -619,6 +733,8 @@ class NotepadX:
     def get_ordered_note_tags(self, doc):
         ordered = []
         for note_tag, note_data in doc['notes'].items():
+            if not self.note_matches_filter(doc, note_tag, note_data):
+                continue
             ranges = doc['text'].tag_ranges(note_tag)
             if len(ranges) < 2:
                 continue
@@ -627,6 +743,18 @@ class NotepadX:
             ordered.append((doc['text'].count('1.0', start_index, 'chars')[0], int(note_id) if note_id.isdigit() else 0, note_tag))
         ordered.sort(key=lambda item: (item[0], item[1]))
         return [tag for _, _, tag in ordered]
+
+    def note_matches_filter(self, doc, note_tag, note_data):
+        filter_mode = self.note_filter.get()
+        if filter_mode == 'all':
+            return True
+        if filter_mode == 'unread':
+            return note_tag in self.get_unread_note_tags(doc)
+        if filter_mode == 'allowed':
+            return bool(note_data.get('approved_by'))
+        if filter_mode == 'denied':
+            return bool(note_data.get('dissapproved_by'))
+        return True
 
     def goto_next_note(self, event=None):
         doc = self.get_current_doc()
@@ -673,19 +801,57 @@ class NotepadX:
         self.update_status()
         return "break"
 
-    def highlight_all_matches(self, query):
-        self.text.tag_remove(self.find_matches_tag, '1.0', tk.END)
-        self.text.tag_remove(self.find_current_tag, '1.0', tk.END)
+    def get_find_target_widgets(self):
+        widgets = []
+        if self.search_all_tabs.get():
+            for doc in self.documents.values():
+                if doc.get('virtual_mode') or doc.get('preview_mode'):
+                    continue
+                widgets.append(doc['text'])
+        elif self.text:
+            widgets.append(self.text)
+
+        if self.compare_active and self.compare_view and self.compare_view.get('text'):
+            widgets.append(self.compare_view['text'])
+        return widgets
+
+    def clear_find_highlights(self):
+        widgets = [doc['text'] for doc in self.documents.values()]
+        if self.compare_view and self.compare_view.get('text'):
+            widgets.append(self.compare_view['text'])
+        for widget in widgets:
+            widget.tag_remove(self.find_matches_tag, '1.0', tk.END)
+            widget.tag_remove(self.find_current_tag, '1.0', tk.END)
+
+    def highlight_matches_in_widget(self, text_widget, query):
+        text_widget.tag_remove(self.find_matches_tag, '1.0', tk.END)
+        text_widget.tag_remove(self.find_current_tag, '1.0', tk.END)
         if not query:
             return
         start = "1.0"
         while True:
-            pos = self.text.search(query, start, stopindex=tk.END, nocase=True, exact=False)
+            pos = text_widget.search(query, start, stopindex=tk.END, nocase=True, exact=False)
             if not pos:
                 break
             end = f"{pos}+{len(query)}c"
-            self.text.tag_add(self.find_matches_tag, pos, end)
+            text_widget.tag_add(self.find_matches_tag, pos, end)
             start = end
+
+    def mirror_compare_current_match(self, doc, pos, end):
+        if not self.compare_active or not self.compare_view:
+            return
+        if self.compare_source_tab != str(doc['frame']):
+            self.compare_view['text'].tag_remove(self.find_current_tag, '1.0', tk.END)
+            return
+        compare_text = self.compare_view['text']
+        compare_text.tag_remove(self.find_current_tag, '1.0', tk.END)
+        compare_text.tag_add(self.find_current_tag, pos, end)
+        compare_text.see(pos)
+
+    def highlight_all_matches(self, query):
+        widgets = self.get_find_target_widgets()
+        for widget in widgets:
+            self.highlight_matches_in_widget(widget, query)
 
     def on_find_entry_change(self, event=None):
         if self.find_panel_visible:
@@ -697,6 +863,9 @@ class NotepadX:
 
         self.highlight_all_matches(query)
         if not query:
+            return
+        if self.search_all_tabs.get():
+            self.find_next_across_tabs(query)
             return
 
         pos = self.text.search(query, '1.0', stopindex=tk.END, nocase=True, exact=False)
@@ -739,8 +908,12 @@ class NotepadX:
         self.root.bind('<Control-S>', self.save)
         self.root.bind('<Control-Shift-s>', self.save_all)
         self.root.bind('<Control-Shift-S>', self.save_all)
+        self.root.bind('<Control-Shift-q>', lambda e: self.save_copy_as())
+        self.root.bind('<Control-Shift-Q>', lambda e: self.save_copy_as())
         self.root.bind('<Control-Shift-X>', self.ctrl_shift_x)
         self.root.bind('<Control-Shift-x>', self.ctrl_shift_x)
+        self.root.bind_all('<Control-Shift-X>', self.ctrl_shift_x)
+        self.root.bind_all('<Control-Shift-x>', self.ctrl_shift_x)
 
         # Edit
         self.root.bind('<Control-z>', self.undo)
@@ -761,6 +934,8 @@ class NotepadX:
         self.root.bind('<Control-D>', self.insert_date)
         self.root.bind('<Control-Shift-D>', self.insert_time_date)
         self.root.bind('<Control-Shift-d>', self.insert_time_date)
+        self.root.bind('<Control-e>', lambda e: self.export_notes_report())
+        self.root.bind('<Control-E>', lambda e: self.export_notes_report())
         self.root.bind('<Control-Shift-T>', self.close_current_tab)
         self.root.bind('<Control-Shift-t>', self.close_current_tab)
         self.root.bind('<Control-Tab>', self.switch_tab_right)
@@ -787,6 +962,8 @@ class NotepadX:
         self.root.bind('<Control-KP_Add>', self.zoom_in)
         self.root.bind('<Control-minus>', self.zoom_out)
         self.root.bind('<Control-KP_Subtract>', self.zoom_out)
+        self.root.bind('<Control-q>', lambda e: self.show_split_compare())
+        self.root.bind('<Control-Q>', lambda e: self.show_split_compare())
         self.root.bind('<F11>', self.toggle_fullscreen)
 
     def cut_or_close_panel(self, event=None):
@@ -804,6 +981,8 @@ class NotepadX:
             return "break"
 
     def ctrl_shift_x(self, event=None):
+        if self.compare_active:
+            return self.close_compare_panel()
         if self.find_panel_visible or self.replace_panel_visible:
             if self.find_panel_visible:
                 self.show_find_panel()
@@ -878,9 +1057,103 @@ class NotepadX:
         )
 
         self.editor_frame = frame
-        self.notebook = ttk.Notebook(frame, style='EditorTabs.TNotebook')
+        self.editor_paned = tk.PanedWindow(
+            frame,
+            orient='horizontal',
+            sashrelief='flat',
+            sashwidth=4,
+            bd=0,
+            relief='flat',
+            bg='#2d2d2d',
+            showhandle=False
+        )
+        self.editor_paned.grid(row=0, column=0, sticky='nsew')
+
+        self.primary_editor_container = tk.Frame(self.editor_paned, bg=self.bg_color)
+        self.primary_editor_container.grid_rowconfigure(0, weight=1)
+        self.primary_editor_container.grid_columnconfigure(0, weight=1)
+        self.editor_paned.add(self.primary_editor_container, stretch='always')
+
+        self.notebook = ttk.Notebook(self.primary_editor_container, style='EditorTabs.TNotebook')
         self.notebook.grid(row=0, column=0, sticky='nsew')
         self.notebook.bind('<<NotebookTabChanged>>', self.on_tab_changed)
+        self.notebook.bind('<ButtonPress-1>', self.on_tab_drag_start, add='+')
+        self.notebook.bind('<B1-Motion>', self.on_tab_drag_motion, add='+')
+        self.notebook.bind('<ButtonRelease-1>', self.on_tab_drag_end, add='+')
+
+        self.compare_container = tk.Frame(self.editor_paned, bg=self.bg_color)
+        self.compare_container.grid_rowconfigure(1, weight=1)
+        self.compare_container.grid_columnconfigure(0, weight=1)
+
+        compare_header = tk.Frame(self.compare_container, bg='#161b22')
+        compare_header.grid(row=0, column=0, sticky='ew')
+        compare_header.grid_columnconfigure(0, weight=1)
+
+        self.compare_title = tk.Label(
+            compare_header,
+            text="",
+            bg='#161b22',
+            fg=self.fg_color,
+            font=('Segoe UI', 10, 'bold'),
+            anchor='w',
+            padx=10,
+            pady=8
+        )
+        self.compare_title.grid(row=0, column=0, sticky='ew')
+
+        compare_body = tk.Frame(self.compare_container, bg=self.bg_color)
+        compare_body.grid(row=1, column=0, sticky='nsew')
+        compare_body.grid_rowconfigure(0, weight=1)
+        compare_body.grid_columnconfigure(0, weight=1)
+
+        self.compare_text = tk.Text(
+            compare_body,
+            undo=False,
+            bg=self.text_bg,
+            fg=self.text_fg,
+            insertbackground=self.cursor_color,
+            selectbackground=self.select_bg,
+            selectforeground='white',
+            wrap=tk.WORD if self.word_wrap_enabled.get() else tk.NONE,
+            padx=8,
+            pady=6,
+            borderwidth=0,
+            highlightthickness=0,
+            relief='flat',
+            font=(self.font_family, self.base_font_size),
+            spacing1=2,
+            spacing2=1,
+            spacing3=2
+        )
+        self.compare_text.grid(row=0, column=0, sticky='nsew')
+
+        compare_v_scroll = ttk.Scrollbar(compare_body, orient='vertical', command=self.compare_text.yview)
+        compare_v_scroll.grid(row=0, column=1, sticky='ns')
+        compare_h_scroll = ttk.Scrollbar(compare_body, orient='horizontal', command=self.compare_text.xview)
+        compare_h_scroll.grid(row=1, column=0, sticky='ew')
+        self.compare_text.config(yscrollcommand=compare_v_scroll.set, xscrollcommand=compare_h_scroll.set)
+        self.compare_text.bind('<KeyPress>', lambda e: "break")
+        self.compare_text.bind('<<Paste>>', lambda e: "break")
+        self.compare_text.bind('<<Cut>>', lambda e: "break")
+        self.compare_text.bind('<Control-b>', self.toggle_status_bar)
+        self.compare_text.bind('<Control-B>', self.toggle_status_bar)
+
+        self.compare_view = {
+            'frame': self.compare_container,
+            'text': self.compare_text,
+            'percolator': None,
+            'colorizer': None,
+            'large_file_mode': False,
+            'preview_mode': False,
+            'virtual_mode': False,
+            'syntax_job': None,
+            'syntax_mode': None,
+            'syntax_override': None,
+            'file_path': None,
+        }
+        self.compare_text.tag_config(self.find_matches_tag, background=self.match_bg, foreground='black')
+        self.compare_text.tag_config(self.find_current_tag, background='#ff8c42', foreground='black')
+        self.apply_syntax_tag_colors(self.compare_text)
 
         self.text = None
         self.create_tab()
@@ -966,14 +1239,9 @@ class NotepadX:
             'notes_registered': False,
             'syntax_job': None,
             'syntax_mode': None,
+            'syntax_override': None,
         }
-        text.tag_config('syntax_keyword', foreground='#ff7b72')
-        text.tag_config('syntax_type', foreground='#79c0ff')
-        text.tag_config('syntax_string', foreground='#a5d6ff')
-        text.tag_config('syntax_comment', foreground='#6a9955')
-        text.tag_config('syntax_number', foreground='#f2cc60')
-        text.tag_config('syntax_preprocessor', foreground='#d2a8ff')
-        text.tag_config('syntax_tag', foreground='#7ee787')
+        self.apply_syntax_tag_colors(text)
         self.configure_syntax_highlighting(tab_frame)
         self.create_text_context_menu(tab_frame)
 
@@ -986,6 +1254,12 @@ class NotepadX:
     def get_syntax_mode(self, doc):
         if doc['large_file_mode'] or doc['virtual_mode'] or doc['preview_mode']:
             return None
+
+        syntax_override = doc.get('syntax_override')
+        if syntax_override == 'plain':
+            return None
+        if syntax_override and syntax_override != 'auto':
+            return syntax_override
 
         if doc['file_path']:
             file_name = os.path.basename(doc['file_path']).lower()
@@ -1122,21 +1396,26 @@ class NotepadX:
 
     def configure_syntax_highlighting(self, tab_id):
         doc = self.documents.get(str(tab_id))
+        self.configure_syntax_for_doc(doc)
+
+    def configure_syntax_for_doc(self, doc):
         if not doc:
             return
 
         text = doc['text']
+        palette = self.get_syntax_palette()
+        self.apply_syntax_tag_colors(text)
         mode = self.get_syntax_mode(doc)
         doc['syntax_mode'] = mode
 
         if mode == 'python' and doc['colorizer'] is None:
             colorizer = ColorDelegator()
             colorizer.tagdefs.update({
-                'COMMENT': {'foreground': '#6a9955'},
-                'KEYWORD': {'foreground': '#ff7b72'},
-                'BUILTIN': {'foreground': '#d2a8ff'},
-                'STRING': {'foreground': '#a5d6ff'},
-                'DEFINITION': {'foreground': '#79c0ff'},
+                'COMMENT': {'foreground': palette['comment']},
+                'KEYWORD': {'foreground': palette['keyword']},
+                'BUILTIN': {'foreground': palette['preprocessor']},
+                'STRING': {'foreground': palette['string']},
+                'DEFINITION': {'foreground': palette['type']},
                 'SYNC': {'background': None, 'foreground': None},
                 'TODO': {'background': None, 'foreground': None},
                 'ERROR': {'foreground': '#ff6b6b'},
@@ -1159,6 +1438,82 @@ class NotepadX:
             self.schedule_syntax_highlight(doc)
         else:
             self.clear_custom_syntax_tags(doc)
+
+    def get_syntax_palette(self):
+        palettes = {
+            'Default': {
+                'keyword': '#ff7b72',
+                'type': '#79c0ff',
+                'string': '#a5d6ff',
+                'comment': '#6a9955',
+                'number': '#f2cc60',
+                'preprocessor': '#d2a8ff',
+                'tag': '#7ee787',
+            },
+            'Soft': {
+                'keyword': '#f38ba8',
+                'type': '#89b4fa',
+                'string': '#94e2d5',
+                'comment': '#a6adc8',
+                'number': '#f9e2af',
+                'preprocessor': '#cba6f7',
+                'tag': '#a6e3a1',
+            },
+            'Vivid': {
+                'keyword': '#ff4d6d',
+                'type': '#4cc9f0',
+                'string': '#72efdd',
+                'comment': '#80ed99',
+                'number': '#ffd166',
+                'preprocessor': '#b388ff',
+                'tag': '#06d6a0',
+            },
+        }
+        return palettes.get(self.syntax_theme.get(), palettes['Default'])
+
+    def apply_syntax_tag_colors(self, text_widget):
+        palette = self.get_syntax_palette()
+        text_widget.tag_config('syntax_keyword', foreground=palette['keyword'])
+        text_widget.tag_config('syntax_type', foreground=palette['type'])
+        text_widget.tag_config('syntax_string', foreground=palette['string'])
+        text_widget.tag_config('syntax_comment', foreground=palette['comment'])
+        text_widget.tag_config('syntax_number', foreground=palette['number'])
+        text_widget.tag_config('syntax_preprocessor', foreground=palette['preprocessor'])
+        text_widget.tag_config('syntax_tag', foreground=palette['tag'])
+
+    def set_syntax_theme(self, theme_name):
+        self.syntax_theme.set(theme_name)
+        palette = self.get_syntax_palette()
+        for doc in self.documents.values():
+            self.apply_syntax_tag_colors(doc['text'])
+            if doc.get('colorizer') is not None:
+                doc['colorizer'].tagdefs.update({
+                    'COMMENT': {'foreground': palette['comment']},
+                    'KEYWORD': {'foreground': palette['keyword']},
+                    'BUILTIN': {'foreground': palette['preprocessor']},
+                    'STRING': {'foreground': palette['string']},
+                    'DEFINITION': {'foreground': palette['type']},
+                })
+                try:
+                    doc['colorizer'].notify_range('1.0', tk.END)
+                except Exception:
+                    pass
+            self.configure_syntax_highlighting(doc['frame'])
+        if self.compare_active:
+            self.refresh_compare_panel()
+        self.save_session()
+
+    def set_current_syntax_override(self, syntax_mode):
+        doc = self.get_current_doc()
+        if not doc:
+            return "break"
+        doc['syntax_override'] = syntax_mode
+        self.configure_syntax_highlighting(doc['frame'])
+        if self.compare_active and self.compare_source_tab == str(doc['frame']):
+            self.refresh_compare_panel()
+        self.update_status()
+        self.save_session()
+        return "break"
 
     def clear_custom_syntax_tags(self, doc):
         for tag_name in ('syntax_keyword', 'syntax_type', 'syntax_string', 'syntax_comment', 'syntax_number', 'syntax_preprocessor', 'syntax_tag'):
@@ -1705,6 +2060,25 @@ class NotepadX:
             anchor='w'
         ).pack(fill='x', padx=10, pady=(8, 2))
 
+        meta_parts = []
+        if note_data.get('author_label'):
+            meta_parts.append(f"Author: {note_data['author_label']}")
+        elif note_data.get('author_id'):
+            meta_parts.append(f"Author ID: {note_data['author_id']}")
+        if note_data.get('created_at'):
+            meta_parts.append(f"Created: {note_data['created_at'].replace('T', ' ')}")
+        if meta_parts:
+            tk.Label(
+                frame,
+                text=" | ".join(meta_parts),
+                bg='#1f2430',
+                fg='#9aa0a6',
+                font=('Segoe UI', 8),
+                justify='left',
+                wraplength=280,
+                anchor='w'
+            ).pack(fill='x', padx=10, pady=(0, 6))
+
         tk.Label(
             frame,
             text=note_data['text'],
@@ -1809,6 +2183,76 @@ class NotepadX:
         parent.wait_window(dialog)
         return result['value']
 
+    def export_notes_report(self):
+        doc = self.get_current_doc()
+        if not doc or not doc.get('notes'):
+            messagebox.showinfo("Export Notes", "There are no notes to export in this tab.", parent=self.root)
+            return "break"
+        initial_name = f"{self.get_doc_name(doc['frame'])}-notes.json"
+        output_path = filedialog.asksaveasfilename(
+            parent=self.root,
+            defaultextension=".json",
+            initialfile=initial_name,
+            filetypes=[("JSON", "*.json"), ("Markdown", "*.md"), ("All Files", "*.*")]
+        )
+        if not output_path:
+            return "break"
+        ordered_tags = self.get_ordered_note_tags(doc)
+        note_rows = []
+        for note_tag in ordered_tags:
+            note_data = doc['notes'][note_tag]
+            ranges = doc['text'].tag_ranges(note_tag)
+            if len(ranges) < 2:
+                continue
+            row = {
+                'id': note_data.get('id'),
+                'selection_start': str(ranges[0]),
+                'selection_end': str(ranges[1]),
+                'selected_text': doc['text'].get(str(ranges[0]), str(ranges[1])),
+                'note': note_data.get('text'),
+                'author': note_data.get('author_label') or note_data.get('author_id'),
+                'created_at': note_data.get('created_at'),
+                'allowed_by': note_data.get('approved_by'),
+                'allowed_note': note_data.get('approved_note'),
+                'denied_by': note_data.get('dissapproved_by'),
+                'denied_note': note_data.get('dissapproved_note'),
+            }
+            note_rows.append(row)
+        try:
+            if output_path.lower().endswith('.md'):
+                with open(output_path, 'w', encoding='utf-8') as f:
+                    f.write(f"# Notes Export for {self.get_doc_name(doc['frame'])}\n\n")
+                    for row in note_rows:
+                        f.write(f"## Note {row['id']}\n\n")
+                        f.write(f"- Range: `{row['selection_start']}` to `{row['selection_end']}`\n")
+                        if row['author']:
+                            f.write(f"- Author: {row['author']}\n")
+                        if row['created_at']:
+                            f.write(f"- Created: {row['created_at']}\n")
+                        if row['allowed_by']:
+                            f.write(f"- Allowed by: {row['allowed_by']}\n")
+                        if row['denied_by']:
+                            f.write(f"- Denied by: {row['denied_by']}\n")
+                        f.write("\n### Selected Text\n\n```\n")
+                        f.write(row['selected_text'])
+                        f.write("\n```\n\n### Code Note\n\n")
+                        f.write(row['note'] or '')
+                        if row['allowed_note']:
+                            f.write("\n\n### Allow Reply\n\n")
+                            f.write(row['allowed_note'])
+                        if row['denied_note']:
+                            f.write("\n\n### Deny Reply\n\n")
+                            f.write(row['denied_note'])
+                        f.write("\n\n")
+            else:
+                with open(output_path, 'w', encoding='utf-8') as f:
+                    json.dump(note_rows, f, indent=2)
+            messagebox.showinfo("Export Notes", f"Notes exported to:\n{output_path}", parent=self.root)
+        except OSError as exc:
+            self.log_exception("export notes report", exc)
+            messagebox.showerror("Export Notes", str(exc), parent=self.root)
+        return "break"
+
     def add_note_to_selection(self, tab_id=None, event=None):
         doc = self.documents.get(str(tab_id)) if tab_id is not None else self.get_current_doc()
         if not doc or self.current_doc_is_large_readonly():
@@ -1859,7 +2303,10 @@ class NotepadX:
         author_id=None,
         author_label=None,
         read_by=None,
-        author_unread=False
+        author_unread=False,
+        created_at=None,
+        anchor_text=None,
+        anchor_line=None
     ):
         if note_id is None:
             note_id = doc['note_counter']
@@ -1881,6 +2328,9 @@ class NotepadX:
             'author_label': str(author_label).strip() if author_label else None,
             'read_by': normalized_read_by,
             'author_unread': bool(author_unread),
+            'created_at': created_at or datetime.now().isoformat(timespec='seconds'),
+            'anchor_text': anchor_text if anchor_text is not None else doc['text'].get(start, end),
+            'anchor_line': anchor_line if anchor_line is not None else int(str(start).split('.')[0]),
         }
         self.apply_note_tag(doc, note_tag, start, end)
         return note_tag
@@ -2127,8 +2577,78 @@ class NotepadX:
                     'author_label': note_data.get('author_label'),
                     'read_by': [str(editor_id) for editor_id in note_data.get('read_by', []) if str(editor_id).strip()],
                     'author_unread': bool(note_data.get('author_unread')),
+                    'created_at': note_data.get('created_at'),
+                    'anchor_text': note_data.get('anchor_text'),
+                    'anchor_line': note_data.get('anchor_line'),
                 })
         return exported
+
+    def sanitize_note_payload(self, saved_note):
+        if not isinstance(saved_note, dict):
+            return None
+        note_text = str(saved_note.get('text', '')).strip()
+        start = str(saved_note.get('start', '')).strip()
+        end = str(saved_note.get('end', '')).strip()
+        note_id = str(saved_note.get('id', '')).strip()
+        if not note_text or not start or not end:
+            return None
+        read_by = saved_note.get('read_by', [])
+        if not isinstance(read_by, list):
+            read_by = []
+        anchor_line = saved_note.get('anchor_line')
+        try:
+            anchor_line = int(anchor_line) if anchor_line is not None else None
+        except (TypeError, ValueError):
+            anchor_line = None
+        return {
+            'id': note_id or None,
+            'start': start,
+            'end': end,
+            'text': note_text,
+            'approved_by': str(saved_note.get('approved_by', '')).strip() or None,
+            'dissapproved_by': str(saved_note.get('dissapproved_by', '')).strip() or None,
+            'approved_note': str(saved_note.get('approved_note', '')).strip() or None,
+            'dissapproved_note': str(saved_note.get('dissapproved_note', '')).strip() or None,
+            'author_id': str(saved_note.get('author_id', '')).strip() or None,
+            'author_label': str(saved_note.get('author_label', '')).strip() or None,
+            'read_by': [str(editor_id).strip() for editor_id in read_by if str(editor_id).strip()],
+            'author_unread': bool(saved_note.get('author_unread', False)),
+            'created_at': str(saved_note.get('created_at', '')).strip() or None,
+            'anchor_text': str(saved_note.get('anchor_text', '')),
+            'anchor_line': anchor_line,
+        }
+
+    def resolve_note_range(self, doc, saved_note):
+        start = saved_note.get('start')
+        end = saved_note.get('end')
+        anchor_text = saved_note.get('anchor_text') or ''
+        if start and end:
+            try:
+                if doc['text'].get(start, end) == anchor_text or not anchor_text:
+                    return start, end
+            except tk.TclError:
+                pass
+        if not anchor_text:
+            return start, end
+        content = doc['text'].get('1.0', 'end-1c')
+        positions = []
+        search_from = 0
+        while True:
+            found = content.find(anchor_text, search_from)
+            if found == -1:
+                break
+            positions.append(found)
+            search_from = found + max(1, len(anchor_text))
+            if len(positions) >= 50:
+                break
+        if not positions:
+            return start, end
+        if saved_note.get('anchor_line'):
+            target_offset = doc['text'].count('1.0', f"{saved_note['anchor_line']}.0", 'chars')[0]
+            best_pos = min(positions, key=lambda pos: abs(pos - target_offset))
+        else:
+            best_pos = positions[0]
+        return f"1.0+{best_pos}c", f"1.0+{best_pos + len(anchor_text)}c"
 
     def clear_doc_notes(self, doc):
         for note_tag in list(doc['notes'].keys()):
@@ -2167,14 +2687,20 @@ class NotepadX:
         try:
             with open(sidecar_path, 'r', encoding='utf-8') as f:
                 payload = json.load(f)
-        except (OSError, json.JSONDecodeError):
+        except (OSError, json.JSONDecodeError) as exc:
+            self.log_exception("load shared notes", exc)
             return {'active_editors': 0, 'editors': [], 'notes': []}
         notes = payload.get('notes', [])
         editors = self.prune_inactive_shared_editors(payload.get('editors', []))
+        sanitized_notes = []
+        for note in notes if isinstance(notes, list) else []:
+            sanitized_note = self.sanitize_note_payload(note)
+            if sanitized_note is not None:
+                sanitized_notes.append(sanitized_note)
         return {
             'active_editors': len(editors),
             'editors': editors,
-            'notes': notes if isinstance(notes, list) else []
+            'notes': sanitized_notes
         }
 
     def persist_doc_notes(self, doc):
@@ -2210,8 +2736,8 @@ class NotepadX:
             return
 
         for saved_note in saved_notes:
-            start = saved_note.get('start')
-            end = saved_note.get('end')
+            resolved_range = self.resolve_note_range(doc, saved_note)
+            start, end = resolved_range
             note_id = saved_note.get('id')
             note_text = saved_note.get('text', '').strip()
             approved_by = saved_note.get('approved_by')
@@ -2222,18 +2748,28 @@ class NotepadX:
             author_label = saved_note.get('author_label')
             read_by = saved_note.get('read_by', [])
             author_unread = saved_note.get('author_unread', False)
+            created_at = saved_note.get('created_at')
+            anchor_text = saved_note.get('anchor_text')
+            anchor_line = saved_note.get('anchor_line')
             if not start or not end or not note_text:
                 continue
-            note_tag = self.create_note_tag(
-                doc, start, end, note_text,
-                approved_by=approved_by,
-                dissapproved_by=dissapproved_by,
-                note_id=note_id,
-                author_id=author_id,
-                author_label=author_label,
-                read_by=read_by,
-                author_unread=author_unread
-            )
+            try:
+                note_tag = self.create_note_tag(
+                    doc, start, end, note_text,
+                    approved_by=approved_by,
+                    dissapproved_by=dissapproved_by,
+                    note_id=note_id,
+                    author_id=author_id,
+                    author_label=author_label,
+                    read_by=read_by,
+                    author_unread=author_unread,
+                    created_at=created_at,
+                    anchor_text=anchor_text,
+                    anchor_line=anchor_line
+                )
+            except tk.TclError as exc:
+                self.log_exception("restore note tag", exc)
+                continue
             restored_note = doc['notes'].get(note_tag)
             if restored_note is not None:
                 restored_note['approved_note'] = approved_note
@@ -2353,6 +2889,8 @@ class NotepadX:
         self.restore_doc_notes(doc)
         self.register_doc_for_shared_notes(doc)
         self.refresh_tab_title(doc['frame'])
+        if self.compare_active and self.compare_source_tab == str(doc['frame']):
+            self.refresh_compare_panel()
         if str(doc['frame']) == self.notebook.select():
             self.update_status()
 
@@ -2361,7 +2899,10 @@ class NotepadX:
         selected_file = current_doc['file_path'] if current_doc and current_doc['file_path'] else None
         open_files = []
 
-        for doc in self.documents.values():
+        for tab_id in self.notebook.tabs():
+            doc = self.documents.get(str(tab_id))
+            if not doc:
+                continue
             if doc['file_path'] and os.path.exists(doc['file_path']):
                 open_files.append(doc['file_path'])
 
@@ -2383,7 +2924,107 @@ class NotepadX:
             ],
             'sound_enabled': bool(self.sound_enabled.get()),
             'status_bar_enabled': bool(self.status_bar_enabled.get()),
+            'syntax_theme': self.syntax_theme.get(),
         }
+
+    def schedule_recovery_save(self):
+        if self.isolated_session:
+            return
+        if self.recovery_job:
+            try:
+                self.root.after_cancel(self.recovery_job)
+            except tk.TclError:
+                pass
+        self.recovery_job = self.root.after(1500, self.persist_recovery_state)
+
+    def get_recovery_state(self):
+        unsaved_tabs = []
+        selected_untitled = None
+        for doc in self.documents.values():
+            if doc.get('file_path'):
+                continue
+            content = doc['text'].get('1.0', 'end-1c')
+            if not content.strip() and not doc['text'].edit_modified():
+                continue
+            unsaved_tabs.append({
+                'untitled_name': doc.get('untitled_name') or self.next_untitled_name(),
+                'content': content,
+                'modified': bool(doc['text'].edit_modified())
+            })
+            if self.get_current_doc() == doc:
+                selected_untitled = doc.get('untitled_name')
+        return {
+            'unsaved_tabs': unsaved_tabs,
+            'selected_untitled': selected_untitled,
+            'timestamp': datetime.now().isoformat(timespec='seconds')
+        }
+
+    def persist_recovery_state(self):
+        self.recovery_job = None
+        if self.isolated_session:
+            return
+        recovery = self.get_recovery_state()
+        if not recovery['unsaved_tabs']:
+            if os.path.exists(self.recovery_path):
+                try:
+                    os.remove(self.recovery_path)
+                except OSError as exc:
+                    self.log_exception("remove recovery state", exc)
+            return
+        try:
+            recovery_dir = os.path.dirname(self.recovery_path)
+            os.makedirs(recovery_dir, exist_ok=True)
+            fd, temp_path = tempfile.mkstemp(prefix='notepadx-recovery-', suffix='.tmp', dir=recovery_dir)
+            try:
+                with os.fdopen(fd, 'w', encoding='utf-8') as f:
+                    json.dump(recovery, f, indent=2)
+                os.replace(temp_path, self.recovery_path)
+            finally:
+                if os.path.exists(temp_path):
+                    try:
+                        os.remove(temp_path)
+                    except OSError:
+                        pass
+            self.hide_support_file(self.recovery_path)
+        except Exception as exc:
+            self.log_exception("persist recovery state", exc)
+
+    def restore_recovery_state(self):
+        if self.isolated_session or not os.path.exists(self.recovery_path):
+            return
+        try:
+            with open(self.recovery_path, 'r', encoding='utf-8') as f:
+                recovery = json.load(f)
+        except Exception as exc:
+            self.log_exception("restore recovery state", exc)
+            return
+        unsaved_tabs = recovery.get('unsaved_tabs', [])
+        if not isinstance(unsaved_tabs, list) or not unsaved_tabs:
+            return
+        if not messagebox.askyesno("Recover Tabs", "Notepad-X found unsaved tabs from a previous crash. Restore them?", parent=self.root):
+            return
+        current_doc = self.get_current_doc()
+        if current_doc and not current_doc.get('file_path') and not current_doc['text'].edit_modified() and not current_doc['text'].get('1.0', 'end-1c').strip():
+            self.notebook.forget(current_doc['frame'])
+            self.documents.pop(str(current_doc['frame']), None)
+        selected_name = recovery.get('selected_untitled')
+        selected_tab = None
+        for recovered_tab in unsaved_tabs:
+            if not isinstance(recovered_tab, dict):
+                continue
+            content = str(recovered_tab.get('content', ''))
+            tab_id = self.create_tab(content=content, select=False)
+            doc = self.documents[str(tab_id)]
+            doc['untitled_name'] = str(recovered_tab.get('untitled_name') or doc['untitled_name'])
+            doc['text'].edit_modified(bool(recovered_tab.get('modified', True)))
+            self.refresh_tab_title(doc['frame'])
+            if doc['untitled_name'] == selected_name:
+                selected_tab = doc['frame']
+        if selected_tab is None and self.documents:
+            selected_tab = next(iter(self.documents.values()))['frame']
+        if selected_tab is not None:
+            self.notebook.select(selected_tab)
+            self.set_active_document(selected_tab)
 
     def save_session(self):
         if self.isolated_session:
@@ -2425,7 +3066,8 @@ class NotepadX:
         try:
             with open(self.session_path, 'r', encoding='utf-8') as f:
                 session = json.load(f)
-        except (OSError, json.JSONDecodeError):
+        except (OSError, json.JSONDecodeError) as exc:
+            self.log_exception("restore session", exc)
             return
 
         open_files = [
@@ -2443,6 +3085,7 @@ class NotepadX:
         ][:self.max_recent_files]
         self.sound_enabled.set(bool(session.get('sound_enabled', True)))
         self.status_bar_enabled.set(bool(session.get('status_bar_enabled', True)))
+        self.syntax_theme.set(str(session.get('syntax_theme', 'Default')))
         if self.status_bar_enabled.get():
             self.status_frame.grid()
         else:
@@ -2564,6 +3207,8 @@ class NotepadX:
         self.notebook.tab(tab_id, text=self.get_doc_title(tab_id))
         if str(tab_id) == self.notebook.select():
             self.update_window_title()
+        if self.compare_active and self.compare_source_tab == str(tab_id):
+            self.refresh_compare_header()
         self.save_session()
 
     def update_window_title(self):
@@ -2588,13 +3233,37 @@ class NotepadX:
         if doc.get('syntax_mode') and doc.get('syntax_mode') != 'python':
             self.schedule_syntax_highlight(doc)
         self.refresh_tab_title(tab_id)
+        self.schedule_recovery_save()
+        if self.compare_active and self.compare_source_tab == str(tab_id):
+            self.schedule_compare_refresh()
         if str(tab_id) == self.notebook.select():
             self.update_status()
 
     def new_tab(self, event=None):
         self.create_tab()
         self.save_session()
+        self.schedule_recovery_save()
         return "break"
+
+    def on_tab_drag_start(self, event):
+        try:
+            self.dragging_tab_index = self.notebook.index(f"@{event.x},{event.y}")
+        except tk.TclError:
+            self.dragging_tab_index = None
+
+    def on_tab_drag_motion(self, event):
+        if getattr(self, 'dragging_tab_index', None) is None:
+            return
+        try:
+            target_index = self.notebook.index(f"@{event.x},{event.y}")
+        except tk.TclError:
+            return
+        if target_index != self.dragging_tab_index:
+            self.notebook.insert(target_index, self.notebook.tabs()[self.dragging_tab_index])
+            self.dragging_tab_index = target_index
+
+    def on_tab_drag_end(self, event):
+        self.dragging_tab_index = None
 
     def switch_tab_by_offset(self, offset):
         tab_ids = self.notebook.tabs()
@@ -2636,6 +3305,9 @@ class NotepadX:
         if closed_file_path:
             self.closed_session_files.add(closed_file_path)
 
+        if self.compare_active and self.compare_source_tab == str(doc['frame']):
+            self.close_compare_panel()
+
         self.unregister_doc_from_shared_notes(doc)
         tab_id = str(doc['frame'])
         self.notebook.forget(doc['frame'])
@@ -2676,7 +3348,9 @@ class NotepadX:
         file_menu.add_command(label="Close Tab", command=self.close_current_tab, accelerator="Ctrl+Shift+T")
         file_menu.add_command(label="Save", command=self.save, accelerator="Ctrl+S")
         file_menu.add_command(label="Save all", command=self.save_all, accelerator="Ctrl+Shift+S")
+        file_menu.add_command(label="Save Copy As", command=self.save_copy_as, accelerator="Ctrl+Shift+Q")
         file_menu.add_command(label="Print", command=self.print_file, accelerator="Ctrl+P")
+        file_menu.add_command(label="Export Notes", command=self.export_notes_report, accelerator="Ctrl+E")
         file_menu.add_separator()
         file_menu.add_command(label="Exit", command=self.exit_app, accelerator="Ctrl+Shift+X")
 
@@ -2695,6 +3369,12 @@ class NotepadX:
         edit_menu.add_command(label="Find Next", command=self.find_next, accelerator="F3")
         edit_menu.add_command(label="Cycle Notes", command=self.goto_next_note, accelerator="F4")
         edit_menu.add_command(label="Replace", command=self.show_replace_panel, accelerator="Ctrl+R")
+        note_filter_menu = tk.Menu(edit_menu, tearoff=0, bg='#2d2d2d', fg=self.fg_color, activebackground='#3a3a3a')
+        edit_menu.add_cascade(label="Filter Notes", menu=note_filter_menu)
+        note_filter_menu.add_radiobutton(label="All", variable=self.note_filter, value='all')
+        note_filter_menu.add_radiobutton(label="Unread", variable=self.note_filter, value='unread')
+        note_filter_menu.add_radiobutton(label="Allowed", variable=self.note_filter, value='allowed')
+        note_filter_menu.add_radiobutton(label="Denied", variable=self.note_filter, value='denied')
         edit_menu.add_separator()
         edit_menu.add_command(label="Go To Line", command=self.goto_line_dialog, accelerator="Ctrl+G")
         edit_menu.add_command(label="Date", command=self.insert_date, accelerator="Ctrl+D")
@@ -2710,6 +3390,20 @@ class NotepadX:
         view_menu.add_checkbutton(label="Status Bar", variable=self.status_bar_enabled, command=self.toggle_status_bar, accelerator="Ctrl+B")
         view_menu.add_checkbutton(label="Word Wrap", variable=self.word_wrap_enabled, command=self.toggle_word_wrap)
         view_menu.add_checkbutton(label="Sound", variable=self.sound_enabled, command=self.toggle_sound)
+        syntax_theme_menu = tk.Menu(view_menu, tearoff=0, bg='#2d2d2d', fg=self.fg_color, activebackground='#3a3a3a')
+        view_menu.add_cascade(label="Syntax Theme", menu=syntax_theme_menu)
+        for theme_name in ('Default', 'Soft', 'Vivid'):
+            syntax_theme_menu.add_radiobutton(label=theme_name, variable=self.syntax_theme, value=theme_name, command=lambda name=theme_name: self.set_syntax_theme(name))
+        syntax_mode_menu = tk.Menu(view_menu, tearoff=0, bg='#2d2d2d', fg=self.fg_color, activebackground='#3a3a3a')
+        view_menu.add_cascade(label="Syntax Mode", menu=syntax_mode_menu)
+        for mode_label, mode_value in (
+            ('Auto', 'auto'), ('Plain Text', 'plain'), ('Python', 'python'), ('C', 'c'),
+            ('C++', 'cpp'), ('Rust', 'rust'), ('Java', 'java'), ('JavaScript', 'javascript'),
+            ('HTML', 'html'), ('PHP', 'php'), ('XML', 'xml'), ('SQL', 'sql')
+        ):
+            syntax_mode_menu.add_command(label=mode_label, command=lambda value=mode_value: self.set_current_syntax_override(value))
+        view_menu.add_command(label="Compare Tabs", command=self.show_split_compare, accelerator="Ctrl+Q")
+        view_menu.add_command(label="Close Compare Tabs", command=self.close_compare_panel, accelerator="Ctrl+Shift+X")
 
         help_menu = tk.Menu(self.menu, tearoff=0, bg='#2d2d2d', fg=self.fg_color,
                             activebackground='#3a3a3a')
@@ -2791,6 +3485,137 @@ class NotepadX:
         dialog.focus_force()
         dialog.after(1, lambda current=dialog: self.center_window_after_show(current))
         dialog.after(50, lambda: dialog.attributes('-topmost', False) if dialog.winfo_exists() else None)
+
+    def show_split_compare(self):
+        current_doc = self.get_current_doc()
+        if not current_doc or len(self.documents) < 2:
+            messagebox.showinfo("Compare With Tab", "Open at least two tabs to compare.", parent=self.root)
+            return "break"
+        choices = []
+        for tab_id, doc in self.documents.items():
+            if doc is current_doc:
+                continue
+            choices.append((self.get_doc_name(doc['frame']), doc))
+        dialog = tk.Toplevel(self.root)
+        dialog.title("Compare With Tab")
+        dialog.transient(self.root)
+        dialog.configure(bg=self.bg_color, padx=12, pady=12)
+        tk.Label(dialog, text="Choose a tab to compare with the current one:", bg=self.bg_color, fg=self.fg_color).pack(anchor='w', pady=(0, 8))
+        listbox = tk.Listbox(dialog, width=50, height=min(10, len(choices)))
+        for label, _ in choices:
+            listbox.insert(tk.END, label)
+        listbox.pack(fill='both', expand=True)
+
+        def open_compare(event=None):
+            selection = listbox.curselection()
+            if not selection:
+                return
+            other_doc = choices[selection[0]][1]
+            dialog.destroy()
+            self.start_inline_compare(other_doc)
+
+        tk.Button(dialog, text="Compare", command=open_compare).pack(pady=(10, 0))
+        listbox.bind('<Double-Button-1>', open_compare)
+        listbox.focus_set()
+        self.center_window(dialog)
+
+    def refresh_compare_header(self):
+        if not self.compare_active:
+            return
+        doc = self.documents.get(self.compare_source_tab)
+        if not doc:
+            self.close_compare_panel()
+            return
+        self.compare_title.config(text=f"Comparing with: {self.get_doc_title(doc['frame'])}")
+
+    def schedule_compare_refresh(self):
+        if self.compare_refresh_job:
+            try:
+                self.root.after_cancel(self.compare_refresh_job)
+            except tk.TclError:
+                pass
+        self.compare_refresh_job = self.root.after(120, self.refresh_compare_panel)
+
+    def refresh_compare_panel(self):
+        self.compare_refresh_job = None
+        if not self.compare_active or not self.compare_view:
+            return
+
+        doc = self.documents.get(self.compare_source_tab)
+        if not doc:
+            self.close_compare_panel()
+            return
+
+        compare_doc = self.compare_view
+        compare_doc['file_path'] = doc.get('file_path')
+        compare_doc['syntax_override'] = doc.get('syntax_override')
+        compare_doc['large_file_mode'] = bool(doc.get('large_file_mode'))
+        compare_doc['preview_mode'] = bool(doc.get('preview_mode'))
+        compare_doc['virtual_mode'] = bool(doc.get('virtual_mode'))
+
+        self.refresh_compare_header()
+
+        compare_text = compare_doc['text']
+        compare_text.delete('1.0', tk.END)
+        compare_text.insert('1.0', doc['text'].get('1.0', 'end-1c'))
+        self.configure_syntax_for_doc(compare_doc)
+
+    def set_compare_sash_position(self):
+        if not self.compare_active:
+            return
+        try:
+            width = self.editor_paned.winfo_width()
+            if width > 0:
+                self.editor_paned.sash_place(0, max(240, width // 2), 0)
+        except tk.TclError:
+            pass
+
+    def start_inline_compare(self, source_doc):
+        if not source_doc:
+            return "break"
+        self.compare_source_tab = str(source_doc['frame'])
+        if str(self.compare_container) not in self.editor_paned.panes():
+            self.editor_paned.add(self.compare_container, stretch='always')
+        self.compare_active = True
+        self.refresh_compare_panel()
+        self.root.after_idle(self.set_compare_sash_position)
+        return "break"
+
+    def close_compare_panel(self, event=None):
+        if self.compare_refresh_job:
+            try:
+                self.root.after_cancel(self.compare_refresh_job)
+            except tk.TclError:
+                pass
+            self.compare_refresh_job = None
+
+        if self.compare_view:
+            if self.compare_view.get('colorizer') is not None and self.compare_view.get('percolator') is not None:
+                try:
+                    self.compare_view['percolator'].removefilter(self.compare_view['colorizer'])
+                except Exception:
+                    pass
+            self.compare_view['percolator'] = None
+            self.compare_view['colorizer'] = None
+            self.compare_view['syntax_job'] = None
+            self.compare_view['syntax_mode'] = None
+            self.compare_view['file_path'] = None
+            self.compare_view['syntax_override'] = None
+            self.compare_view['large_file_mode'] = False
+            self.compare_view['preview_mode'] = False
+            self.compare_view['virtual_mode'] = False
+            self.compare_view['text'].delete('1.0', tk.END)
+
+        self.compare_active = False
+        self.compare_source_tab = None
+        self.compare_title.config(text="")
+        try:
+            self.editor_paned.forget(self.compare_container)
+        except tk.TclError:
+            pass
+        if self.text and self.text.winfo_exists():
+            self.text.focus_set()
+        return "break"
 
     def show_about_dialog(self):
         dialog = tk.Toplevel(self.root)
@@ -3239,8 +4064,8 @@ class NotepadX:
             if os.path.exists(temp_path):
                 try:
                     os.remove(temp_path)
-                except OSError:
-                    pass
+                except OSError as exc:
+                    self.log_exception("cleanup temp save file", exc)
 
     def save(self, event=None):
         doc = self.get_current_doc()
@@ -3316,6 +4141,30 @@ class NotepadX:
             return self.save()
         return False
 
+    def save_copy_as(self):
+        doc = self.get_current_doc()
+        if not doc:
+            return "break"
+        suggested_name = self.get_doc_name(doc['frame'])
+        output_path = filedialog.asksaveasfilename(parent=self.root, initialfile=suggested_name)
+        if not output_path:
+            return "break"
+        try:
+            if doc.get('virtual_mode') or doc.get('preview_mode'):
+                with open(doc['file_path'], 'rb') as src, open(output_path, 'wb') as dst:
+                    while True:
+                        chunk = src.read(self.file_load_chunk_size)
+                        if not chunk:
+                            break
+                        dst.write(chunk)
+            else:
+                self.write_file_atomically(output_path, doc['text'].get('1.0', tk.END).rstrip('\n'))
+            messagebox.showinfo("Save Copy As", f"Copy saved to:\n{output_path}", parent=self.root)
+        except OSError as exc:
+            self.log_exception("save copy as", exc)
+            messagebox.showerror("Save Copy As", str(exc), parent=self.root)
+        return "break"
+
     def print_file(self, event=None):
         doc = self.get_current_doc()
         if not doc:
@@ -3339,6 +4188,17 @@ class NotepadX:
                 return "break"
         for doc in list(self.documents.values()):
             self.unregister_doc_from_shared_notes(doc)
+        if self.recovery_job:
+            try:
+                self.root.after_cancel(self.recovery_job)
+            except tk.TclError:
+                pass
+            self.recovery_job = None
+        if os.path.exists(self.recovery_path):
+            try:
+                os.remove(self.recovery_path)
+            except OSError as exc:
+                self.log_exception("remove recovery file on exit", exc)
         self.persist_editor_identity()
         self.save_session()
         self.root.quit()

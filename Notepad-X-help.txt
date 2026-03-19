@@ -1,97 +1,110 @@
 Notepad-X Help
 
 Overview
-Notepad-X is a tabbed desktop editor for plain text and source code. It combines a Notepad-style workflow with code notes, shared note sync, syntax highlighting, large-file protection, recent files, project opening, and an About window with hidden extras.
+Notepad-X is a tabbed desktop text editor for plain text, source code, shared review notes, and safer handling of very large files. It keeps a Notepad-style workflow while adding project opening, syntax highlighting, note sync, recovery, and a built-in help viewer.
 
 Main Window
-- The title bar shows Notepad-X and the current document name.
-- The menu bar provides File, Edit, View, and Help menus.
-- The tab strip lets you keep multiple documents open at once.
-- The editor area is the main text surface for the active tab.
-- The bottom status bar shows line and column position, character counts, encoding, zoom state, editing mode, editor ID, note sync state, unread notes, active editors, memory usage, and the current day, time, and date.
+- The title bar shows Notepad-X and the active document name.
+- The menu bar contains File, Edit, View, and Help.
+- The tab strip holds every open document.
+- The editor area shows the active tab.
+- The bottom status bar shows editor position and document state on the left, and the live clock on the far right.
+
+Status Bar
+- Position is shown as Ln X of Y, Col Z.
+- Character counts show total characters, or selected count and total count when text is selected.
+- UTF-8 is shown as the current encoding indicator.
+- Zoom shows Normal at the default size and a percentage when zoomed.
+- File-backed tabs can also show:
+  ID: Notepad-X-<md5>
+  Notes Synced
+  unread note count with the F3 hint
+  active editor count
+- Large-file tabs can show Virtual or Preview markers.
+- Memory used is shown in MB.
+- The far-right clock shows Day | Time | Date.
 
 Tabs
 - Every document is opened in its own tab.
 - Blank tabs are named Untitled 1, Untitled 2, and so on.
-- Untitled numbering reuses the lowest available untitled name from currently open tabs.
-- A modified tab shows an asterisk after the tab title.
+- Untitled numbering reuses the lowest available untitled name still open.
+- Modified tabs show an asterisk after the tab name.
 - If you open a file that is already open, Notepad-X switches to that tab instead of opening a duplicate.
-- File-backed tabs are restored on startup from the saved session.
-- Unsaved untitled tabs are not persisted as full documents between launches.
-
-Status Bar
-- Line and column appear as Ln X of Y, Col Z.
-- If text is selected, the character area shows selected count of total count.
-- UTF-8 is shown as the current encoding indicator.
-- Zoom shows Normal at the base font size and a percentage offset when zoomed.
-- Large-file tabs can show Virtual or Preview mode markers.
-- File-backed tabs also show:
-  ID: Notepad-X-<md5>
-  Synced
-  unread note count with F3 hint
-  active editor count
-- Memory used is shown in MB.
-- The far-right clock shows Day | Time | Date.
+- Dragging tabs with the mouse lets you reorder them.
+- File-backed tabs are restored on startup from the session file.
+- If the only open tab is the default Untitled 1 tab, Close Tab is blocked so the editor never closes down to zero tabs while still running.
 
 File Menu
-- Open: Opens one file into the current blank unmodified tab when possible, or a new tab otherwise.
-- Open Project: Opens a selected source file and additional related source-code files from the same folder.
-- Recent: Shows recently opened files and lets you reopen them quickly. The list can also be cleared.
-- New Tab: Creates a new untitled tab.
-- Close Tab: Closes the current tab and prompts to save unsaved changes if needed.
+- Open: Opens a single file. If the current tab is a blank unmodified untitled tab, Notepad-X can reuse it instead of opening another tab.
+- Open Project: Opens the chosen source file and then other related source-code files from the same folder. After loading, Notepad-X switches back to the originally chosen file.
+- Recent: Shows recently opened files and lets you reopen them. Clear list removes the stored recent-file history.
+- New Tab: Opens a fresh untitled tab.
+- Close Tab: Closes the current tab and prompts to save if needed.
 - Save: Saves the current tab.
-- Save all: Saves all normal editable tabs. Untitled modified tabs prompt for Save As. Large virtual/read-only tabs are skipped.
-- Print: Sends the current saved file to the Windows print action. If the file is untitled, Notepad-X first prompts you to save it.
-- Exit: Closes the application after prompting to save modified tabs.
+- Save all: Saves every normal editable tab. Modified untitled tabs prompt for a file name. Large virtual/read-only tabs are skipped.
+- Save Copy As: Saves a copy of the current tab. In very large virtual or preview modes, this copies the source file stream to a new path without trying to edit the original.
+- Print: Sends the current saved file to the Windows print action. If the tab has never been saved, Notepad-X prompts you to save it first.
+- Export Notes: Exports the current tab's notes to JSON or Markdown.
+- Exit: Closes the app. If Find or Replace is open, Ctrl+Shift+X closes the panel first and exits only when no panel is open.
 
 Edit Menu
 - Undo: Reverses the last edit.
 - Redo: Reapplies the last undone edit.
 - Cut / Copy / Paste: Standard clipboard actions.
 - Select All: Selects all text in the current tab.
-- Find: Opens the live find bar.
-- Find Next: Moves to the next find result. If Find and Replace are closed, F3 jumps to the oldest unread note instead.
-- Cycle Notes: Moves through every note in the current tab from first to last. After the last note it wraps back to the first.
-- Replace: Opens the find/replace bar.
-- Go To Line: Jumps directly to a line number.
+- Find: Opens the live find panel.
+- Find Next: Moves to the next match. If Find and Replace are closed, F3 jumps through unread notes instead.
+- Cycle Notes: Moves through every note in the current tab from first to last, then wraps back to the beginning.
+- Replace: Opens the Find/Replace panel.
+- Filter Notes: Filters note cycling to All, Unread, Allowed, or Denied notes.
+- Go To Line: Jumps to a specific line number.
 - Date: Inserts the current date.
 - Time/Date: Inserts the current time and date.
-- Font: Opens the font picker for family and size.
+- Font: Opens the font picker for editor family and size.
 
 View Menu
-- Full Screen: Toggles fullscreen while keeping the tabs, text area, and status bar visible.
+- Full Screen: Toggles fullscreen while keeping the tab strip, text area, and status bar visible.
 - Switch Tab: Moves to the next tab.
 - Switch Tab Left: Moves to the tab on the left.
 - Switch Tab Right: Moves to the tab on the right.
-- Word Wrap: Toggles text wrapping on and off. A checkmark indicates when it is enabled.
+- Status Bar: Shows or hides the status bar. The checkmark shows whether it is enabled.
+- Word Wrap: Turns wrapping on or off. The checkmark shows whether it is enabled.
+- Sound: Enables or disables note sounds. The checkmark shows whether it is enabled.
+- Syntax Theme: Changes the highlight color palette. Available themes are Default, Soft, and Vivid.
+- Syntax Mode: Manually overrides syntax detection for the current tab. Available modes include Auto, Plain Text, Python, C, C++, Rust, Java, JavaScript, HTML, PHP, XML, and SQL.
+- Compare With Tab...: Opens a side-by-side read-only compare window using the current tab and another open tab.
 
 Help Menu
-- Help Contents: Opens this help document in a built-in help viewer window.
+- Help Contents: Opens this document inside Notepad-X.
 - About Notepad-X: Opens the About dialog.
 
 Opening Files
-- Open loads files as UTF-8-compatible text with replacement for unreadable characters.
-- Opening a file adds it to Recent.
-- Open Project starts with the chosen file, then opens other source-code files from the same folder in tabs.
-- Related project files are filtered by recognized source-code extensions.
+- Files are loaded as text with replacement for unreadable characters when needed.
+- Opening a file moves the caret to line 1, column 1, clears any old selection, and scrolls to the top.
+- Opening a file adds it to the recent-files list.
+- Open Project filters out Notepad-X support files such as session files, editor identity files, and note sidecars so they do not open as project tabs.
 
 Saving and Save Safety
-- Normal saves use a temp-file replacement pattern. Notepad-X writes a temporary copy and then replaces the original file.
-- This reduces the chance of partial writes if something goes wrong during saving.
-- Save all preserves the current tab selection after finishing.
-- Very large virtual-mode files are intentionally treated as read-only and cannot be saved from that mode.
+- Normal saves use an atomic temp-file replacement pattern. Notepad-X writes a temporary file first and then replaces the original file.
+- This reduces the chance of partial writes if a save is interrupted.
+- Save all keeps you on your original tab when it finishes.
+- Very large virtual-mode files are intentionally read-only and cannot be directly saved from that mode.
+- Save Copy As is the supported way to create a second copy of a very large read-only tab.
 
 Find and Replace
 - Find highlights matches live while you type.
 - The first current match is selected automatically during live find.
 - Replace uses the same live highlighting in its Find field.
-- Find Next wraps around to the top when needed.
-- Closing Find or Replace clears the input field and removes the highlights.
-- Ctrl+X can also act as a close-panel path when the find or replace UI is open.
+- Closing Find or Replace clears the field and removes the highlights.
+- The Find and Replace panels include a Search across all tabs checkbox.
+- When Search across all tabs is enabled, Find Next can continue into other open tabs instead of stopping at the current tab.
+- Find is not available in buffered large-file virtual mode.
+- Replace is not available in buffered large-file virtual mode.
+- Ctrl+Shift+X closes the Find or Replace panel if one is open.
 
 Syntax Highlighting
-- Python uses IDLE-based highlighting when IDLE components are available in the Python install.
-- Notepad-X also includes built-in highlighting and detection for many source formats, including:
+- Python uses IDLE-based highlighting when the required IDLE components are available in the Python install.
+- Notepad-X also includes built-in highlighting for many file types, including:
   ActionScript
   ASP / ASPX
   AutoIt
@@ -126,28 +139,35 @@ Syntax Highlighting
   XML-family files
   HTML
   Assembly
-- Unsaved tabs can use content-based detection for several languages, so pasted code can highlight even before the file has an extension.
-- Highlighting is disabled in large-file virtual mode to keep performance usable.
+- Unsaved tabs can use content-based detection for several languages, so pasted code can highlight before the file has an extension.
+- Syntax Theme changes the current color palette.
+- Syntax Mode lets you manually force the current tab into a specific language mode or Plain Text.
+- Highlighting is reduced or disabled in large-file modes to keep performance usable.
 
 Large Files
-- Notepad-X uses safer handling for large files to avoid loading too much into the Tk text widget.
-- Files above the large-file threshold reduce expensive features such as undo and syntax work.
-- Very large files enter virtual buffered mode instead of loading the full file at once.
-- Virtual mode indexes the file and loads only a moving window of lines around your current location.
+- Notepad-X uses safer handling for large files so the Tk text widget does not try to hold extremely large content all at once.
+- Large files reduce expensive features such as undo depth and syntax work.
+- Very large files can enter virtual buffered mode instead of loading the full file into the editor.
+- Virtual mode indexes the file and loads only a moving line window around your current location.
 - In virtual mode:
   editing is disabled
-  saving is disabled
-  find/replace behavior is restricted
+  direct saving is disabled
+  Find and Replace are disabled
   Go To Line still works against the full file
-- Selection support is preserved as much as possible inside the visible virtual window.
+  scrolling and selection are limited to the currently loaded buffer window
+- Preview mode may be used for very large files where only a partial view is appropriate.
 
 Code Notes
 - Select text, right-click, and choose Add note.
-- Add note is disabled when no text is selected.
-- A note highlights the selected text in yellow.
-- Clicking highlighted noted text opens a popup showing the note.
-- The note popup title is Code note.
-- Notes are stored per file and synced through a sidecar JSON file next to the document.
+- Add note is disabled if no text is selected.
+- Notes highlight the selected code in yellow.
+- Clicking highlighted code opens the note popup.
+- The popup title is Code note.
+- Popups can show:
+  the note author
+  the creation timestamp
+  the original note text
+- Notes are stored per file and synced through a hidden sidecar JSON file next to the document.
 
 Allow and Deny Workflow
 - Right-clicking an existing note can show:
@@ -176,15 +196,17 @@ Shared Notes and Collaboration
 - Each file-backed document can have a hidden sidecar file named:
   <filename>.notepadx.notes.json
 - The sidecar stores:
-  note data
+  note text
+  note IDs
   author information
   read state
-  allow/deny state
+  allow or deny state
   reply text
-  active editor tracking
+  timestamps
+  editor-tracking information
+- Notepad-X validates and sanitizes note payloads when reading the sidecar so malformed entries are ignored instead of blindly trusted.
 - The sync system polls for sidecar changes and reloads notes when another editor updates them.
-- The status bar shows Synced, unread count, and how many editors are currently tracked on that file.
-- New notes from other editors appear as unread for you.
+- The status bar shows Notes Synced, unread count, and how many editors are currently tracked on that file.
 - Notes you authored do not count as unread for you.
 - If another editor allows or denies your note, that response is marked unread for you so the result comes back to the author.
 - Clicking a note or jumping to it marks it read for your current editor identity.
@@ -193,45 +215,57 @@ Unread Notes and Navigation
 - F3 jumps to the oldest unread note when Find and Replace are closed.
 - Each F3 press continues through unread notes from oldest to newest.
 - F4 cycles through all notes in the current tab from first to last and wraps around.
+- The Filter Notes menu affects which notes are included when cycling with F4.
 - Opening a note by clicking it also clears its unread state for your editor identity.
+
+Note Anchoring and Export
+- Notes store anchor text and line information so Notepad-X can try to keep them attached even if nearby lines shift.
+- When a note's original start and end positions no longer match exactly, Notepad-X can search for the original selected text and re-anchor to the closest match.
+- Export Notes writes the current tab's notes to:
+  JSON for machine-readable export
+  Markdown for a readable report
 
 Audio Notifications
 - note.mp3 plays when a new unread note arrives for the active file.
 - delete_note.mp3 plays when a note is removed.
+- The Sound checkmark in the View menu enables or disables sound playback.
 - Audio files are resolved from the audio folder first, with appdir/audio as a fallback location.
 
-Recent Files
-- Recent files are stored between launches.
-- The Recent submenu lets you reopen files quickly.
-- Missing files are ignored when reopened.
-- Clear list removes the saved recent-file history.
+Session Restore and Recovery
+- File-backed tabs are written to the session file and restored on startup.
+- The last active tab is restored when possible.
+- Sound, status bar, and syntax theme settings are also restored from the session file.
+- Unsaved untitled tabs are not part of normal session restore, but they can be recovered after a crash through the recovery system.
+- If Notepad-X finds recovery data from a previous crash, it asks whether you want to restore the unsaved tabs.
 
-Session Restore
-- File-backed tabs are written to a session file and restored on startup.
-- The last active tab is also restored when possible.
-- Session support files are hidden on Windows when supported.
+Crash Logging
+- Important failure paths write to a crash log in the app folder.
+- Unhandled exceptions are also written to the crash log when possible.
+- The crash log helps diagnose startup issues, note-sidecar errors, and other failures that would otherwise disappear silently.
 
 Support Files
 - Notepad-X keeps several support files in its app directory.
 - These can include:
   Notepad-X.session.json
   Notepad-X.editor.json
+  Notepad-X.recovery.json
+  Notepad-X.crash.log
   per-file *.notepadx.notes.json sidecars
-- On Windows, Notepad-X attempts to mark these support files as hidden for a cleaner folder view.
+- On Windows, Notepad-X attempts to mark support files as hidden for a cleaner folder view.
 
 Zoom
-- Ctrl + mouse wheel zooms in and out.
-- Ctrl + zooms in.
-- Ctrl - zooms out.
+- Ctrl+Mouse Wheel zooms in and out.
+- Ctrl++ zooms in.
+- Ctrl+- zooms out.
 - Zoom affects the editor font size within the configured minimum and maximum range.
 
 Printing
 - Print uses the Windows file print action on the saved file path.
-- If the current tab has never been saved, Notepad-X prompts you to save it before printing.
+- If the current tab has never been saved, Notepad-X prompts you to save it first.
 
 Help Viewer
 - Help Contents opens this file in a scrollable built-in text viewer.
-- The help viewer is read-only and is intended to document the app’s current behavior.
+- The help viewer is read-only.
 
 Keyboard Shortcuts
 - Ctrl+W: Open
@@ -241,7 +275,7 @@ Keyboard Shortcuts
 - Ctrl+S: Save
 - Ctrl+Shift+S: Save all
 - Ctrl+P: Print
-- Ctrl+Shift+X: Exit
+- Ctrl+Shift+X: Close Find/Replace if open, otherwise exit
 - Ctrl+Z: Undo
 - Ctrl+Shift+Z: Redo
 - Ctrl+X: Cut
@@ -259,11 +293,12 @@ Keyboard Shortcuts
 - Ctrl+Tab: Switch Tab
 - Ctrl+Left: Switch Tab Left
 - Ctrl+Right: Switch Tab Right
+- Ctrl+B: Toggle Status Bar
 - Ctrl++: Zoom in
 - Ctrl+-: Zoom out
 - Ctrl+Mouse Wheel: Zoom
 - F11: Full Screen
 
 Notes
-- Behavior described here matches the current Notepad-X build in this folder.
-- If the app changes, this help file may need to be regenerated to stay accurate.
+- This help file describes the current Notepad-X build in this folder.
+- If features change later, the help file should be regenerated so it stays accurate.

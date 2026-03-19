@@ -1,0 +1,17 @@
+__pycache__/
+*.pyc
+
+build/
+dist/
+output/
+*.rar
+
+Notepad-X.session.json
+Notepad-X.editor.json
+Notepad-X.recovery.json
+Notepad-X.crash.log
+*.notepadx.notes.json
+Notepad-X.*.session.json
+Notepad-X.*.editor.json
+*.json
+*.tmp
