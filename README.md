@@ -1,48 +1,69 @@
 # Notepad-X
 
-Notepad-X is a tabbed Tkinter text editor built for plain text, source code, code review notes, and safer large-file handling.
+Notepad-X is a tabbed Windows text editor built with Tkinter for plain text, source code, shared code notes, and safer handling of large files.
 
-It keeps the simple feel of a classic desktop editor, but adds project opening, syntax highlighting, shared code notes, note approvals and denials, live find, persistent sessions, and a few playful extras.
+It keeps a simple desktop-editor feel, but adds project opening, persistent sessions, syntax highlighting, live search, collaborative note sidecars, inline compare mode, recovery, and a built-in help viewer.
 
 ## Features
 
 - Tabbed editing with persistent file-backed sessions
 - Recent files and `Open Project`
+- Drag-reorder tabs
 - Live Find and Find/Replace
-- Syntax highlighting for many common code and config formats
+- Optional `Search across all tabs`
+- Syntax highlighting for many source and config formats
+- Syntax theme presets and manual syntax override per tab
 - Large-file protection with buffered virtual mode
+- `Save Copy As` for huge read-only files
 - Code notes on selected text
-- Shared note sidecars with unread tracking (Multiplayer Notepad)
-- Multiple users editing one file, sharing notes live with notifications.
+- Shared note sidecars with unread tracking
 - Allow / Deny review flow with reviewer name and reply
-- Status bar with line info, memory usage, note sync state, and live clock
-- Word Wrap, Full Screen, zoom controls, font picker, printing
+- Export notes to JSON or Markdown
+- Inline compare mode inside the main editor
+- Autosave recovery for unsaved untitled tabs after a crash
+- Crash logging for important failures and unhandled exceptions
+- Status bar with line info, memory usage, note sync state, editor ID, and live clock
+- Word Wrap, Sound toggle, Full Screen, zoom controls, font picker, printing
 - Built-in Help viewer and About dialog
+
+## Compare Mode
+
+Notepad-X can compare two open tabs side by side inside the main window.
+
+- `View > Compare Tabs` or `Ctrl+Q` opens compare mode
+- the normal editor stays usable on the left
+- the compared file appears on the right
+- syntax highlighting is applied on the compare side too
+- `Ctrl+Shift+X` closes compare mode
 
 ## Code Notes
 
-Notepad-X lets you select a section of code, right-click, and attach a note to it.
+You can select text, right-click, and attach a note to the selection.
 
 Notes support:
 
 - yellow highlight for normal notes
 - green highlight for allowed changes
 - red highlight for denied changes
+- note author and timestamp display
 - unread tracking between editors
 - `F3` to jump unread notes
-- `F4` to cycle all notes
+- `F4` to cycle notes
 - shared sidecar files for collaboration
+- export to JSON or Markdown
 
 ## Large File Handling
 
-Very large files are protected with a virtual buffered mode so Notepad-X does not try to load the entire file into the Tk text widget at once.
+Very large files are protected with a buffered virtual mode so Notepad-X does not try to load the entire file into the Tk text widget at once.
 
 In large-file virtual mode:
 
 - navigation stays usable
 - line tracking still works
-- the whole file is not fully loaded into memory
-- editing and saving are disabled on purpose
+- only a moving window of the file is loaded
+- editing is disabled
+- direct saving is disabled
+- `Save Copy As` is available for copying the source file elsewhere
 
 ## Included Assets
 
@@ -89,8 +110,10 @@ python -m PyInstaller --noconfirm --clean --onedir --windowed --name "Notepad-X"
 - `Ctrl+Shift+T` Close Tab
 - `Ctrl+S` Save
 - `Ctrl+Shift+S` Save all
+- `Ctrl+Shift+Q` Save Copy As
 - `Ctrl+P` Print
-- `Ctrl+Shift+X` Exit or close Find/Replace
+- `Ctrl+E` Export Notes
+- `Ctrl+Shift+X` Close compare / close Find or Replace / exit
 - `Ctrl+F` Find
 - `Ctrl+R` Replace
 - `F3` Find next or next unread note
@@ -104,11 +127,23 @@ python -m PyInstaller --noconfirm --clean --onedir --windowed --name "Notepad-X"
 - `Ctrl+Tab` Switch Tab
 - `Ctrl+Left` Switch Tab Left
 - `Ctrl+Right` Switch Tab Right
+- `Ctrl+Q` Compare Tabs
 - `Ctrl++` Zoom in
 - `Ctrl+-` Zoom out
 - `F11` Full Screen
 
+## Support Files
+
+Notepad-X keeps some support files next to the app, including:
+
+- `Notepad-X.session.json`
+- `Notepad-X.editor.json`
+- `Notepad-X.recovery.json`
+- `Notepad-X.crash.log`
+- `*.notepadx.notes.json`
+
+On Windows, Notepad-X attempts to mark support files as hidden.
+
 ## Notes
 
-Notepad-X is currently implemented as a single Python file for the main application logic. That keeps distribution simple, though the project can be modularized further later if needed.
-
+Notepad-X is currently implemented as a single Python file for the main application logic. That keeps distribution simple, though it can be modularized further later if needed.
