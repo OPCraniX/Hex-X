@@ -12,7 +12,8 @@ It keeps the simple feel of a classic desktop editor, but adds project opening, 
 - Syntax highlighting for many common code and config formats
 - Large-file protection with buffered virtual mode
 - Code notes on selected text
-- Shared note sidecars with unread tracking
+- Shared note sidecars with unread tracking (Multiplayer Notepad)
+- Multiple users editing one file, sharing notes live with notifications.
 - Allow / Deny review flow with reviewer name and reply
 - Status bar with line info, memory usage, note sync state, and live clock
 - Word Wrap, Full Screen, zoom controls, font picker, printing
