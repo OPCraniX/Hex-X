@@ -61,12 +61,6 @@ Help file:
 
 - `Notepad-X-help.txt`
 
-Runtime support files are intentionally excluded from Git:
-
-- `Notepad-X.session.json`
-- `Notepad-X.editor.json`
-- `*.notepadx.notes.json`
-
 ## Requirements
 
 - Windows
