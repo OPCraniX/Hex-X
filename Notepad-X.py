@@ -108,6 +108,7 @@ class NotepadX:
         self.compare_source_tab = None
         self.compare_refresh_job = None
         self.compare_view = None
+        self.last_active_editor_widget = None
 
         # Panel visibility flags
         self.find_panel_visible = False
@@ -639,7 +640,7 @@ class NotepadX:
             self.find_panel_visible = False
             self.find_entry.delete(0, tk.END)
             self.clear_find_highlights()
-            self.text.focus_set()           # ← important
+            self.focus_last_active_editor()
 
         self.update_bottom_panel_visibility()
 
@@ -665,14 +666,126 @@ class NotepadX:
             self.replace_frame.grid_remove()
             self.replace_panel_visible = False
             self.replace_find_entry.delete(0, tk.END)
-            self.text.focus_set()           # ← important
             self.clear_find_highlights()
+            self.focus_last_active_editor()
 
         self.update_bottom_panel_visibility()
 
         return "break"
 
     # ─── Find / Replace Logic ────────────────────────────────────
+    def set_last_active_editor_widget(self, widget):
+        if widget is None:
+            return
+        try:
+            if widget.winfo_exists():
+                self.last_active_editor_widget = widget
+        except tk.TclError:
+            pass
+
+    def get_compare_text_widget(self):
+        if not self.compare_active or not self.compare_view:
+            return None
+        compare_widget = self.compare_view.get('text')
+        if not compare_widget:
+            return None
+        try:
+            return compare_widget if compare_widget.winfo_exists() else None
+        except tk.TclError:
+            return None
+
+    def get_active_search_widget(self):
+        valid_widgets = [doc['text'] for doc in self.documents.values() if doc.get('text')]
+        compare_widget = self.get_compare_text_widget()
+        if compare_widget is not None:
+            valid_widgets.append(compare_widget)
+
+        focus_widget = self.root.focus_get()
+        if focus_widget in valid_widgets:
+            self.set_last_active_editor_widget(focus_widget)
+            return focus_widget
+
+        last_widget = getattr(self, 'last_active_editor_widget', None)
+        if last_widget in valid_widgets:
+            return last_widget
+
+        if self.text in valid_widgets:
+            return self.text
+        return compare_widget
+
+    def focus_last_active_editor(self):
+        widget = self.get_active_search_widget()
+        if widget is None:
+            return
+        try:
+            widget.focus_set()
+        except tk.TclError:
+            pass
+
+    def remember_compare_focus(self, event=None):
+        compare_widget = self.get_compare_text_widget()
+        if compare_widget is not None:
+            self.root.after_idle(lambda widget=compare_widget: self.set_last_active_editor_widget(widget))
+        self.update_status()
+        return None
+
+    def get_doc_for_text_widget(self, widget):
+        compare_widget = self.get_compare_text_widget()
+        if compare_widget is not None and widget == compare_widget:
+            return self.documents.get(self.compare_source_tab) if self.compare_source_tab else None
+        for doc in self.documents.values():
+            if doc.get('text') == widget:
+                return doc
+        return None
+
+    def clear_current_find_marker(self):
+        widgets = self.get_find_target_widgets()
+        seen = set()
+        for widget in widgets:
+            widget_key = str(widget)
+            if widget_key in seen:
+                continue
+            seen.add(widget_key)
+            widget.tag_remove(self.find_current_tag, '1.0', tk.END)
+
+    def set_current_find_match(self, widget, pos, end):
+        if widget is None:
+            return
+        self.clear_current_find_marker()
+        widget.tag_remove('sel', '1.0', tk.END)
+        widget.tag_add('sel', pos, end)
+        widget.tag_add(self.find_current_tag, pos, end)
+        widget.mark_set(tk.INSERT, end)
+        widget.see(pos)
+        self.set_last_active_editor_widget(widget)
+
+        compare_widget = self.get_compare_text_widget()
+        if compare_widget is not None and widget == compare_widget:
+            compare_doc = self.documents.get(self.compare_source_tab) if self.compare_source_tab else None
+            if compare_doc:
+                compare_doc['text'].tag_remove(self.find_current_tag, '1.0', tk.END)
+                compare_doc['text'].tag_add(self.find_current_tag, pos, end)
+        else:
+            doc = self.get_doc_for_text_widget(widget)
+            if doc:
+                self.mirror_compare_current_match(doc, pos, end)
+
+    def search_next_in_widget(self, widget, query, start_index=None, wrap=True):
+        if widget is None or not query:
+            return None
+
+        start = start_index or widget.index(tk.INSERT)
+        pos = widget.search(query, start, stopindex=tk.END, nocase=True, exact=False)
+        if not pos and wrap:
+            pos = widget.search(query, '1.0', stopindex=start, nocase=True, exact=False)
+        if not pos:
+            return None
+
+        end = f"{pos}+{len(query)}c"
+        self.set_current_find_match(widget, pos, end)
+        self.update_status()
+        return pos, end
+
     def find_next(self, event=None):
         if self.find_panel_visible:
             query = self.find_entry.get().strip()
@@ -684,32 +797,28 @@ class NotepadX:
         if not query:
             return
 
+        target_widget = self.get_active_search_widget()
+        if target_widget is None:
+            return "break"
+
+        compare_widget = self.get_compare_text_widget()
+        if target_widget == compare_widget:
+            self.search_next_in_widget(target_widget, query, wrap=True)
+            return "break"
+
         if self.search_all_tabs.get():
-            return self.find_next_across_tabs(query)
+            return self.find_next_across_tabs(query, target_widget)
 
-        start = self.text.index(tk.INSERT)
-        pos = self.text.search(query, start, stopindex=tk.END, nocase=True, exact=False)
-        if not pos:  # wrap around
-            pos = self.text.search(query, "1.0", stopindex=start, nocase=True, exact=False)
+        self.search_next_in_widget(target_widget, query, wrap=True)
+        return "break"
 
-        if pos:
-            end = f"{pos}+{len(query)}c"
-            self.text.tag_remove('sel', '1.0', tk.END)
-            self.text.tag_add('sel', pos, end)
-            self.text.tag_remove(self.find_current_tag, '1.0', tk.END)
-            self.text.tag_add(self.find_current_tag, pos, end)
-            current_doc = self.get_current_doc()
-            if current_doc:
-                self.mirror_compare_current_match(current_doc, pos, end)
-            self.text.mark_set(tk.INSERT, end)
-            self.text.see(pos)
-            self.update_status()
-
-    def find_next_across_tabs(self, query):
+    def find_next_across_tabs(self, query, start_widget=None):
         tab_ids = list(self.notebook.tabs())
         if not tab_ids:
             return "break"
-        current_tab = self.notebook.select()
+
+        start_doc = self.get_doc_for_text_widget(start_widget) if start_widget is not None else self.get_current_doc()
+        current_tab = str(start_doc['frame']) if start_doc else self.notebook.select()
         try:
             start_index = tab_ids.index(current_tab)
         except ValueError:
@@ -722,18 +831,12 @@ class NotepadX:
                 continue
             self.notebook.select(doc['frame'])
             self.set_active_document(doc['frame'])
-            start = self.text.index(tk.INSERT) if first_pass else '1.0'
-            pos = self.text.search(query, start, stopindex=tk.END, nocase=True, exact=False)
+            search_widget = doc['text']
+            start = search_widget.index(tk.INSERT) if first_pass and search_widget == start_widget else '1.0'
+            pos = search_widget.search(query, start, stopindex=tk.END, nocase=True, exact=False)
             if pos:
                 end = f"{pos}+{len(query)}c"
-                self.text.tag_remove('sel', '1.0', tk.END)
-                self.text.tag_add('sel', pos, end)
-                self.text.tag_remove(self.find_current_tag, '1.0', tk.END)
-                self.text.tag_add(self.find_current_tag, pos, end)
-                self.mirror_compare_current_match(doc, pos, end)
-                self.text.mark_set(tk.INSERT, end)
-                self.text.see(pos)
-                self.update_status()
+                self.set_current_find_match(search_widget, pos, end)
                 return "break"
             first_pass = False
         return "break"
@@ -1015,7 +1118,7 @@ class NotepadX:
                 self.show_find_panel()
             if self.replace_panel_visible:
                 self.show_replace_panel()
-            self.text.focus_set()          # ensure focus returns
+            self.focus_last_active_editor()
             return "break"
         else:
             if self.current_doc_is_large_readonly():
@@ -1031,7 +1134,7 @@ class NotepadX:
                 self.show_find_panel()
             if self.replace_panel_visible:
                 self.show_replace_panel()
-            self.text.focus_set()
+            self.focus_last_active_editor()
             return "break"
         return self.exit_app(event)
 
@@ -1175,11 +1278,17 @@ class NotepadX:
         compare_h_scroll = ttk.Scrollbar(compare_body, orient='horizontal', command=self.compare_text.xview)
         compare_h_scroll.grid(row=1, column=0, sticky='ew')
         self.compare_text.config(yscrollcommand=compare_v_scroll.set, xscrollcommand=compare_h_scroll.set)
-        self.compare_text.bind('<KeyPress>', lambda e: "break")
+        self.compare_text.bind('<KeyPress>', self.handle_compare_keypress)
         self.compare_text.bind('<<Paste>>', lambda e: "break")
         self.compare_text.bind('<<Cut>>', lambda e: "break")
         self.compare_text.bind('<Control-b>', self.toggle_status_bar)
         self.compare_text.bind('<Control-B>', self.toggle_status_bar)
+        self.compare_text.bind('<FocusIn>', self.remember_compare_focus, add='+')
+        self.compare_text.bind('<Button-1>', self.remember_compare_focus, add='+')
+        self.compare_text.bind('<ButtonRelease-1>', self.remember_compare_focus, add='+')
+        self.compare_text.bind('<F3>', self.find_next)
+        self.compare_text.bind('<Control-Shift-X>', self.ctrl_shift_x)
+        self.compare_text.bind('<Control-Shift-x>', self.ctrl_shift_x)
 
         self.compare_view = {
             'frame': self.compare_container,
@@ -1239,6 +1348,7 @@ class NotepadX:
         text.bind('<Button-5>', lambda e, frame=tab_frame: self.on_text_mousewheel(e, frame))
         text.bind('<Control-b>', self.toggle_status_bar)
         text.bind('<Control-B>', self.toggle_status_bar)
+        text.bind('<FocusIn>', lambda e, frame=tab_frame: self.remember_doc_focus(frame), add='+')
         text.bind('<KeyPress>', lambda e, frame=tab_frame: self.handle_text_keypress(e, frame))
         text.bind('<ButtonRelease-1>', lambda e, frame=tab_frame: self.on_text_click_release(e, frame), add='+')
         text.bind('<Button-3>', lambda e, frame=tab_frame: self.show_text_context_menu(e, frame))
@@ -1892,6 +2002,7 @@ class NotepadX:
         doc = self.documents.get(str(tab_id))
         if not doc:
             return
+        self.set_last_active_editor_widget(doc['text'])
         if doc.get('virtual_mode'):
             # Don't rebuffer while the user is actively selecting text.
             event_type = str(getattr(event, 'type', ''))
@@ -1907,6 +2018,12 @@ class NotepadX:
             self.ensure_virtual_line_visible(doc)
         self.update_status()
 
+    def remember_doc_focus(self, tab_id):
+        doc = self.documents.get(str(tab_id))
+        if doc:
+            self.set_last_active_editor_widget(doc['text'])
+        return None
+
     def handle_text_keypress(self, event, tab_id):
         doc = self.documents.get(str(tab_id))
         if not doc or not doc.get('virtual_mode'):
@@ -1916,6 +2033,16 @@ class NotepadX:
             'Up', 'Down', 'Left', 'Right', 'Prior', 'Next', 'Home', 'End',
             'Shift_L', 'Shift_R', 'Control_L', 'Control_R', 'Alt_L', 'Alt_R',
             'Escape'
+        }
+        if event.keysym in navigation_keys or (event.state & 0x4):
+            return
+        return "break"
+
+    def handle_compare_keypress(self, event):
+        navigation_keys = {
+            'Up', 'Down', 'Left', 'Right', 'Prior', 'Next', 'Home', 'End',
+            'Shift_L', 'Shift_R', 'Control_L', 'Control_R', 'Alt_L', 'Alt_R',
+            'Escape', 'F3', 'F4'
         }
         if event.keysym in navigation_keys or (event.state & 0x4):
             return
@@ -3272,6 +3399,7 @@ class NotepadX:
             self.hide_note_popup(doc)
         self.set_active_document(self.notebook.select())
         if self.text:
+            self.set_last_active_editor_widget(self.text)
             self.text.focus_set()
 
     def get_doc_name(self, tab_id):
