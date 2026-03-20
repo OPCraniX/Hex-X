@@ -7,6 +7,7 @@ It keeps a simple desktop-editor feel, but adds project opening, persistent sess
 ## Features
 
 - Tabbed editing with persistent file-backed sessions
+- Tabs remember your caret and scroll position when you switch away and come back
 - Recent files and `Open Project`
 - Drag-reorder tabs
 - GitHub-style line number gutter with click-to-copy line support
@@ -164,8 +165,6 @@ python -m PyInstaller --noconfirm --clean --onedir --windowed --name "Notepad-X"
 - `Ctrl+A` Select All
 - `Ctrl+B` Show / hide status bar
 - `Ctrl+Tab` Switch Tab
-- `Ctrl+Left` Switch Tab Left
-- `Ctrl+Right` Switch Tab Right
 - `Ctrl+Q` Compare Tabs
 - `Ctrl++` Zoom in
 - `Ctrl+-` Zoom out

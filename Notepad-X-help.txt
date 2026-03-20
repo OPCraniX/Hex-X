@@ -32,6 +32,7 @@ Tabs
 - Modified tabs show an asterisk after the tab name.
 - If you open a file that is already open, Notepad-X switches to that tab instead of opening a duplicate.
 - Dragging tabs with the mouse lets you reorder them.
+- Tabs remember their caret position and scroll position when you switch away and come back.
 - File-backed tabs are restored on startup from the session file.
 - If the only open tab is the default Untitled 1 tab, Close Tab is blocked so the editor never closes down to zero tabs while still running.
 
@@ -76,15 +77,14 @@ Edit Menu
 View Menu
 - Full Screen: Toggles fullscreen while keeping the tab strip, text area, and status bar visible.
 - Switch Tab: Moves to the next tab.
-- Switch Tab Left: Moves to the tab on the left.
-- Switch Tab Right: Moves to the tab on the right.
 - Status Bar: Shows or hides the status bar. The checkmark shows whether it is enabled.
 - Numbered Lines: Shows or hides the line number gutter. The checkmark shows whether it is enabled.
 - Word Wrap: Turns wrapping on or off. The checkmark shows whether it is enabled.
 - Sound: Enables or disables note sounds. The checkmark shows whether it is enabled.
 - Syntax Theme: Changes the highlight color palette. Available themes are Default, Soft, and Vivid.
 - Syntax Mode: Manually overrides syntax detection for the current tab. Available modes include Auto, Plain Text, Python, C, C++, Rust, Java, JavaScript, HTML, PHP, XML, and SQL.
-- Compare With Tab...: Opens a side-by-side read-only compare window using the current tab and another open tab.
+- Compare Tabs: Opens a side-by-side read-only compare window using the current tab and another open tab.
+- Close Compare Tabs: Closes the compare pane.
 
 Help Menu
 - Help Contents: Opens this document inside Notepad-X.
@@ -309,8 +309,6 @@ Keyboard Shortcuts
 - Ctrl+Shift+D: Time/Date
 - Ctrl+Shift+F: Font
 - Ctrl+Tab: Switch Tab
-- Ctrl+Left: Switch Tab Left
-- Ctrl+Right: Switch Tab Right
 - Ctrl+Q: Compare Tabs
 - Ctrl+B: Toggle Status Bar
 - Ctrl+PgUp: Top of Document
