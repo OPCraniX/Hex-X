@@ -2627,6 +2627,16 @@ class NotepadX:
                 })
         return exported
 
+    def normalize_optional_metadata(self, value):
+        if value is None:
+            return None
+        text = str(value).strip()
+        if not text:
+            return None
+        if text.lower() in {'none', 'null'}:
+            return None
+        return text
+
     def sanitize_note_payload(self, saved_note):
         if not isinstance(saved_note, dict):
             return None
@@ -2649,15 +2659,15 @@ class NotepadX:
             'start': start,
             'end': end,
             'text': note_text,
-            'approved_by': str(saved_note.get('approved_by', '')).strip() or None,
-            'dissapproved_by': str(saved_note.get('dissapproved_by', '')).strip() or None,
-            'approved_note': str(saved_note.get('approved_note', '')).strip() or None,
-            'dissapproved_note': str(saved_note.get('dissapproved_note', '')).strip() or None,
-            'author_id': str(saved_note.get('author_id', '')).strip() or None,
-            'author_label': str(saved_note.get('author_label', '')).strip() or None,
+            'approved_by': self.normalize_optional_metadata(saved_note.get('approved_by')),
+            'dissapproved_by': self.normalize_optional_metadata(saved_note.get('dissapproved_by')),
+            'approved_note': self.normalize_optional_metadata(saved_note.get('approved_note')),
+            'dissapproved_note': self.normalize_optional_metadata(saved_note.get('dissapproved_note')),
+            'author_id': self.normalize_optional_metadata(saved_note.get('author_id')),
+            'author_label': self.normalize_optional_metadata(saved_note.get('author_label')),
             'read_by': [str(editor_id).strip() for editor_id in read_by if str(editor_id).strip()],
             'author_unread': bool(saved_note.get('author_unread', False)),
-            'created_at': str(saved_note.get('created_at', '')).strip() or None,
+            'created_at': self.normalize_optional_metadata(saved_note.get('created_at')),
             'anchor_text': str(saved_note.get('anchor_text', '')),
             'anchor_line': anchor_line,
         }
@@ -2737,10 +2747,20 @@ class NotepadX:
         notes = payload.get('notes', [])
         editors = self.prune_inactive_shared_editors(payload.get('editors', []))
         sanitized_notes = []
+        dirty_payload = False
         for note in notes if isinstance(notes, list) else []:
             sanitized_note = self.sanitize_note_payload(note)
             if sanitized_note is not None:
                 sanitized_notes.append(sanitized_note)
+                if sanitized_note != note:
+                    dirty_payload = True
+            else:
+                dirty_payload = True
+        if dirty_payload:
+            try:
+                self.write_shared_notes(sidecar_path, sanitized_notes, len(editors), editors)
+            except OSError as exc:
+                self.log_exception("rewrite sanitized shared notes", exc)
         return {
             'active_editors': len(editors),
             'editors': editors,
