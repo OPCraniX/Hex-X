@@ -50,7 +50,8 @@ File Menu
 - Close Tab: Closes the current tab and prompts to save if needed.
 - Save: Saves the current tab.
 - Save all: Saves every normal editable tab. Modified untitled tabs prompt for a file name. Large virtual/read-only tabs are skipped.
-- Save Copy As: Saves a copy of the current tab. In very large virtual or preview modes, this copies the source file stream to a new path without trying to edit the original.
+- Save As: Opens the standard save dialog with file type filters for text, markdown, .gitignore, and supported source/config formats.
+- Save Copy As: Saves a copy of the current tab. In very large virtual or preview modes, this copies the source file stream to a new path without trying to edit the original. It uses its own Save Copy As dialog title and the same file type filters as Save As.
 - Print: Sends the current saved file to the Windows print action. If the tab has never been saved, Notepad-X prompts you to save it first.
 - Export Notes: Exports the current tab's notes to JSON or Markdown.
 - Exit: Closes the app. If Find or Replace is open, Ctrl+Shift+X closes the panel first and exits only when no panel is open.
@@ -66,6 +67,8 @@ Edit Menu
 - Replace: Opens the Find/Replace panel.
 - Filter Notes: Filters note cycling to All, Unread, Allowed, or Denied notes.
 - Go To Line: Jumps to a specific line number.
+- Top of Document: Jumps to line 1, column 1.
+- Bottom of Document: Jumps to the last line, column 1.
 - Date: Inserts the current date.
 - Time/Date: Inserts the current time and date.
 - Font: Opens the font picker for editor family and size.
@@ -102,7 +105,9 @@ Saving and Save Safety
 
 Find and Replace
 - Find highlights matches live while you type.
-- The first current match is selected automatically during live find.
+- Live find does not move the caret while you type.
+- Pressing Enter in the Find or Replace query box jumps to the first match from the top of the active editor pane.
+- After that jump, the caret is placed at the end of the found match.
 - Replace uses the same live highlighting in its Find field.
 - Closing Find or Replace clears the field and removes the highlights.
 - The Find and Replace panels include a Search across all tabs checkbox.
@@ -111,6 +116,7 @@ Find and Replace
 - Find is not available in buffered large-file virtual mode.
 - Replace is not available in buffered large-file virtual mode.
 - Ctrl+Shift+X closes the Find or Replace panel if one is open.
+- If Help Contents or About Notepad-X is open, Ctrl+Shift+X closes that window before it falls through to compare, Find/Replace, or exit behavior.
 
 Syntax Highlighting
 - Python uses IDLE-based highlighting when the required IDLE components are available in the Python install.
@@ -307,6 +313,8 @@ Keyboard Shortcuts
 - Ctrl+Right: Switch Tab Right
 - Ctrl+Q: Compare Tabs
 - Ctrl+B: Toggle Status Bar
+- Ctrl+PgUp: Top of Document
+- Ctrl+PgDn: Bottom of Document
 - Ctrl++: Zoom in
 - Ctrl+-: Zoom out
 - Ctrl+Mouse Wheel: Zoom

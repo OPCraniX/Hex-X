@@ -17,6 +17,7 @@ It keeps a simple desktop-editor feel, but adds project opening, persistent sess
 - Syntax theme presets and manual syntax override per tab
 - Large-file protection with buffered virtual mode
 - `Save Copy As` for huge read-only files
+- Save dialogs with text, markdown, `.gitignore`, and code/config file type filters
 - Code notes on selected text
 - Shared note sidecars with unread tracking
 - Allow / Deny review flow with reviewer name and reply
@@ -64,6 +65,13 @@ Notepad-X includes a lightweight local autocomplete system for normal editable t
 - `Up` / `Down` move through suggestions
 - `Tab` or `Enter` accepts the selected suggestion
 - `Esc` closes the popup
+
+## Find Behavior
+
+- live search highlights matches while you type
+- live search does not move the caret while typing
+- pressing `Enter` in the Find or Replace query box jumps to the first match from the top
+- the caret lands at the end of that found match
 
 ## Code Notes
 
@@ -148,6 +156,8 @@ python -m PyInstaller --noconfirm --clean --onedir --windowed --name "Notepad-X"
 - `F3` Find next or next unread note
 - `F4` Cycle notes
 - `Ctrl+G` Go To Line
+- `Ctrl+PgUp` Top of Document
+- `Ctrl+PgDn` Bottom of Document
 - `Ctrl+D` Date
 - `Ctrl+Shift+D` Time/Date
 - `Ctrl+Shift+F` Font
