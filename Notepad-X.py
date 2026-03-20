@@ -105,6 +105,7 @@ class NotepadX:
         self.sound_enabled = tk.BooleanVar(value=True)
         self.status_bar_enabled = tk.BooleanVar(value=True)
         self.numbered_lines_enabled = tk.BooleanVar(value=True)
+        self.autocomplete_enabled = tk.BooleanVar(value=True)
         self.search_all_tabs = tk.BooleanVar(value=False)
         self.note_filter = tk.StringVar(value='all')
         self.syntax_theme = tk.StringVar(value='Default')
@@ -118,6 +119,11 @@ class NotepadX:
         self.toast_popup = None
         self.toast_after_id = None
         self._last_gutter_copy = None
+        self.autocomplete_popup = None
+        self.autocomplete_listbox = None
+        self.autocomplete_doc_id = None
+        self.autocomplete_start_index = None
+        self.autocomplete_prefix = ""
 
         # Panel visibility flags
         self.find_panel_visible = False
@@ -981,6 +987,7 @@ class NotepadX:
         return "break"
 
     def remember_compare_focus(self, event=None):
+        self.hide_autocomplete_popup()
         compare_widget = self.get_compare_text_widget()
         if compare_widget is not None:
             self.root.after_idle(lambda widget=compare_widget: self.set_last_active_editor_widget(widget))
@@ -1456,6 +1463,12 @@ class NotepadX:
     def toggle_sound(self):
         self.save_session()
 
+    def toggle_autocomplete(self):
+        if not self.autocomplete_enabled.get():
+            self.hide_autocomplete_popup()
+        self.save_session()
+        return "break"
+
     def toggle_status_bar(self, event=None):
         if event is not None:
             self.status_bar_enabled.set(not self.status_bar_enabled.get())
@@ -1465,6 +1478,196 @@ class NotepadX:
             self.status_frame.grid_remove()
         self.save_session()
         return "break"
+
+    def hide_autocomplete_popup(self):
+        popup = getattr(self, 'autocomplete_popup', None)
+        if popup is not None:
+            try:
+                popup.destroy()
+            except tk.TclError:
+                pass
+        self.autocomplete_popup = None
+        self.autocomplete_listbox = None
+        self.autocomplete_doc_id = None
+        self.autocomplete_start_index = None
+        self.autocomplete_prefix = ""
+
+    def autocomplete_popup_visible(self):
+        popup = getattr(self, 'autocomplete_popup', None)
+        if popup is None:
+            return False
+        try:
+            return popup.winfo_exists()
+        except tk.TclError:
+            return False
+
+    def get_autocomplete_keywords(self, syntax_mode):
+        keyword_sets = {
+            'python': ['and', 'as', 'assert', 'break', 'class', 'continue', 'def', 'del', 'elif', 'else', 'except', 'False', 'finally', 'for', 'from', 'if', 'import', 'in', 'is', 'lambda', 'None', 'not', 'or', 'pass', 'raise', 'return', 'self', 'True', 'try', 'while', 'with', 'yield'],
+            'c': ['auto', 'break', 'case', 'char', 'const', 'continue', 'default', 'do', 'double', 'else', 'enum', 'extern', 'float', 'for', 'goto', 'if', 'inline', 'int', 'long', 'register', 'return', 'short', 'signed', 'sizeof', 'static', 'struct', 'switch', 'typedef', 'union', 'unsigned', 'void', 'volatile', 'while'],
+            'cpp': ['bool', 'break', 'case', 'catch', 'class', 'const', 'constexpr', 'continue', 'default', 'delete', 'do', 'double', 'else', 'enum', 'false', 'float', 'for', 'if', 'inline', 'int', 'namespace', 'new', 'nullptr', 'private', 'protected', 'public', 'return', 'static', 'std', 'struct', 'switch', 'template', 'this', 'throw', 'true', 'try', 'using', 'virtual', 'void', 'while'],
+            'rust': ['as', 'break', 'const', 'continue', 'crate', 'else', 'enum', 'false', 'fn', 'for', 'if', 'impl', 'in', 'let', 'loop', 'match', 'mod', 'move', 'mut', 'pub', 'ref', 'return', 'self', 'Self', 'static', 'struct', 'trait', 'true', 'type', 'unsafe', 'use', 'where', 'while'],
+            'java': ['abstract', 'boolean', 'break', 'byte', 'case', 'catch', 'class', 'continue', 'default', 'double', 'else', 'extends', 'false', 'final', 'finally', 'float', 'for', 'if', 'implements', 'import', 'int', 'interface', 'long', 'new', 'null', 'package', 'private', 'protected', 'public', 'return', 'short', 'static', 'super', 'switch', 'this', 'throw', 'true', 'try', 'void', 'while'],
+            'javascript': ['async', 'await', 'break', 'case', 'catch', 'class', 'const', 'continue', 'default', 'else', 'export', 'extends', 'false', 'finally', 'for', 'function', 'if', 'import', 'let', 'new', 'null', 'return', 'super', 'switch', 'this', 'throw', 'true', 'try', 'undefined', 'var', 'while'],
+            'html': ['body', 'div', 'footer', 'form', 'head', 'header', 'html', 'img', 'input', 'label', 'link', 'main', 'meta', 'nav', 'script', 'section', 'span', 'style', 'title'],
+            'php': ['class', 'echo', 'else', 'elseif', 'false', 'foreach', 'function', 'if', 'namespace', 'new', 'null', 'private', 'protected', 'public', 'require', 'return', 'static', 'this', 'true', 'use', 'var', 'while'],
+            'xml': ['attribute', 'comment', 'element', 'encoding', 'namespace', 'version'],
+            'sql': ['alter', 'and', 'as', 'create', 'delete', 'drop', 'from', 'group', 'having', 'insert', 'into', 'join', 'not', 'null', 'or', 'order', 'select', 'set', 'table', 'update', 'values', 'where'],
+        }
+        return keyword_sets.get(syntax_mode or '', [])
+
+    def update_autocomplete_popup(self, doc):
+        if not self.autocomplete_enabled.get() or not doc:
+            self.hide_autocomplete_popup()
+            return
+        if doc.get('virtual_mode') or doc.get('preview_mode') or doc.get('large_file_mode'):
+            self.hide_autocomplete_popup()
+            return
+
+        text = doc.get('text')
+        if not text or not text.winfo_exists():
+            self.hide_autocomplete_popup()
+            return
+
+        try:
+            line_start = text.index(f"{tk.INSERT} linestart")
+            current_line = text.get(line_start, tk.INSERT)
+        except tk.TclError:
+            self.hide_autocomplete_popup()
+            return
+
+        match = re.search(r'([A-Za-z_][A-Za-z0-9_]*)$', current_line)
+        if not match:
+            self.hide_autocomplete_popup()
+            return
+
+        prefix = match.group(1)
+        if len(prefix) < 2:
+            self.hide_autocomplete_popup()
+            return
+
+        syntax_mode = self.get_syntax_mode(doc)
+        suggestions = []
+        seen = set()
+
+        try:
+            content = text.get('1.0', 'end-1c')
+        except tk.TclError:
+            content = ''
+
+        for word in re.findall(r'\b[A-Za-z_][A-Za-z0-9_]*\b', content):
+            if len(word) < len(prefix) or word == prefix or not word.lower().startswith(prefix.lower()):
+                continue
+            lowered = word.lower()
+            if lowered in seen:
+                continue
+            seen.add(lowered)
+            suggestions.append(word)
+            if len(suggestions) >= 24:
+                break
+
+        for word in self.get_autocomplete_keywords(syntax_mode):
+            if len(word) < len(prefix) or word == prefix or not word.lower().startswith(prefix.lower()):
+                continue
+            lowered = word.lower()
+            if lowered in seen:
+                continue
+            seen.add(lowered)
+            suggestions.append(word)
+            if len(suggestions) >= 24:
+                break
+
+        if not suggestions:
+            self.hide_autocomplete_popup()
+            return
+
+        try:
+            bbox = text.bbox(tk.INSERT)
+        except tk.TclError:
+            bbox = None
+        if not bbox:
+            self.hide_autocomplete_popup()
+            return
+
+        x, y, width, height = bbox
+        popup = self.autocomplete_popup
+        if not self.autocomplete_popup_visible():
+            popup = tk.Toplevel(self.root)
+            popup.wm_overrideredirect(True)
+            popup.configure(bg='#2d2d2d')
+            listbox = tk.Listbox(
+                popup,
+                bg='#161b22',
+                fg=self.fg_color,
+                selectbackground='#264f78',
+                selectforeground='white',
+                activestyle='none',
+                highlightthickness=1,
+                highlightbackground='#30363d',
+                relief='flat',
+                borderwidth=0,
+                font=('Segoe UI', 10),
+                width=max(18, min(42, max(len(word) for word in suggestions) + 2)),
+                height=min(8, len(suggestions))
+            )
+            listbox.pack(fill='both', expand=True)
+            self.autocomplete_popup = popup
+            self.autocomplete_listbox = listbox
+        else:
+            listbox = self.autocomplete_listbox
+            listbox.configure(width=max(18, min(42, max(len(word) for word in suggestions) + 2)), height=min(8, len(suggestions)))
+
+        listbox.delete(0, tk.END)
+        for suggestion in suggestions:
+            listbox.insert(tk.END, suggestion)
+        listbox.selection_clear(0, tk.END)
+        listbox.selection_set(0)
+        listbox.activate(0)
+
+        popup.geometry(f"+{text.winfo_rootx() + x}+{text.winfo_rooty() + y + height + 2}")
+        popup.lift()
+        self.autocomplete_doc_id = str(doc['frame'])
+        self.autocomplete_start_index = f"{line_start}+{match.start(1)}c"
+        self.autocomplete_prefix = prefix
+
+    def move_autocomplete_selection(self, direction):
+        if not self.autocomplete_popup_visible() or not self.autocomplete_listbox:
+            return "break"
+        listbox = self.autocomplete_listbox
+        selection = listbox.curselection()
+        current_index = selection[0] if selection else 0
+        next_index = max(0, min(listbox.size() - 1, current_index + direction))
+        listbox.selection_clear(0, tk.END)
+        listbox.selection_set(next_index)
+        listbox.activate(next_index)
+        listbox.see(next_index)
+        return "break"
+
+    def accept_autocomplete_selection(self):
+        if not self.autocomplete_popup_visible() or not self.autocomplete_listbox:
+            return False
+        doc = self.documents.get(self.autocomplete_doc_id)
+        if not doc:
+            self.hide_autocomplete_popup()
+            return False
+        text = doc.get('text')
+        if not text or not text.winfo_exists():
+            self.hide_autocomplete_popup()
+            return False
+        selection = self.autocomplete_listbox.curselection()
+        if not selection:
+            return False
+        suggestion = self.autocomplete_listbox.get(selection[0])
+        try:
+            text.delete(self.autocomplete_start_index, tk.INSERT)
+            text.insert(self.autocomplete_start_index, suggestion)
+            text.edit_modified(True)
+        except tk.TclError:
+            self.hide_autocomplete_popup()
+            return False
+        self.hide_autocomplete_popup()
+        self.on_text_modified(doc['frame'])
+        return True
 
     # ─── Text Widget ─────────────────────────────────────────────
     def create_text_widget(self):
@@ -2366,9 +2569,9 @@ class NotepadX:
             return
         self.set_last_active_editor_widget(doc['text'])
         self.remember_doc_view_state(doc)
+        event_type = str(getattr(event, 'type', ''))
         if doc.get('virtual_mode'):
             # Don't rebuffer while the user is actively selecting text.
-            event_type = str(getattr(event, 'type', ''))
             if event_type in {'4', '5', '6', 'Motion', 'ButtonPress', 'ButtonRelease'}:
                 self.update_line_number_gutter(doc)
                 self.update_status()
@@ -2381,6 +2584,10 @@ class NotepadX:
             except tk.TclError:
                 pass
             self.ensure_virtual_line_visible(doc)
+        if event_type in {'4', '5', '6', 'Motion', 'ButtonPress', 'ButtonRelease'}:
+            self.hide_autocomplete_popup()
+        elif event_type not in {'35'}:
+            self.update_autocomplete_popup(doc)
         self.update_line_number_gutter(doc)
         self.update_status()
 
@@ -2392,7 +2599,23 @@ class NotepadX:
 
     def handle_text_keypress(self, event, tab_id):
         doc = self.documents.get(str(tab_id))
-        if not doc or not doc.get('virtual_mode'):
+        if not doc:
+            return
+
+        if not doc.get('virtual_mode'):
+            if self.autocomplete_popup_visible() and self.autocomplete_doc_id == str(tab_id):
+                if event.keysym == 'Up':
+                    return self.move_autocomplete_selection(-1)
+                if event.keysym == 'Down':
+                    return self.move_autocomplete_selection(1)
+                if event.keysym in {'Tab', 'Return', 'KP_Enter'}:
+                    if self.accept_autocomplete_selection():
+                        return "break"
+                if event.keysym == 'Escape':
+                    self.hide_autocomplete_popup()
+                    return "break"
+                if event.keysym in {'Left', 'Right', 'Home', 'End', 'Prior', 'Next'}:
+                    self.hide_autocomplete_popup()
             return
 
         navigation_keys = {
@@ -3512,6 +3735,7 @@ class NotepadX:
             'sound_enabled': bool(self.sound_enabled.get()),
             'status_bar_enabled': bool(self.status_bar_enabled.get()),
             'numbered_lines_enabled': bool(self.numbered_lines_enabled.get()),
+            'autocomplete_enabled': bool(self.autocomplete_enabled.get()),
             'syntax_theme': self.syntax_theme.get(),
         }
 
@@ -3692,6 +3916,7 @@ class NotepadX:
         self.sound_enabled.set(bool(session.get('sound_enabled', True)))
         self.status_bar_enabled.set(bool(session.get('status_bar_enabled', True)))
         self.numbered_lines_enabled.set(bool(session.get('numbered_lines_enabled', True)))
+        self.autocomplete_enabled.set(bool(session.get('autocomplete_enabled', True)))
         self.syntax_theme.set(str(session.get('syntax_theme', 'Default')))
         if self.status_bar_enabled.get():
             self.status_frame.grid()
@@ -3796,6 +4021,7 @@ class NotepadX:
         self.update_status()
 
     def on_tab_changed(self, event=None):
+        self.hide_autocomplete_popup()
         previous_widget = getattr(self, 'last_active_editor_widget', None)
         if previous_widget is not None:
             previous_doc = self.get_doc_for_text_widget(previous_widget)
@@ -4013,6 +4239,7 @@ class NotepadX:
         view_menu.add_command(label="Switch Tab", command=self.switch_tab_right, accelerator="Ctrl+Tab")
         view_menu.add_checkbutton(label="Status Bar", variable=self.status_bar_enabled, command=self.toggle_status_bar, accelerator="Ctrl+B")
         view_menu.add_checkbutton(label="Numbered Lines", variable=self.numbered_lines_enabled, command=self.toggle_numbered_lines)
+        view_menu.add_checkbutton(label="Autocomplete", variable=self.autocomplete_enabled, command=self.toggle_autocomplete)
         view_menu.add_checkbutton(label="Word Wrap", variable=self.word_wrap_enabled, command=self.toggle_word_wrap)
         view_menu.add_checkbutton(label="Sound", variable=self.sound_enabled, command=self.toggle_sound)
         syntax_theme_menu = tk.Menu(view_menu, tearoff=0, bg='#2d2d2d', fg=self.fg_color, activebackground='#3a3a3a')
