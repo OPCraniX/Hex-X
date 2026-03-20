@@ -11,6 +11,7 @@ import hashlib
 import secrets
 import tempfile
 import traceback
+import time
 from datetime import datetime
 from ctypes import wintypes
 
@@ -112,6 +113,7 @@ class NotepadX:
         self.last_active_editor_widget = None
         self.toast_popup = None
         self.toast_after_id = None
+        self._last_gutter_copy = None
 
         # Panel visibility flags
         self.find_panel_visible = False
@@ -717,6 +719,14 @@ class NotepadX:
         except tk.TclError:
             return "break"
 
+        copy_signature = (id(event.widget), local_line, line_text)
+        now = time.monotonic()
+        if self._last_gutter_copy:
+            last_signature, last_time = self._last_gutter_copy
+            if copy_signature == last_signature and (now - last_time) < 0.35:
+                return "break"
+        self._last_gutter_copy = (copy_signature, now)
+
         self.root.clipboard_clear()
         self.root.clipboard_append(line_text)
         self.root.update_idletasks()
@@ -1246,12 +1256,8 @@ class NotepadX:
         self.root.bind('<Control-Z>', self.undo)
         self.root.bind('<Control-Shift-Z>', self.redo)
         self.root.bind('<Control-Shift-z>', self.redo)
-        self.root.bind('<Control-c>', self.copy)
-        self.root.bind('<Control-C>', self.copy)
         self.root.bind('<Control-x>', lambda e: self.text.event_generate("<<Cut>>"))
         self.root.bind('<Control-X>', lambda e: self.text.event_generate("<<Cut>>"))
-        self.root.bind('<Control-v>', self.paste)
-        self.root.bind('<Control-V>', self.paste)
         self.root.bind('<Control-a>', self.select_all)
         self.root.bind('<Control-A>', self.select_all)
         self.root.bind_all('<Control-b>', self.toggle_status_bar)
@@ -3796,8 +3802,8 @@ class NotepadX:
         edit_menu.add_command(label="Redo", command=self.redo, accelerator="Ctrl+Shift+Z")
         edit_menu.add_separator()
         edit_menu.add_command(label="Cut",  command=lambda: self.text.event_generate("<<Cut>>"),  accelerator="Ctrl+X")
-        edit_menu.add_command(label="Copy", command=lambda: self.text.event_generate("<<Copy>>"), accelerator="Ctrl+C")
-        edit_menu.add_command(label="Paste",command=lambda: self.text.event_generate("<<Paste>>"),accelerator="Ctrl+V")
+        edit_menu.add_command(label="Copy", command=self.copy, accelerator="Ctrl+C")
+        edit_menu.add_command(label="Paste", command=self.paste, accelerator="Ctrl+V")
         edit_menu.add_command(label="Select All", command=self.select_all, accelerator="Ctrl+A")
         edit_menu.add_separator()
         edit_menu.add_command(label="Find", command=self.show_find_panel, accelerator="Ctrl+F")
@@ -4695,13 +4701,68 @@ class NotepadX:
         return "break"
 
     def copy(self, event=None):
-        self.text.event_generate("<<Copy>>")
+        target = None
+        if event is not None and isinstance(getattr(event, 'widget', None), tk.Text):
+            target = event.widget
+        elif isinstance(self.root.focus_get(), tk.Text):
+            target = self.root.focus_get()
+        elif isinstance(self.text, tk.Text):
+            target = self.text
+
+        if target is None:
+            return "break"
+
+        try:
+            selection = target.get('sel.first', 'sel.last')
+        except tk.TclError:
+            return "break"
+
+        self.root.clipboard_clear()
+        self.root.clipboard_append(selection)
+        self.root.update_idletasks()
         return "break"
 
     def paste(self, event=None):
-        if self.current_doc_is_large_readonly():
+        target = None
+        if event is not None and isinstance(getattr(event, 'widget', None), tk.Text):
+            target = event.widget
+        elif isinstance(self.root.focus_get(), tk.Text):
+            target = self.root.focus_get()
+        elif isinstance(self.text, tk.Text):
+            target = self.text
+
+        compare_widget = self.get_compare_text_widget()
+        if target is None or (compare_widget is not None and target == compare_widget):
             return "break"
-        self.text.event_generate("<<Paste>>")
+
+        doc = self.get_doc_for_text_widget(target)
+        if doc and (doc.get('preview_mode') or doc.get('virtual_mode')):
+            return "break"
+
+        try:
+            clipboard_text = self.root.clipboard_get()
+        except tk.TclError:
+            return "break"
+
+        if clipboard_text is None:
+            return "break"
+
+        try:
+            target.delete('sel.first', 'sel.last')
+        except tk.TclError:
+            pass
+
+        target.insert(tk.INSERT, clipboard_text)
+        try:
+            target.edit_modified(True)
+        except tk.TclError:
+            pass
+        target.see(tk.INSERT)
+        self.set_last_active_editor_widget(target)
+        if doc:
+            self.on_text_modified(doc['frame'])
+        else:
+            self.update_status()
         return "break"
 
     def insert_date(self, event=None):
