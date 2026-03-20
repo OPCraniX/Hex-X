@@ -8,6 +8,7 @@ Main Window
 - The menu bar contains File, Edit, View, and Help.
 - The tab strip holds every open document.
 - The editor area shows the active tab.
+- A GitHub-style line number gutter appears on the left when numbered lines are enabled.
 - The bottom status bar shows editor position and document state on the left, and the live clock on the far right.
 
 Status Bar
@@ -33,6 +34,13 @@ Tabs
 - Dragging tabs with the mouse lets you reorder them.
 - File-backed tabs are restored on startup from the session file.
 - If the only open tab is the default Untitled 1 tab, Close Tab is blocked so the editor never closes down to zero tabs while still running.
+
+Line Numbers
+- Notepad-X shows a GitHub-style line number gutter on the left side of the editor.
+- Numbered lines are enabled by default.
+- Clicking a line number copies that full line to the clipboard.
+- A small in-window notification appears next to the clicked line number area to confirm the copy.
+- The gutter stays in sync while typing, scrolling, switching tabs, using compare mode, and in large-file virtual mode.
 
 File Menu
 - Open: Opens a single file. If the current tab is a blank unmodified untitled tab, Notepad-X can reuse it instead of opening another tab.
@@ -68,6 +76,7 @@ View Menu
 - Switch Tab Left: Moves to the tab on the left.
 - Switch Tab Right: Moves to the tab on the right.
 - Status Bar: Shows or hides the status bar. The checkmark shows whether it is enabled.
+- Numbered Lines: Shows or hides the line number gutter. The checkmark shows whether it is enabled.
 - Word Wrap: Turns wrapping on or off. The checkmark shows whether it is enabled.
 - Sound: Enables or disables note sounds. The checkmark shows whether it is enabled.
 - Syntax Theme: Changes the highlight color palette. Available themes are Default, Soft, and Vivid.
@@ -98,6 +107,7 @@ Find and Replace
 - Closing Find or Replace clears the field and removes the highlights.
 - The Find and Replace panels include a Search across all tabs checkbox.
 - When Search across all tabs is enabled, Find Next can continue into other open tabs instead of stopping at the current tab.
+- In compare mode, Find Next and F3 follow the editor pane you most recently clicked instead of always jumping back to the left side.
 - Find is not available in buffered large-file virtual mode.
 - Replace is not available in buffered large-file virtual mode.
 - Ctrl+Shift+X closes the Find or Replace panel if one is open.
@@ -234,7 +244,7 @@ Audio Notifications
 Session Restore and Recovery
 - File-backed tabs are written to the session file and restored on startup.
 - The last active tab is restored when possible.
-- Sound, status bar, and syntax theme settings are also restored from the session file.
+- Sound, status bar, numbered lines, and syntax theme settings are also restored from the session file.
 - Unsaved untitled tabs are not part of normal session restore, but they can be recovered after a crash through the recovery system.
 - If Notepad-X finds recovery data from a previous crash, it asks whether you want to restore the unsaved tabs.
 
@@ -274,8 +284,10 @@ Keyboard Shortcuts
 - Ctrl+Shift+T: Close Tab
 - Ctrl+S: Save
 - Ctrl+Shift+S: Save all
+- Ctrl+Shift+Q: Save Copy As
+- Ctrl+E: Export Notes
 - Ctrl+P: Print
-- Ctrl+Shift+X: Close Find/Replace if open, otherwise exit
+- Ctrl+Shift+X: Close compare mode or Find/Replace if open, otherwise exit
 - Ctrl+Z: Undo
 - Ctrl+Shift+Z: Redo
 - Ctrl+X: Cut
@@ -293,6 +305,7 @@ Keyboard Shortcuts
 - Ctrl+Tab: Switch Tab
 - Ctrl+Left: Switch Tab Left
 - Ctrl+Right: Switch Tab Right
+- Ctrl+Q: Compare Tabs
 - Ctrl+B: Toggle Status Bar
 - Ctrl++: Zoom in
 - Ctrl+-: Zoom out

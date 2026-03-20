@@ -99,6 +99,7 @@ class NotepadX:
         self.word_wrap_enabled = tk.BooleanVar(value=True)
         self.sound_enabled = tk.BooleanVar(value=True)
         self.status_bar_enabled = tk.BooleanVar(value=True)
+        self.numbered_lines_enabled = tk.BooleanVar(value=True)
         self.search_all_tabs = tk.BooleanVar(value=False)
         self.note_filter = tk.StringVar(value='all')
         self.syntax_theme = tk.StringVar(value='Default')
@@ -109,6 +110,8 @@ class NotepadX:
         self.compare_refresh_job = None
         self.compare_view = None
         self.last_active_editor_widget = None
+        self.toast_popup = None
+        self.toast_after_id = None
 
         # Panel visibility flags
         self.find_panel_visible = False
@@ -386,8 +389,32 @@ class NotepadX:
         font_tuple = (self.font_family, self.current_font_size)
         for doc in self.documents.values():
             doc['text'].configure(font=font_tuple)
+            self.update_line_number_gutter(doc)
         if self.compare_view:
             self.compare_view['text'].configure(font=font_tuple)
+            self.update_line_number_gutter(self.compare_view)
+
+    def toggle_numbered_lines(self):
+        show_gutters = self.numbered_lines_enabled.get()
+        for doc in self.documents.values():
+            gutter = doc.get('line_numbers')
+            if not gutter:
+                continue
+            if show_gutters:
+                gutter.grid()
+            else:
+                gutter.grid_remove()
+            self.update_line_number_gutter(doc)
+        if self.compare_view:
+            gutter = self.compare_view.get('line_numbers')
+            if gutter:
+                if show_gutters:
+                    gutter.grid()
+                else:
+                    gutter.grid_remove()
+                self.update_line_number_gutter(self.compare_view)
+        self.save_session()
+        return "break"
 
     def update_word_wrap(self):
         wrap_mode = tk.WORD if self.word_wrap_enabled.get() else tk.NONE
@@ -549,6 +576,159 @@ class NotepadX:
         self.status.config(text=status_main_text)
         self.status_sync.config(text="| Notes Synced" if current_doc and current_doc.get('file_path') else "")
         self.status_tail.config(text=status_tail_text)
+
+    def hide_toast(self):
+        popup = getattr(self, 'toast_popup', None)
+        if popup is not None:
+            try:
+                popup.destroy()
+            except tk.TclError:
+                pass
+        self.toast_popup = None
+        self.toast_after_id = None
+
+    def show_toast(self, message, x=None, y=None):
+        if self.toast_after_id:
+            try:
+                self.root.after_cancel(self.toast_after_id)
+            except tk.TclError:
+                pass
+            self.toast_after_id = None
+        self.hide_toast()
+
+        popup = tk.Label(
+            self.root,
+            text=message,
+            bg='#1f6feb',
+            fg='white',
+            font=('Segoe UI', 9, 'bold'),
+            padx=12,
+            pady=7,
+            bd=0,
+            highlightthickness=0
+        )
+        popup.update_idletasks()
+
+        if x is None or y is None:
+            x = self.root.winfo_pointerx()
+            y = self.root.winfo_pointery()
+
+        self.root.update_idletasks()
+        root_x = self.root.winfo_rootx()
+        root_y = self.root.winfo_rooty()
+        local_x = int(x) - root_x + 16
+        local_y = int(y) - root_y + 14
+        max_x = max(8, self.root.winfo_width() - popup.winfo_reqwidth() - 8)
+        max_y = max(8, self.root.winfo_height() - popup.winfo_reqheight() - 8)
+        local_x = max(8, min(local_x, max_x))
+        local_y = max(8, min(local_y, max_y))
+        popup.place(x=local_x, y=local_y)
+        popup.lift()
+
+        self.toast_popup = popup
+        self.toast_after_id = self.root.after(1400, self.hide_toast)
+
+    def create_line_number_gutter(self, parent, tab_id=None, doc=None):
+        gutter = tk.Canvas(
+            parent,
+            width=56,
+            bg='#0d1117',
+            highlightthickness=0,
+            borderwidth=0,
+            relief='flat'
+        )
+        if tab_id is not None:
+            gutter.bind('<Button-1>', lambda e, frame=tab_id: self.copy_line_from_gutter(e, frame))
+        elif doc is not None:
+            gutter.bind('<Button-1>', lambda e, target=doc: self.copy_line_from_gutter(e, target_doc=target))
+        return gutter
+
+    def get_display_line_number(self, doc, local_line):
+        if doc.get('virtual_mode'):
+            return doc.get('window_start_line', 1) + local_line - 1
+        return local_line
+
+    def update_line_number_gutter(self, doc):
+        if not doc:
+            return
+        gutter = doc.get('line_numbers')
+        text = doc.get('text')
+        if not gutter or not text:
+            return
+        try:
+            if not gutter.winfo_exists() or not text.winfo_exists():
+                return
+        except tk.TclError:
+            return
+
+        gutter.delete('all')
+        gutter_height = max(gutter.winfo_height(), text.winfo_height(), 1)
+        gutter_width = int(gutter.cget('width'))
+        current_line = 1
+        try:
+            current_line = int(text.index(tk.INSERT).split('.')[0])
+        except tk.TclError:
+            pass
+
+        gutter.create_rectangle(gutter_width - 1, 0, gutter_width, gutter_height, fill='#30363d', outline='')
+
+        try:
+            index = text.index('@0,0')
+            while True:
+                info = text.dlineinfo(index)
+                if info is None:
+                    break
+                local_line = int(index.split('.')[0])
+                display_line = self.get_display_line_number(doc, local_line)
+                y = info[1]
+                line_height = info[3]
+                if local_line == current_line:
+                    gutter.create_rectangle(0, y, gutter_width - 1, y + line_height, fill='#161b22', outline='')
+                    line_fg = '#c9d1d9'
+                else:
+                    line_fg = '#8b949e'
+                gutter.create_text(
+                    gutter_width - 10,
+                    y + (line_height / 2),
+                    anchor='e',
+                    text=str(display_line),
+                    fill=line_fg,
+                    font=(self.font_family, max(9, self.current_font_size - 1))
+                )
+                index = text.index(f"{local_line + 1}.0")
+        except tk.TclError:
+            return
+
+    def copy_line_from_gutter(self, event, tab_id=None, target_doc=None):
+        doc = target_doc
+        if doc is None and tab_id is not None:
+            doc = self.documents.get(str(tab_id))
+        if not doc:
+            return "break"
+
+        text = doc.get('text')
+        if not text:
+            return "break"
+
+        try:
+            local_index = text.index(f"@0,{event.y}")
+            local_line = int(local_index.split('.')[0])
+            line_text = text.get(f"{local_line}.0", f"{local_line}.end")
+        except tk.TclError:
+            return "break"
+
+        self.root.clipboard_clear()
+        self.root.clipboard_append(line_text)
+        self.root.update_idletasks()
+        display_line = self.get_display_line_number(doc, local_line)
+        toast_x = event.widget.winfo_rootx() + event.x
+        toast_y = event.widget.winfo_rooty() + event.y
+        self.show_toast(
+            f"Copied line {display_line} to clipboard",
+            x=toast_x,
+            y=toast_y
+        )
+        return "break"
         self.status_clock.config(text=datetime.now().strftime("%A | %I:%M:%S %p | %m/%d/%Y").lstrip('0').replace('/0', '/'))
 
     # ─── Bottom Find / Replace Panels ────────────────────────────
@@ -1250,7 +1430,12 @@ class NotepadX:
         compare_body = tk.Frame(self.compare_container, bg=self.bg_color)
         compare_body.grid(row=1, column=0, sticky='nsew')
         compare_body.grid_rowconfigure(0, weight=1)
-        compare_body.grid_columnconfigure(0, weight=1)
+        compare_body.grid_columnconfigure(1, weight=1)
+
+        self.compare_line_numbers = self.create_line_number_gutter(compare_body)
+        self.compare_line_numbers.grid(row=0, column=0, sticky='ns')
+        if not self.numbered_lines_enabled.get():
+            self.compare_line_numbers.grid_remove()
 
         self.compare_text = tk.Text(
             compare_body,
@@ -1271,13 +1456,16 @@ class NotepadX:
             spacing2=1,
             spacing3=2
         )
-        self.compare_text.grid(row=0, column=0, sticky='nsew')
+        self.compare_text.grid(row=0, column=1, sticky='nsew')
 
-        compare_v_scroll = ttk.Scrollbar(compare_body, orient='vertical', command=self.compare_text.yview)
-        compare_v_scroll.grid(row=0, column=1, sticky='ns')
+        compare_v_scroll = ttk.Scrollbar(compare_body, orient='vertical', command=self.on_compare_vertical_scroll)
+        compare_v_scroll.grid(row=0, column=2, sticky='ns')
         compare_h_scroll = ttk.Scrollbar(compare_body, orient='horizontal', command=self.compare_text.xview)
-        compare_h_scroll.grid(row=1, column=0, sticky='ew')
-        self.compare_text.config(yscrollcommand=compare_v_scroll.set, xscrollcommand=compare_h_scroll.set)
+        compare_h_scroll.grid(row=1, column=1, sticky='ew')
+        self.compare_text.config(
+            yscrollcommand=lambda first, last, scroll=compare_v_scroll: self.update_compare_vertical_scrollbar(scroll, first, last),
+            xscrollcommand=compare_h_scroll.set
+        )
         self.compare_text.bind('<KeyPress>', self.handle_compare_keypress)
         self.compare_text.bind('<<Paste>>', lambda e: "break")
         self.compare_text.bind('<<Cut>>', lambda e: "break")
@@ -1293,6 +1481,7 @@ class NotepadX:
         self.compare_view = {
             'frame': self.compare_container,
             'text': self.compare_text,
+            'line_numbers': self.compare_line_numbers,
             'percolator': None,
             'colorizer': None,
             'large_file_mode': False,
@@ -1302,7 +1491,11 @@ class NotepadX:
             'syntax_mode': None,
             'syntax_override': None,
             'file_path': None,
+            'window_start_line': 1,
+            'window_end_line': 1,
+            'total_file_lines': 1,
         }
+        self.compare_line_numbers.bind('<Button-1>', lambda e: self.copy_line_from_gutter(e, target_doc=self.compare_view))
         self.compare_text.tag_config(self.find_matches_tag, background=self.match_bg, foreground='black')
         self.compare_text.tag_config(self.find_current_tag, background='#ff8c42', foreground='black')
         self.apply_syntax_tag_colors(self.compare_text)
@@ -1313,7 +1506,12 @@ class NotepadX:
     def create_tab(self, file_path=None, content="", select=True):
         tab_frame = tk.Frame(self.notebook, bg=self.bg_color)
         tab_frame.grid_rowconfigure(0, weight=1)
-        tab_frame.grid_columnconfigure(0, weight=1)
+        tab_frame.grid_columnconfigure(1, weight=1)
+
+        line_numbers = self.create_line_number_gutter(tab_frame, tab_id=tab_frame)
+        line_numbers.grid(row=0, column=0, sticky='ns')
+        if not self.numbered_lines_enabled.get():
+            line_numbers.grid_remove()
 
         text = tk.Text(
             tab_frame, undo=True,
@@ -1326,12 +1524,12 @@ class NotepadX:
             font=(self.font_family, self.base_font_size),
             spacing1=2, spacing2=1, spacing3=2
         )
-        text.grid(row=0, column=0, sticky='nsew')
+        text.grid(row=0, column=1, sticky='nsew')
 
         v_scroll = ttk.Scrollbar(tab_frame, orient='vertical')
-        v_scroll.grid(row=0, column=1, sticky='ns')
+        v_scroll.grid(row=0, column=2, sticky='ns')
         h_scroll = ttk.Scrollbar(tab_frame, orient='horizontal', command=text.xview)
-        h_scroll.grid(row=1, column=0, sticky='ew')
+        h_scroll.grid(row=1, column=1, sticky='ew')
         v_scroll.configure(command=lambda *args, frame=tab_frame: self.on_vertical_scroll(frame, *args))
         text.config(
             yscrollcommand=lambda first, last, frame=tab_frame, scroll=v_scroll: self.update_vertical_scrollbar(frame, scroll, first, last),
@@ -1364,6 +1562,7 @@ class NotepadX:
         self.documents[str(tab_frame)] = {
             'frame': tab_frame,
             'text': text,
+            'line_numbers': line_numbers,
             'v_scroll': v_scroll,
             'file_path': file_path,
             'untitled_name': self.next_untitled_name(),
@@ -1402,6 +1601,7 @@ class NotepadX:
         if select:
             self.notebook.select(tab_frame)
             self.set_active_document(tab_frame)
+        self.root.after_idle(lambda frame=tab_frame: self.update_line_number_gutter(self.documents.get(str(frame))))
         return tab_frame
 
     def get_syntax_mode(self, doc):
@@ -1979,6 +2179,7 @@ class NotepadX:
             text.mark_set(tk.INSERT, '1.0')
 
         self.update_vertical_scrollbar(doc['frame'], None, None, None)
+        self.update_line_number_gutter(doc)
 
     def ensure_virtual_line_visible(self, doc, target_line=None):
         if not doc.get('virtual_mode'):
@@ -2007,15 +2208,18 @@ class NotepadX:
             # Don't rebuffer while the user is actively selecting text.
             event_type = str(getattr(event, 'type', ''))
             if event_type in {'4', '5', '6', 'Motion', 'ButtonPress', 'ButtonRelease'}:
+                self.update_line_number_gutter(doc)
                 self.update_status()
                 return
             try:
                 doc['text'].index('sel.first')
+                self.update_line_number_gutter(doc)
                 self.update_status()
                 return
             except tk.TclError:
                 pass
             self.ensure_virtual_line_visible(doc)
+        self.update_line_number_gutter(doc)
         self.update_status()
 
     def remember_doc_focus(self, tab_id):
@@ -2082,6 +2286,7 @@ class NotepadX:
                 text.yview_scroll(3, 'units')
             elif doc['window_end_line'] < doc['total_file_lines']:
                 self.load_virtual_window(doc, min(doc['total_file_lines'], doc['window_end_line'] + 20))
+        self.update_line_number_gutter(doc)
         self.update_status()
         return "break"
 
@@ -2092,6 +2297,7 @@ class NotepadX:
 
         if not doc.get('virtual_mode'):
             doc['text'].yview(*args)
+            self.update_line_number_gutter(doc)
             return
 
         if not args:
@@ -2122,12 +2328,24 @@ class NotepadX:
         if not doc.get('virtual_mode'):
             if first is not None and last is not None:
                 scrollbar.set(first, last)
+            self.update_line_number_gutter(doc)
             return
 
         total_lines = max(1, doc['total_file_lines'])
         first_fraction = (doc['window_start_line'] - 1) / total_lines
         last_fraction = doc['window_end_line'] / total_lines
         scrollbar.set(first_fraction, min(1.0, last_fraction))
+        self.update_line_number_gutter(doc)
+
+    def on_compare_vertical_scroll(self, *args):
+        if not self.compare_view or not self.compare_view.get('text'):
+            return
+        self.compare_view['text'].yview(*args)
+        self.update_line_number_gutter(self.compare_view)
+
+    def update_compare_vertical_scrollbar(self, scrollbar, first, last):
+        scrollbar.set(first, last)
+        self.update_line_number_gutter(self.compare_view)
 
     def create_text_context_menu(self, tab_id):
         doc = self.documents.get(str(tab_id))
@@ -3115,6 +3333,7 @@ class NotepadX:
             ],
             'sound_enabled': bool(self.sound_enabled.get()),
             'status_bar_enabled': bool(self.status_bar_enabled.get()),
+            'numbered_lines_enabled': bool(self.numbered_lines_enabled.get()),
             'syntax_theme': self.syntax_theme.get(),
         }
 
@@ -3294,11 +3513,13 @@ class NotepadX:
         ][:self.max_recent_files]
         self.sound_enabled.set(bool(session.get('sound_enabled', True)))
         self.status_bar_enabled.set(bool(session.get('status_bar_enabled', True)))
+        self.numbered_lines_enabled.set(bool(session.get('numbered_lines_enabled', True)))
         self.syntax_theme.set(str(session.get('syntax_theme', 'Default')))
         if self.status_bar_enabled.get():
             self.status_frame.grid()
         else:
             self.status_frame.grid_remove()
+        self.toggle_numbered_lines()
         self.refresh_recent_files_menu()
         if not open_files:
             return
@@ -3391,6 +3612,7 @@ class NotepadX:
         self.text = doc['text']
         self.current_file = doc['file_path']
         self.syntax_mode_selection.set(doc.get('syntax_override') or 'auto')
+        self.update_line_number_gutter(doc)
         self.update_window_title()
         self.update_status()
 
@@ -3444,6 +3666,7 @@ class NotepadX:
             self.configure_syntax_highlighting(tab_id)
         if doc.get('syntax_mode') and doc.get('syntax_mode') != 'python':
             self.schedule_syntax_highlight(doc)
+        self.update_line_number_gutter(doc)
         self.refresh_tab_title(tab_id)
         self.schedule_recovery_save()
         if self.compare_active and self.compare_source_tab == str(tab_id):
@@ -3600,6 +3823,7 @@ class NotepadX:
         view_menu.add_command(label="Switch Tab Left", command=self.switch_tab_left, accelerator="Ctrl+Left")
         view_menu.add_command(label="Switch Tab Right", command=self.switch_tab_right, accelerator="Ctrl+Right")
         view_menu.add_checkbutton(label="Status Bar", variable=self.status_bar_enabled, command=self.toggle_status_bar, accelerator="Ctrl+B")
+        view_menu.add_checkbutton(label="Numbered Lines", variable=self.numbered_lines_enabled, command=self.toggle_numbered_lines)
         view_menu.add_checkbutton(label="Word Wrap", variable=self.word_wrap_enabled, command=self.toggle_word_wrap)
         view_menu.add_checkbutton(label="Sound", variable=self.sound_enabled, command=self.toggle_sound)
         syntax_theme_menu = tk.Menu(view_menu, tearoff=0, bg='#2d2d2d', fg=self.fg_color, activebackground='#3a3a3a')
@@ -3769,6 +3993,9 @@ class NotepadX:
         compare_doc['large_file_mode'] = bool(doc.get('large_file_mode'))
         compare_doc['preview_mode'] = bool(doc.get('preview_mode'))
         compare_doc['virtual_mode'] = bool(doc.get('virtual_mode'))
+        compare_doc['window_start_line'] = doc.get('window_start_line', 1)
+        compare_doc['window_end_line'] = doc.get('window_end_line', 1)
+        compare_doc['total_file_lines'] = doc.get('total_file_lines', 1)
 
         self.refresh_compare_header()
 
@@ -3776,6 +4003,7 @@ class NotepadX:
         compare_text.delete('1.0', tk.END)
         compare_text.insert('1.0', doc['text'].get('1.0', 'end-1c'))
         self.configure_syntax_for_doc(compare_doc)
+        self.update_line_number_gutter(compare_doc)
 
     def set_compare_sash_position(self):
         if not self.compare_active:

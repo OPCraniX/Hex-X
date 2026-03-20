@@ -9,6 +9,7 @@ It keeps a simple desktop-editor feel, but adds project opening, persistent sess
 - Tabbed editing with persistent file-backed sessions
 - Recent files and `Open Project`
 - Drag-reorder tabs
+- GitHub-style line number gutter with click-to-copy line support
 - Live Find and Find/Replace
 - Optional `Search across all tabs`
 - Syntax highlighting for many source and config formats
@@ -20,10 +21,12 @@ It keeps a simple desktop-editor feel, but adds project opening, persistent sess
 - Allow / Deny review flow with reviewer name and reply
 - Export notes to JSON or Markdown
 - Inline compare mode inside the main editor
+- `Find Next` and `F3` follow the active pane during compare mode
 - Autosave recovery for unsaved untitled tabs after a crash
 - Crash logging for important failures and unhandled exceptions
 - Status bar with line info, memory usage, note sync state, editor ID, and live clock
 - Word Wrap, Sound toggle, Full Screen, zoom controls, font picker, printing
+- `View > Numbered Lines` toggle with saved preference
 - Built-in Help viewer and About dialog
 
 ## Compare Mode
@@ -34,7 +37,18 @@ Notepad-X can compare two open tabs side by side inside the main window.
 - the normal editor stays usable on the left
 - the compared file appears on the right
 - syntax highlighting is applied on the compare side too
+- `Find Next` and `F3` follow whichever compare pane you last clicked
 - `Ctrl+Shift+X` closes compare mode
+
+## Line Numbers
+
+Notepad-X includes a GitHub-style line number gutter on the left side of the editor.
+
+- line numbers are enabled by default
+- `View > Numbered Lines` hides or shows the gutter
+- the setting is remembered across launches
+- clicking a line number copies that whole line to the clipboard
+- a small in-window notification appears beside the clicked gutter line
 
 ## Code Notes
 
