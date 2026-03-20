@@ -30,6 +30,9 @@ class NotepadX:
         self.app_dir = self.get_app_dir()
         self.isolated_session = isolated_session
         self.icon_path = self.resolve_gfx_path("Notepad-X.ico")
+        self.splash_path = self.resolve_gfx_path("splash.png")
+        self.splash_max_width = 430
+        self.splash_max_height = 645
         self.note_sound_path = self.resolve_audio_path("note.mp3")
         self.delete_note_sound_path = self.resolve_audio_path("delete_note.mp3")
         
@@ -4085,20 +4088,32 @@ class NotepadX:
         content = tk.Frame(dialog, bg=self.bg_color)
         content.pack()
 
-        icon_loaded = False
+        image_loaded = False
         icon_widget = None
-        if os.path.exists(self.icon_path):
+        if os.path.exists(self.splash_path):
+            try:
+                from PIL import Image, ImageTk
+                splash_image = Image.open(self.splash_path)
+                splash_image.thumbnail((self.splash_max_width, self.splash_max_height), Image.LANCZOS)
+                dialog.icon_image = ImageTk.PhotoImage(splash_image)
+                image_loaded = True
+                icon_widget = tk.Label(content, image=dialog.icon_image, bg=self.bg_color, cursor='hand2')
+                icon_widget.pack(pady=(0, 12))
+            except Exception:
+                image_loaded = False
+
+        if not image_loaded and os.path.exists(self.icon_path):
             try:
                 from PIL import Image, ImageTk
                 icon_image = Image.open(self.icon_path)
                 dialog.icon_image = ImageTk.PhotoImage(icon_image)
-                icon_loaded = True
+                image_loaded = True
                 icon_widget = tk.Label(content, image=dialog.icon_image, bg=self.bg_color, cursor='hand2')
                 icon_widget.pack(pady=(0, 12))
             except Exception:
-                icon_loaded = False
+                image_loaded = False
 
-        if not icon_loaded:
+        if not image_loaded:
             icon_widget = tk.Label(
                 content,
                 text="[Icon]",
@@ -4121,7 +4136,7 @@ class NotepadX:
 
         tk.Label(
             content,
-            text="When you are so sick of Microsoft and AI you decide to make your own Notepad.",
+            text="Built because Microsoft forgot what Notepad was supposed to be.",
             bg=self.bg_color,
             fg='#9aa0a6',
             font=('Segoe UI', 9)
