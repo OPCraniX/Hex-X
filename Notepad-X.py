@@ -1520,6 +1520,8 @@ class NotepadX:
         self.root.bind('<Control-Shift-z>', self.redo)
         self.root.bind('<Control-x>', self.cut)
         self.root.bind('<Control-X>', self.cut)
+        self.root.bind('<Control-v>', self.paste)
+        self.root.bind('<Control-V>', self.paste)
         self.root.bind('<Control-a>', self.select_all)
         self.root.bind('<Control-A>', self.select_all)
         self.root.bind_all('<Control-b>', self.toggle_status_bar)
