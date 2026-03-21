@@ -1380,8 +1380,8 @@ class NotepadX:
         self.root.bind('<Control-Z>', self.undo)
         self.root.bind('<Control-Shift-Z>', self.redo)
         self.root.bind('<Control-Shift-z>', self.redo)
-        self.root.bind('<Control-x>', lambda e: self.text.event_generate("<<Cut>>"))
-        self.root.bind('<Control-X>', lambda e: self.text.event_generate("<<Cut>>"))
+        self.root.bind('<Control-x>', self.cut)
+        self.root.bind('<Control-X>', self.cut)
         self.root.bind('<Control-a>', self.select_all)
         self.root.bind('<Control-A>', self.select_all)
         self.root.bind_all('<Control-b>', self.toggle_status_bar)
@@ -1794,6 +1794,8 @@ class NotepadX:
         if not self.autocomplete_popup_visible() or not self.autocomplete_listbox:
             return False
         doc = self.documents.get(self.autocomplete_doc_id)
+        if not doc and self.compare_view and self.autocomplete_doc_id == str(self.compare_view['frame']):
+            doc = self.compare_view
         if not doc:
             self.hide_autocomplete_popup()
             return False
@@ -1813,7 +1815,10 @@ class NotepadX:
             self.hide_autocomplete_popup()
             return False
         self.hide_autocomplete_popup()
-        self.on_text_modified(doc['frame'])
+        if doc is self.compare_view:
+            self.on_compare_modified()
+        else:
+            self.on_text_modified(doc['frame'])
         return True
 
     # ─── Text Widget ─────────────────────────────────────────────
@@ -1896,7 +1901,7 @@ class NotepadX:
 
         self.compare_text = tk.Text(
             compare_body,
-            undo=False,
+            undo=True,
             bg=self.text_bg,
             fg=self.text_fg,
             insertbackground=self.cursor_color,
@@ -1923,9 +1928,11 @@ class NotepadX:
             yscrollcommand=lambda first, last, scroll=compare_v_scroll: self.update_compare_vertical_scrollbar(scroll, first, last),
             xscrollcommand=compare_h_scroll.set
         )
+        for evt in ('<KeyRelease>', '<MouseWheel>', '<Button-4>', '<Button-5>',
+                    '<Button-1>', '<B1-Motion>', '<ButtonRelease-1>', '<Double-Button-1>',
+                    '<<Selection>>'):
+            self.compare_text.bind(evt, self.handle_compare_activity, add='+')
         self.compare_text.bind('<KeyPress>', self.handle_compare_keypress)
-        self.compare_text.bind('<<Paste>>', lambda e: "break")
-        self.compare_text.bind('<<Cut>>', lambda e: "break")
         self.compare_text.bind('<Control-b>', self.toggle_status_bar)
         self.compare_text.bind('<Control-B>', self.toggle_status_bar)
         self.compare_text.bind('<FocusIn>', self.remember_compare_focus, add='+')
@@ -1934,6 +1941,7 @@ class NotepadX:
         self.compare_text.bind('<F3>', self.find_next)
         self.compare_text.bind('<Control-Shift-X>', self.ctrl_shift_x)
         self.compare_text.bind('<Control-Shift-x>', self.ctrl_shift_x)
+        self.compare_text.bind('<<Modified>>', self.on_compare_modified)
 
         self.compare_view = {
             'frame': self.compare_container,
@@ -1951,6 +1959,7 @@ class NotepadX:
             'window_start_line': 1,
             'window_end_line': 1,
             'total_file_lines': 1,
+            'suspend_modified_events': False,
         }
         self.compare_line_numbers.bind('<Button-1>', lambda e: self.copy_line_from_gutter(e, target_doc=self.compare_view))
         self.compare_text.tag_config(self.find_matches_tag, background=self.match_bg, foreground='black')
@@ -2775,6 +2784,25 @@ class NotepadX:
         return "break"
 
     def handle_compare_keypress(self, event):
+        compare_doc = self.compare_view
+        source_doc = self.documents.get(self.compare_source_tab) if self.compare_source_tab else None
+        if source_doc and not source_doc.get('virtual_mode') and not source_doc.get('preview_mode'):
+            compare_doc_id = str(compare_doc['frame']) if compare_doc else None
+            if self.autocomplete_popup_visible() and self.autocomplete_doc_id == compare_doc_id:
+                if event.keysym == 'Up':
+                    return self.move_autocomplete_selection(-1)
+                if event.keysym == 'Down':
+                    return self.move_autocomplete_selection(1)
+                if event.keysym in {'Tab', 'Return', 'KP_Enter'}:
+                    if self.accept_autocomplete_selection():
+                        return "break"
+                if event.keysym == 'Escape':
+                    self.hide_autocomplete_popup()
+                    return "break"
+                if event.keysym in {'Left', 'Right', 'Home', 'End', 'Prior', 'Next'}:
+                    self.hide_autocomplete_popup()
+            return
+
         navigation_keys = {
             'Up', 'Down', 'Left', 'Right', 'Prior', 'Next', 'Home', 'End',
             'Shift_L', 'Shift_R', 'Control_L', 'Control_R', 'Alt_L', 'Alt_R',
@@ -2783,6 +2811,70 @@ class NotepadX:
         if event.keysym in navigation_keys or (event.state & 0x4):
             return
         return "break"
+
+    def handle_compare_activity(self, event=None):
+        compare_doc = self.compare_view
+        if not compare_doc:
+            return
+        compare_text = compare_doc.get('text')
+        if not compare_text:
+            return
+        self.set_last_active_editor_widget(compare_text)
+        event_type = str(getattr(event, 'type', ''))
+        if event_type in {'4', '5', '6', 'Motion', 'ButtonPress', 'ButtonRelease'}:
+            self.hide_autocomplete_popup()
+        elif event_type not in {'35'}:
+            self.update_autocomplete_popup(compare_doc)
+        self.update_line_number_gutter(compare_doc)
+        self.update_status()
+
+    def on_compare_modified(self, event=None):
+        compare_doc = self.compare_view
+        if not compare_doc:
+            return
+        compare_text = compare_doc.get('text')
+        if not compare_text:
+            return
+        if compare_doc.get('suspend_modified_events'):
+            compare_text.edit_modified(False)
+            return
+
+        source_doc = self.documents.get(self.compare_source_tab) if self.compare_source_tab else None
+        if not source_doc or source_doc.get('virtual_mode') or source_doc.get('preview_mode'):
+            compare_text.edit_modified(False)
+            return
+
+        self.set_last_active_editor_widget(compare_text)
+        self.handle_compare_activity()
+
+        try:
+            compare_content = compare_text.get('1.0', 'end-1c')
+            compare_insert = compare_text.index(tk.INSERT)
+        except tk.TclError:
+            compare_text.edit_modified(False)
+            return
+
+        source_text = source_doc['text']
+        self.remember_doc_view_state(source_doc)
+        source_doc['suspend_modified_events'] = True
+        compare_doc['pushing_to_source'] = True
+        try:
+            source_text.delete('1.0', tk.END)
+            source_text.insert('1.0', compare_content)
+            source_text.edit_modified(True)
+            source_doc['last_insert_index'] = compare_insert
+        finally:
+            source_doc['suspend_modified_events'] = False
+
+        self.on_text_modified(source_doc['frame'])
+        compare_doc['pushing_to_source'] = False
+        source_doc['last_insert_index'] = compare_insert
+        compare_doc['last_insert_index'] = compare_insert
+        if compare_doc.get('syntax_mode') and compare_doc.get('syntax_mode') != 'python':
+            self.schedule_syntax_highlight(compare_doc)
+        self.update_line_number_gutter(compare_doc)
+        self.update_status()
+        compare_text.edit_modified(False)
 
     def on_text_mousewheel(self, event, tab_id):
         doc = self.documents.get(str(tab_id))
@@ -4149,6 +4241,14 @@ class NotepadX:
         return f"Untitled {next_number}"
 
     def get_current_doc(self):
+        compare_widget = self.get_compare_text_widget()
+        focus_widget = self.root.focus_get()
+        last_widget = getattr(self, 'last_active_editor_widget', None)
+        if compare_widget is not None and (focus_widget == compare_widget or last_widget == compare_widget):
+            if self.compare_source_tab:
+                compare_doc = self.documents.get(self.compare_source_tab)
+                if compare_doc:
+                    return compare_doc
         current_tab = self.notebook.select()
         return self.documents.get(current_tab)
 
@@ -4228,7 +4328,7 @@ class NotepadX:
         self.update_line_number_gutter(doc)
         self.refresh_tab_title(tab_id)
         self.schedule_recovery_save()
-        if self.compare_active and self.compare_source_tab == str(tab_id):
+        if self.compare_active and self.compare_source_tab == str(tab_id) and not self.compare_view.get('pushing_to_source'):
             self.schedule_compare_refresh()
         if str(tab_id) == self.notebook.select():
             self.update_status()
@@ -4358,7 +4458,7 @@ class NotepadX:
         edit_menu.add_command(label="Undo", command=self.undo, accelerator="Ctrl+Z")
         edit_menu.add_command(label="Redo", command=self.redo, accelerator="Ctrl+Shift+Z")
         edit_menu.add_separator()
-        edit_menu.add_command(label="Cut",  command=lambda: self.text.event_generate("<<Cut>>"),  accelerator="Ctrl+X")
+        edit_menu.add_command(label="Cut",  command=self.cut,  accelerator="Ctrl+X")
         edit_menu.add_command(label="Copy", command=self.copy, accelerator="Ctrl+C")
         edit_menu.add_command(label="Paste", command=self.paste, accelerator="Ctrl+V")
         edit_menu.add_command(label="Select All", command=self.select_all, accelerator="Ctrl+A")
@@ -4565,8 +4665,32 @@ class NotepadX:
         self.refresh_compare_header()
 
         compare_text = compare_doc['text']
+        try:
+            compare_doc['last_insert_index'] = compare_text.index(tk.INSERT)
+            compare_doc['last_yview'] = compare_text.yview()[0]
+            compare_doc['last_xview'] = compare_text.xview()[0]
+        except (tk.TclError, IndexError):
+            pass
+
+        compare_doc['suspend_modified_events'] = True
         compare_text.delete('1.0', tk.END)
         compare_text.insert('1.0', doc['text'].get('1.0', 'end-1c'))
+        compare_text.edit_modified(False)
+        compare_doc['suspend_modified_events'] = False
+
+        insert_index = compare_doc.get('last_insert_index') or '1.0'
+        try:
+            compare_text.mark_set(tk.INSERT, insert_index)
+        except tk.TclError:
+            compare_text.mark_set(tk.INSERT, '1.0')
+        try:
+            compare_text.xview_moveto(float(compare_doc.get('last_xview', 0.0)))
+        except (tk.TclError, TypeError, ValueError):
+            pass
+        try:
+            compare_text.yview_moveto(float(compare_doc.get('last_yview', 0.0)))
+        except (tk.TclError, TypeError, ValueError):
+            pass
         self.configure_syntax_for_doc(compare_doc)
         self.update_line_number_gutter(compare_doc)
 
@@ -5325,26 +5449,85 @@ class NotepadX:
     def undo(self, event=None):
         if self.current_doc_is_large_readonly():
             return "break"
+        target = self.root.focus_get() if isinstance(self.root.focus_get(), tk.Text) else self.text
         try:
-            self.text.edit_undo()
+            target.edit_undo()
         except tk.TclError:
             pass
+        compare_widget = self.get_compare_text_widget()
+        if compare_widget is not None and target == compare_widget:
+            self.on_compare_modified()
+        else:
+            doc = self.get_doc_for_text_widget(target)
+            if doc:
+                self.on_text_modified(doc['frame'])
 
     def redo(self, event=None):
         if self.current_doc_is_large_readonly():
             return "break"
+        target = self.root.focus_get() if isinstance(self.root.focus_get(), tk.Text) else self.text
         try:
-            self.text.edit_redo()
+            target.edit_redo()
         except tk.TclError:
             pass
+        compare_widget = self.get_compare_text_widget()
+        if compare_widget is not None and target == compare_widget:
+            self.on_compare_modified()
+        else:
+            doc = self.get_doc_for_text_widget(target)
+            if doc:
+                self.on_text_modified(doc['frame'])
 
     def select_all(self, event=None):
-        if not self.text:
+        target = self.root.focus_get() if isinstance(self.root.focus_get(), tk.Text) else self.text
+        if not target:
             return "break"
-        self.text.tag_add('sel', '1.0', 'end-1c')
-        self.text.mark_set(tk.INSERT, '1.0')
-        self.text.see(tk.INSERT)
+        target.tag_add('sel', '1.0', 'end-1c')
+        target.mark_set(tk.INSERT, '1.0')
+        target.see(tk.INSERT)
+        self.set_last_active_editor_widget(target)
         self.update_status()
+        return "break"
+
+    def cut(self, event=None):
+        target = None
+        if event is not None and isinstance(getattr(event, 'widget', None), tk.Text):
+            target = event.widget
+        elif isinstance(self.root.focus_get(), tk.Text):
+            target = self.root.focus_get()
+        elif isinstance(self.text, tk.Text):
+            target = self.text
+
+        if target is None:
+            return "break"
+
+        compare_widget = self.get_compare_text_widget()
+        doc = self.get_doc_for_text_widget(target)
+        if doc and (doc.get('preview_mode') or doc.get('virtual_mode')):
+            return "break"
+
+        try:
+            selection = target.get('sel.first', 'sel.last')
+        except tk.TclError:
+            return "break"
+
+        self.root.clipboard_clear()
+        self.root.clipboard_append(selection)
+        self.root.update_idletasks()
+
+        try:
+            target.delete('sel.first', 'sel.last')
+            target.edit_modified(True)
+        except tk.TclError:
+            return "break"
+
+        self.set_last_active_editor_widget(target)
+        if compare_widget is not None and target == compare_widget:
+            self.on_compare_modified()
+        elif doc:
+            self.on_text_modified(doc['frame'])
+        else:
+            self.update_status()
         return "break"
 
     def copy(self, event=None):
@@ -5379,7 +5562,7 @@ class NotepadX:
             target = self.text
 
         compare_widget = self.get_compare_text_widget()
-        if target is None or (compare_widget is not None and target == compare_widget):
+        if target is None:
             return "break"
 
         doc = self.get_doc_for_text_widget(target)
@@ -5406,7 +5589,9 @@ class NotepadX:
             pass
         target.see(tk.INSERT)
         self.set_last_active_editor_widget(target)
-        if doc:
+        if compare_widget is not None and target == compare_widget:
+            self.on_compare_modified()
+        elif doc:
             self.on_text_modified(doc['frame'])
         else:
             self.update_status()
