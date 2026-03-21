@@ -2300,6 +2300,10 @@ class NotepadX:
         self.compare_text.bind('<Control-X>', self.cut)
         self.compare_text.bind('<Control-v>', self.paste)
         self.compare_text.bind('<Control-V>', self.paste)
+        self.compare_text.bind('<Control-z>', self.undo)
+        self.compare_text.bind('<Control-Z>', self.undo)
+        self.compare_text.bind('<Control-Shift-z>', self.redo)
+        self.compare_text.bind('<Control-Shift-Z>', self.redo)
         self.compare_text.bind('<Control-Shift-x>', self.ctrl_shift_x)
         self.compare_text.bind('<Control-Shift-X>', self.ctrl_shift_x)
         self.compare_text.bind('<FocusIn>', self.remember_compare_focus, add='+')
@@ -2385,6 +2389,10 @@ class NotepadX:
         text.bind('<Control-X>', self.cut)
         text.bind('<Control-v>', self.paste)
         text.bind('<Control-V>', self.paste)
+        text.bind('<Control-z>', self.undo)
+        text.bind('<Control-Z>', self.undo)
+        text.bind('<Control-Shift-z>', self.redo)
+        text.bind('<Control-Shift-Z>', self.redo)
         text.bind('<Control-Shift-x>', self.ctrl_shift_x)
         text.bind('<Control-Shift-X>', self.ctrl_shift_x)
         text.bind('<FocusIn>', lambda e, frame=tab_frame: self.remember_doc_focus(frame), add='+')
@@ -5900,6 +5908,7 @@ class NotepadX:
             doc = self.get_doc_for_text_widget(target)
             if doc:
                 self.on_text_modified(doc['frame'])
+        return "break"
 
     def redo(self, event=None):
         if self.current_doc_is_large_readonly():
@@ -5916,6 +5925,7 @@ class NotepadX:
             doc = self.get_doc_for_text_widget(target)
             if doc:
                 self.on_text_modified(doc['frame'])
+        return "break"
 
     def select_all(self, event=None):
         target = self.root.focus_get() if isinstance(self.root.focus_get(), tk.Text) else self.text
