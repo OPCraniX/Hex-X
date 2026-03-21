@@ -84,7 +84,8 @@ View Menu
 - Sound: Enables or disables note sounds. The checkmark shows whether it is enabled.
 - Syntax Theme: Changes the highlight color palette. Available themes are Default, Soft, and Vivid.
 - Syntax Mode: Manually overrides syntax detection for the current tab. Available modes include Auto, Plain Text, Python, C, C++, Rust, Java, JavaScript, HTML, PHP, XML, and SQL.
-- Compare Tabs: Opens a side-by-side read-only compare window using the current tab and another open tab.
+- Compare Tabs: Opens a side-by-side compare view using the current tab and another open tab.
+- Normal editable tabs can also be edited from the compare pane on the right.
 - Close Compare Tabs: Closes the compare pane.
 
 Help Menu
@@ -224,6 +225,7 @@ Shared Notes and Collaboration
 - Notepad-X validates and sanitizes note payloads when reading the sidecar so malformed entries are ignored instead of blindly trusted.
 - The sync system polls for sidecar changes and reloads notes when another editor updates them.
 - The status bar shows Notes Synced, unread count, and how many editors are currently tracked on that file.
+- In compare mode, the compared file also shows its own status readout aligned on the right side of the bottom bar.
 - Notes you authored do not count as unread for you.
 - If another editor allows or denies your note, that response is marked unread for you so the result comes back to the author.
 - Clicking a note or jumping to it marks it read for your current editor identity.
@@ -251,6 +253,7 @@ Audio Notifications
 Session Restore and Recovery
 - File-backed tabs are written to the session file and restored on startup.
 - The last active tab is restored when possible.
+- If compare mode was open when the app closed, the same compared file pair is restored on startup when both files still exist.
 - Sound, status bar, numbered lines, and syntax theme settings are also restored from the session file.
 - Unsaved untitled tabs are not part of normal session restore, but they can be recovered after a crash through the recovery system.
 - If Notepad-X finds recovery data from a previous crash, it asks whether you want to restore the unsaved tabs.

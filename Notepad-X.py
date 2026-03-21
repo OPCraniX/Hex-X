@@ -131,6 +131,8 @@ class NotepadX:
         self.autocomplete_doc_id = None
         self.autocomplete_start_index = None
         self.autocomplete_prefix = ""
+        self.hovered_editor_widget = None
+        self.sync_page_navigation_enabled = tk.BooleanVar(value=False)
 
         # Panel visibility flags
         self.find_panel_visible = False
@@ -151,6 +153,7 @@ class NotepadX:
 
         self.bind_keys()
         self.update_font()  # initial font
+        self.update_clock()
         self.update_memory_usage()
         self.poll_shared_notes()
         self.center_window(self.root)
@@ -577,51 +580,89 @@ class NotepadX:
         )
         self.status_clock.grid(row=0, column=1, sticky='e')
 
+        self.compare_status = tk.Label(
+            self.status_frame,
+            text="",
+            anchor='w',
+            bg='#2d2d2d',
+            fg='#d4d4d4',
+            font=('Segoe UI', 9),
+            padx=8,
+            pady=4
+        )
+        self.compare_status.place_forget()
+        self.status_frame.bind('<Configure>', self.position_compare_status, add='+')
+
+    def position_compare_status(self, event=None):
+        if not hasattr(self, 'compare_status') or not hasattr(self, 'status_frame'):
+            return
+        if not self.compare_active:
+            self.compare_status.place_forget()
+            return
+        try:
+            self.status_frame.update_idletasks()
+            sash_x, _ = self.editor_paned.sash_coord(0)
+            frame_width = self.status_frame.winfo_width()
+            clock_width = self.status_clock.winfo_reqwidth() + 12
+            start_x = max(0, int(sash_x) + 8)
+            available_width = max(120, frame_width - start_x - clock_width)
+            self.compare_status.place(x=start_x, y=0, width=available_width, relheight=1.0)
+            self.compare_status.lift()
+        except tk.TclError:
+            self.compare_status.place_forget()
+
+    def update_clock(self):
+        if hasattr(self, 'status_clock') and self.status_clock.winfo_exists():
+            self.status_clock.config(
+                text=datetime.now().strftime("%A | %I:%M:%S %p | %m/%d/%Y").lstrip('0').replace('/0', '/')
+            )
+            self.root.after(1000, self.update_clock)
+
     def get_zoom_text(self):
         if self.current_font_size == self.base_font_size:
             return "Normal"
         percent = round((self.current_font_size / self.base_font_size) * 100)
         return f"+{percent-100}%" if percent > 100 else f"{percent-100}%"
 
-    def update_status(self):
-        if not self.text or not hasattr(self, 'status'):
-            return
-        current_doc = self.get_current_doc()
-        row, col = self.text.index(tk.INSERT).split('.')
+    def build_editor_status_text(self, doc, text_widget):
+        row, col = text_widget.index(tk.INSERT).split('.')
         row = int(row)
         col = int(col) + 1
-        if current_doc and current_doc.get('virtual_mode'):
-            row = current_doc['window_start_line'] + row - 1
-            total_lines = current_doc['total_file_lines']
-            total_chars = current_doc['file_size_bytes']
+
+        if doc and doc.get('virtual_mode'):
+            row = doc['window_start_line'] + row - 1
+            total_lines = doc['total_file_lines']
+            total_chars = doc['file_size_bytes']
             char_info = f"{total_chars:,} bytes"
         else:
-            full_content = self.text.get('1.0', 'end-1c')
-            total_lines = int(self.text.index('end-1c').split('.')[0])
+            full_content = text_widget.get('1.0', 'end-1c')
+            total_lines = int(text_widget.index('end-1c').split('.')[0])
             total_chars = len(full_content)
             try:
-                sel_start = self.text.index('sel.first')
-                sel_end = self.text.index('sel.last')
-                selected_count = len(self.text.get(sel_start, sel_end))
+                sel_start = text_widget.index('sel.first')
+                sel_end = text_widget.index('sel.last')
+                selected_count = len(text_widget.get(sel_start, sel_end))
             except tk.TclError:
                 selected_count = 0
             char_info = f"{selected_count:,} of {total_chars:,} characters" if selected_count > 0 else f"{total_chars:,} characters"
 
-        try:
-            if current_doc and current_doc.get('virtual_mode'):
-                selected_count = 0
-            else:
-                sel_start = self.text.index('sel.first')
-                sel_end = self.text.index('sel.last')
-                selected_count = len(self.text.get(sel_start, sel_end))
-        except tk.TclError:
-            selected_count = 0
         zoom_text = self.get_zoom_text()
         mode_suffix = ""
-        if current_doc and current_doc.get('virtual_mode'):
+        if doc and doc.get('virtual_mode'):
             mode_suffix = " | Virtual"
-        elif current_doc and current_doc.get('preview_mode'):
+        elif doc and doc.get('preview_mode'):
             mode_suffix = " | Preview"
+
+        return (
+            f"Ln {row} of {total_lines}, Col {col} | "
+            f"{char_info} | UTF-8 | {zoom_text}{mode_suffix}"
+        )
+
+    def update_status(self):
+        if not self.text or not hasattr(self, 'status'):
+            return
+        current_doc = self.get_current_doc()
+        status_main_text = self.build_editor_status_text(current_doc, self.text)
         editor_label_text = ""
         if current_doc and current_doc.get('file_path'):
             editor_label_text = f" | ID: Notepad-X-{self.editor_id}"
@@ -632,14 +673,25 @@ class NotepadX:
                 f" | {unread_count} unread (F3 to view) | "
                 f"({current_doc.get('note_active_editors', 0)} editing)"
             )
-        status_main_text = (
-            f"Ln {row} of {total_lines}, Col {col} | "
-            f"{char_info} | UTF-8 | {zoom_text}{mode_suffix}{editor_label_text}"
-        )
+        status_main_text = f"{status_main_text}{editor_label_text}"
         status_tail_text = f"{shared_notes_tail} | Memory used: {self.memory_used_mb}MB"
         self.status.config(text=status_main_text)
         self.status_sync.config(text="| Notes Synced" if current_doc and current_doc.get('file_path') else "")
         self.status_tail.config(text=status_tail_text)
+
+        if hasattr(self, 'compare_status') and self.compare_view and self.compare_active:
+            try:
+                compare_doc = self.documents.get(self.compare_source_tab) if self.compare_source_tab else self.compare_view
+                self.compare_status.config(
+                    text=self.build_editor_status_text(compare_doc, self.compare_view['text'])
+                )
+                self.position_compare_status()
+            except tk.TclError:
+                self.compare_status.config(text="")
+                self.compare_status.place_forget()
+        elif hasattr(self, 'compare_status'):
+            self.compare_status.config(text="")
+            self.compare_status.place_forget()
 
     def hide_toast(self):
         popup = getattr(self, 'toast_popup', None)
@@ -815,7 +867,6 @@ class NotepadX:
             y=toast_y
         )
         return "break"
-        self.status_clock.config(text=datetime.now().strftime("%A | %I:%M:%S %p | %m/%d/%Y").lstrip('0').replace('/0', '/'))
 
     # ─── Bottom Find / Replace Panels ────────────────────────────
     def create_bottom_panels(self):
@@ -989,35 +1040,47 @@ class NotepadX:
             pass
 
     def goto_document_start(self, event=None):
-        widget = self.get_active_search_widget()
-        if widget is None:
+        targets = self.get_page_navigation_targets()
+        if not targets:
             return "break"
-        try:
-            widget.mark_set(tk.INSERT, '1.0')
-            widget.tag_remove('sel', '1.0', tk.END)
-            widget.see('1.0')
-            widget.focus_set()
-            self.set_last_active_editor_widget(widget)
-            self.update_status()
-        except tk.TclError:
-            pass
+        for widget in targets:
+            try:
+                widget.mark_set(tk.INSERT, '1.0')
+                widget.tag_remove('sel', '1.0', tk.END)
+                widget.see('1.0')
+                self.set_last_active_editor_widget(widget)
+            except tk.TclError:
+                continue
+            doc = self.get_doc_for_text_widget(widget)
+            if widget == self.get_compare_text_widget():
+                self.update_line_number_gutter(self.compare_view)
+            elif doc:
+                self.remember_doc_view_state(doc)
+                self.update_line_number_gutter(doc)
+        self.update_status()
         return "break"
 
     def goto_document_end(self, event=None):
-        widget = self.get_active_search_widget()
-        if widget is None:
+        targets = self.get_page_navigation_targets()
+        if not targets:
             return "break"
-        try:
-            last_line = widget.index('end-1c').split('.')[0]
-            target_index = f'{last_line}.0'
-            widget.mark_set(tk.INSERT, target_index)
-            widget.tag_remove('sel', '1.0', tk.END)
-            widget.see(target_index)
-            widget.focus_set()
-            self.set_last_active_editor_widget(widget)
-            self.update_status()
-        except tk.TclError:
-            pass
+        for widget in targets:
+            try:
+                last_line = widget.index('end-1c').split('.')[0]
+                target_index = f'{last_line}.0'
+                widget.mark_set(tk.INSERT, target_index)
+                widget.tag_remove('sel', '1.0', tk.END)
+                widget.see(target_index)
+                self.set_last_active_editor_widget(widget)
+            except tk.TclError:
+                continue
+            doc = self.get_doc_for_text_widget(widget)
+            if widget == self.get_compare_text_widget():
+                self.update_line_number_gutter(self.compare_view)
+            elif doc:
+                self.remember_doc_view_state(doc)
+                self.update_line_number_gutter(doc)
+        self.update_status()
         return "break"
 
     def remember_compare_focus(self, event=None):
@@ -1027,6 +1090,81 @@ class NotepadX:
             self.root.after_idle(lambda widget=compare_widget: self.set_last_active_editor_widget(widget))
         self.update_status()
         return None
+
+    def remember_hovered_editor(self, event=None):
+        widget = getattr(event, 'widget', None)
+        if isinstance(widget, tk.Text):
+            self.hovered_editor_widget = widget
+        return None
+
+    def get_hovered_editor_widget(self):
+        widget = getattr(self, 'hovered_editor_widget', None)
+        if not isinstance(widget, tk.Text):
+            return None
+        compare_widget = self.get_compare_text_widget()
+        if compare_widget is not None and widget == compare_widget:
+            return widget
+        for doc in self.documents.values():
+            if doc.get('text') == widget:
+                return widget
+        return None
+
+    def get_page_navigation_targets(self):
+        if self.compare_active and self.sync_page_navigation_enabled.get():
+            targets = []
+            if isinstance(self.text, tk.Text):
+                targets.append(self.text)
+            compare_widget = self.get_compare_text_widget()
+            if compare_widget is not None:
+                targets.append(compare_widget)
+            return targets
+
+        hovered_widget = self.get_hovered_editor_widget()
+        if hovered_widget is not None:
+            return [hovered_widget]
+
+        active_widget = self.get_active_search_widget()
+        if active_widget is not None:
+            return [active_widget]
+        return []
+
+    def page_up(self, event=None):
+        targets = self.get_page_navigation_targets()
+        if not targets:
+            return
+        for widget in targets:
+            try:
+                widget.yview_scroll(-1, 'page')
+                self.set_last_active_editor_widget(widget)
+            except tk.TclError:
+                continue
+            doc = self.get_doc_for_text_widget(widget)
+            if widget == self.get_compare_text_widget():
+                self.update_line_number_gutter(self.compare_view)
+            elif doc:
+                self.remember_doc_view_state(doc)
+                self.update_line_number_gutter(doc)
+        self.update_status()
+        return "break"
+
+    def page_down(self, event=None):
+        targets = self.get_page_navigation_targets()
+        if not targets:
+            return
+        for widget in targets:
+            try:
+                widget.yview_scroll(1, 'page')
+                self.set_last_active_editor_widget(widget)
+            except tk.TclError:
+                continue
+            doc = self.get_doc_for_text_widget(widget)
+            if widget == self.get_compare_text_widget():
+                self.update_line_number_gutter(self.compare_view)
+            elif doc:
+                self.remember_doc_view_state(doc)
+                self.update_line_number_gutter(doc)
+        self.update_status()
+        return "break"
 
     def get_doc_for_text_widget(self, widget):
         compare_widget = self.get_compare_text_widget()
@@ -1406,8 +1544,10 @@ class NotepadX:
         self.root.bind('<F4>', self.goto_next_note)
         self.root.bind('<Control-g>', self.goto_line_dialog)
         self.root.bind('<Control-G>', self.goto_line_dialog)
-        self.root.bind('<Control-Prior>', self.goto_document_start)
-        self.root.bind('<Control-Next>', self.goto_document_end)
+        self.root.bind_all('<Prior>', self.page_up)
+        self.root.bind_all('<Next>', self.page_down)
+        self.root.bind_all('<Control-Prior>', self.goto_document_start)
+        self.root.bind_all('<Control-Next>', self.goto_document_end)
 
         # Zoom
         self.root.bind('<Control-MouseWheel>', self.on_ctrl_mousewheel)
@@ -1936,6 +2076,8 @@ class NotepadX:
         self.compare_text.bind('<Control-b>', self.toggle_status_bar)
         self.compare_text.bind('<Control-B>', self.toggle_status_bar)
         self.compare_text.bind('<FocusIn>', self.remember_compare_focus, add='+')
+        self.compare_text.bind('<Enter>', self.remember_hovered_editor, add='+')
+        self.compare_text.bind('<Motion>', self.remember_hovered_editor, add='+')
         self.compare_text.bind('<Button-1>', self.remember_compare_focus, add='+')
         self.compare_text.bind('<ButtonRelease-1>', self.remember_compare_focus, add='+')
         self.compare_text.bind('<F3>', self.find_next)
@@ -2013,6 +2155,8 @@ class NotepadX:
         text.bind('<Control-b>', self.toggle_status_bar)
         text.bind('<Control-B>', self.toggle_status_bar)
         text.bind('<FocusIn>', lambda e, frame=tab_frame: self.remember_doc_focus(frame), add='+')
+        text.bind('<Enter>', self.remember_hovered_editor, add='+')
+        text.bind('<Motion>', self.remember_hovered_editor, add='+')
         text.bind('<KeyPress>', lambda e, frame=tab_frame: self.handle_text_keypress(e, frame))
         text.bind('<ButtonRelease-1>', lambda e, frame=tab_frame: self.on_text_click_release(e, frame), add='+')
         text.bind('<Button-3>', lambda e, frame=tab_frame: self.show_text_context_menu(e, frame))
@@ -2855,6 +2999,18 @@ class NotepadX:
             return
 
         source_text = source_doc['text']
+        try:
+            source_content = source_text.get('1.0', 'end-1c')
+        except tk.TclError:
+            compare_text.edit_modified(False)
+            return
+        if compare_content == source_content:
+            compare_doc['last_insert_index'] = compare_insert
+            compare_text.edit_modified(False)
+            self.update_line_number_gutter(compare_doc)
+            self.update_status()
+            return
+
         self.remember_doc_view_state(source_doc)
         source_doc['suspend_modified_events'] = True
         compare_doc['pushing_to_source'] = True
@@ -3946,6 +4102,11 @@ class NotepadX:
     def get_session_state(self):
         current_doc = self.get_current_doc()
         selected_file = current_doc['file_path'] if current_doc and current_doc['file_path'] else None
+        compare_file = None
+        if self.compare_active and self.compare_source_tab:
+            compare_doc = self.documents.get(self.compare_source_tab)
+            if compare_doc and compare_doc.get('file_path') and os.path.exists(compare_doc['file_path']):
+                compare_file = compare_doc['file_path']
         open_files = []
 
         for tab_id in self.notebook.tabs():
@@ -3975,8 +4136,11 @@ class NotepadX:
             'status_bar_enabled': bool(self.status_bar_enabled.get()),
             'numbered_lines_enabled': bool(self.numbered_lines_enabled.get()),
             'autocomplete_enabled': bool(self.autocomplete_enabled.get()),
+            'sync_page_navigation_enabled': bool(self.sync_page_navigation_enabled.get()),
             'edit_with_shell_enabled': bool(self.edit_with_shell_enabled.get()),
+            'current_font_size': int(self.current_font_size),
             'syntax_theme': self.syntax_theme.get(),
+            'compare_file': compare_file,
         }
 
     def schedule_recovery_save(self):
@@ -4156,7 +4320,13 @@ class NotepadX:
         self.status_bar_enabled.set(bool(session.get('status_bar_enabled', True)))
         self.numbered_lines_enabled.set(bool(session.get('numbered_lines_enabled', True)))
         self.autocomplete_enabled.set(bool(session.get('autocomplete_enabled', True)))
+        self.sync_page_navigation_enabled.set(bool(session.get('sync_page_navigation_enabled', False)))
         self.edit_with_shell_enabled.set(bool(session.get('edit_with_shell_enabled', False)))
+        saved_font_size = session.get('current_font_size', self.base_font_size)
+        try:
+            self.current_font_size = max(self.min_font_size, min(self.max_font_size, int(saved_font_size)))
+        except (TypeError, ValueError):
+            self.current_font_size = self.base_font_size
         self.syntax_theme.set(str(session.get('syntax_theme', 'Default')))
         if self.status_bar_enabled.get():
             self.status_frame.grid()
@@ -4187,6 +4357,13 @@ class NotepadX:
         if selected_tab is not None:
             self.notebook.select(selected_tab)
             self.set_active_document(selected_tab)
+
+        compare_file = session.get('compare_file')
+        compare_tab = restored_tabs.get(compare_file) if isinstance(compare_file, str) else None
+        if selected_tab is not None and compare_tab is not None and compare_tab != selected_tab:
+            compare_doc = self.documents.get(str(compare_tab))
+            if compare_doc:
+                self.start_inline_compare(compare_doc)
 
     def add_recent_file(self, file_path):
         if not file_path or not os.path.exists(file_path):
@@ -4477,6 +4654,7 @@ class NotepadX:
         edit_menu.add_command(label="Go To Line", command=self.goto_line_dialog, accelerator="Ctrl+G")
         edit_menu.add_command(label="Top of Document", command=self.goto_document_start, accelerator="Ctrl+PgUp")
         edit_menu.add_command(label="Bottom of Document", command=self.goto_document_end, accelerator="Ctrl+PgDn")
+        edit_menu.add_checkbutton(label="Sync PgUp/PgDn in Compare", variable=self.sync_page_navigation_enabled, command=self.save_session)
         edit_menu.add_command(label="Date", command=self.insert_date, accelerator="Ctrl+D")
         edit_menu.add_command(label="Time/Date", command=self.insert_time_date, accelerator="Ctrl+Shift+D")
         edit_menu.add_command(label="Font", command=self.show_font_dialog, accelerator="Ctrl+Shift+F")
@@ -4693,6 +4871,7 @@ class NotepadX:
             pass
         self.configure_syntax_for_doc(compare_doc)
         self.update_line_number_gutter(compare_doc)
+        self.update_status()
 
     def set_compare_sash_position(self):
         if not self.compare_active:
@@ -4701,6 +4880,7 @@ class NotepadX:
             width = self.editor_paned.winfo_width()
             if width > 0:
                 self.editor_paned.sash_place(0, max(240, width // 2), 0)
+                self.position_compare_status()
         except tk.TclError:
             pass
 
@@ -4713,6 +4893,7 @@ class NotepadX:
         self.compare_active = True
         self.refresh_compare_panel()
         self.root.after_idle(self.set_compare_sash_position)
+        self.update_status()
         return "break"
 
     def close_compare_panel(self, event=None):
@@ -4747,6 +4928,9 @@ class NotepadX:
             self.editor_paned.forget(self.compare_container)
         except tk.TclError:
             pass
+        if hasattr(self, 'compare_status'):
+            self.compare_status.place_forget()
+        self.update_status()
         if self.text and self.text.winfo_exists():
             self.text.focus_set()
         return "break"

@@ -42,9 +42,12 @@ Notepad-X can compare two open tabs side by side inside the main window.
 - `View > Compare Tabs` or `Ctrl+Q` opens compare mode
 - the normal editor stays usable on the left
 - the compared file appears on the right
+- both sides are editable for normal tabs
 - syntax highlighting is applied on the compare side too
+- the compared file shows its own bottom compare status readout
 - `Find Next` and `F3` follow whichever compare pane you last clicked
 - `Ctrl+Shift+X` closes compare mode
+- if you close the app while compare mode is open, the same compare pair is restored on next launch
 
 ## Line Numbers
 
