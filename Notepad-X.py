@@ -436,6 +436,10 @@ class NotepadX:
         if not isinstance(compare_file, str) or compare_file not in open_files:
             compare_file = None
 
+        compare_base_file = session.get('compare_base_file')
+        if not isinstance(compare_base_file, str) or compare_base_file not in open_files:
+            compare_base_file = None
+
         syntax_theme = str(session.get('syntax_theme', 'Default'))
         if syntax_theme not in {'Default', 'Soft', 'Vivid'}:
             syntax_theme = 'Default'
@@ -460,6 +464,7 @@ class NotepadX:
             'current_font_size': current_font_size,
             'syntax_theme': syntax_theme,
             'compare_file': compare_file,
+            'compare_base_file': compare_base_file,
         }
 
     def sanitize_recovery_payload(self, recovery):
@@ -4384,12 +4389,17 @@ class NotepadX:
 
     def get_session_state(self):
         current_doc = self.get_current_doc()
+        selected_tab_id = self.notebook.select()
+        selected_tab_doc = self.documents.get(str(selected_tab_id)) if selected_tab_id else None
         selected_file = current_doc['file_path'] if current_doc and current_doc['file_path'] else None
         compare_file = None
+        compare_base_file = None
         if self.compare_active and self.compare_source_tab:
             compare_doc = self.documents.get(self.compare_source_tab)
             if compare_doc and compare_doc.get('file_path') and os.path.exists(compare_doc['file_path']):
                 compare_file = compare_doc['file_path']
+            if selected_tab_doc and selected_tab_doc.get('file_path') and os.path.exists(selected_tab_doc['file_path']):
+                compare_base_file = selected_tab_doc['file_path']
         open_files = []
 
         for tab_id in self.notebook.tabs():
@@ -4424,6 +4434,7 @@ class NotepadX:
             'current_font_size': int(self.current_font_size),
             'syntax_theme': self.syntax_theme.get(),
             'compare_file': compare_file,
+            'compare_base_file': compare_base_file,
         }
 
     def schedule_recovery_save(self):
@@ -4592,7 +4603,14 @@ class NotepadX:
             restored_tabs[file_path] = doc['frame']
 
         selected_file = session.get('selected_file')
-        selected_tab = restored_tabs.get(selected_file)
+        compare_base_file = session.get('compare_base_file')
+        compare_file = session.get('compare_file')
+
+        primary_file = selected_file
+        if isinstance(compare_base_file, str) and compare_base_file in restored_tabs:
+            primary_file = compare_base_file
+
+        selected_tab = restored_tabs.get(primary_file)
         if selected_tab is None and restored_tabs:
             selected_tab = next(iter(restored_tabs.values()))
 
@@ -4600,9 +4618,8 @@ class NotepadX:
             self.notebook.select(selected_tab)
             self.set_active_document(selected_tab)
 
-        compare_file = session.get('compare_file')
         compare_tab = restored_tabs.get(compare_file) if isinstance(compare_file, str) else None
-        if selected_tab is not None and compare_tab is not None and compare_tab != selected_tab:
+        if compare_tab is not None and compare_tab != selected_tab:
             compare_doc = self.documents.get(str(compare_tab))
             if compare_doc:
                 self.start_inline_compare(compare_doc)
@@ -5136,6 +5153,7 @@ class NotepadX:
         self.refresh_compare_panel()
         self.root.after_idle(self.set_compare_sash_position)
         self.update_status()
+        self.save_session()
         return "break"
 
     def close_compare_panel(self, event=None):
@@ -5173,6 +5191,7 @@ class NotepadX:
         if hasattr(self, 'compare_status'):
             self.compare_status.place_forget()
         self.update_status()
+        self.save_session()
         if self.text and self.text.winfo_exists():
             self.text.focus_set()
         return "break"
