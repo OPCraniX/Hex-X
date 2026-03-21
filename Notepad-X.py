@@ -13,8 +13,14 @@ import subprocess
 import tempfile
 import traceback
 import time
+import shutil
 from datetime import datetime
 from ctypes import wintypes
+
+try:
+    import resource
+except ImportError:
+    resource = None
 
 try:
     import winreg
@@ -32,6 +38,8 @@ class NotepadX:
     def __init__(self, isolated_session=False, startup_files=None):
         self.root = tk.Tk()
         self.root.title("Notepad-X")
+        self.is_windows = os.name == 'nt'
+        self.is_linux = sys.platform.startswith('linux')
         self.resource_dir = self.get_resource_dir()
         self.app_dir = self.get_app_dir()
         self.isolated_session = isolated_session
@@ -98,8 +106,11 @@ class NotepadX:
         self.recent_files = []
         self.closed_session_files = set()
         self.note_sync_interval_ms = 2000
-        self.kernel32 = ctypes.WinDLL('kernel32', use_last_error=True)
-        self.psapi = ctypes.WinDLL('psapi', use_last_error=True)
+        self.kernel32 = None
+        self.psapi = None
+        if self.is_windows:
+            self.kernel32 = ctypes.WinDLL('kernel32', use_last_error=True)
+            self.psapi = ctypes.WinDLL('psapi', use_last_error=True)
         self.configure_memory_api()
         self.configure_sound_api()
         self.known_editor_ids = self.load_known_editor_ids()
@@ -182,6 +193,8 @@ class NotepadX:
         ]
 
     def configure_memory_api(self):
+        if not self.kernel32 or not self.psapi:
+            return
         self.kernel32.GetCurrentProcess.restype = wintypes.HANDLE
         self.kernel32.GetCurrentProcess.argtypes = []
         self.psapi.GetProcessMemoryInfo.restype = wintypes.BOOL
@@ -196,6 +209,10 @@ class NotepadX:
         self.kernel32.SetFileAttributesW.argtypes = [wintypes.LPCWSTR, wintypes.DWORD]
 
     def configure_sound_api(self):
+        self.winmm = None
+        self.shell32 = None
+        if not self.is_windows:
+            return
         try:
             self.winmm = ctypes.WinDLL('winmm')
             self.winmm.mciSendStringW.restype = wintypes.UINT
@@ -236,7 +253,7 @@ class NotepadX:
     def apply_window_icon(self, window):
         if window is None:
             return
-        if os.name == 'nt' and os.path.exists(self.icon_path):
+        if self.is_windows and os.path.exists(self.icon_path):
             try:
                 window.iconbitmap(self.icon_path)
                 return
@@ -252,6 +269,8 @@ class NotepadX:
 
     def get_user_support_dir(self):
         base_dir = os.environ.get('LOCALAPPDATA') or os.path.expanduser('~')
+        if self.is_linux:
+            base_dir = os.environ.get('XDG_STATE_HOME') or os.path.join(os.path.expanduser('~'), '.local', 'state')
         return os.path.join(base_dir, 'Notepad-X')
 
     def get_emergency_support_dir(self):
@@ -259,6 +278,10 @@ class NotepadX:
 
     def get_config_dir(self, base_dir):
         return os.path.join(base_dir, 'cfg')
+
+    def get_linux_desktop_entry_path(self):
+        applications_dir = os.path.join(os.path.expanduser('~'), '.local', 'share', 'applications')
+        return os.path.join(applications_dir, 'notepad-x.desktop')
 
     def directory_is_writable(self, directory):
         try:
@@ -533,15 +556,25 @@ class NotepadX:
         return candidates[0]
 
     def play_sound(self, sound_path):
-        if not self.sound_enabled.get() or not self.winmm or not os.path.exists(sound_path):
+        if not self.sound_enabled.get() or not os.path.exists(sound_path):
             return
-        sound_path = sound_path.replace('"', '""')
-        try:
-            self.winmm.mciSendStringW('close notepadx_note', None, 0, None)
-            self.winmm.mciSendStringW(f'open "{sound_path}" type mpegvideo alias notepadx_note', None, 0, None)
-            self.winmm.mciSendStringW('play notepadx_note from 0', None, 0, None)
-        except Exception:
-            pass
+        if self.is_windows and self.winmm:
+            sound_path = sound_path.replace('"', '""')
+            try:
+                self.winmm.mciSendStringW('close notepadx_note', None, 0, None)
+                self.winmm.mciSendStringW(f'open "{sound_path}" type mpegvideo alias notepadx_note', None, 0, None)
+                self.winmm.mciSendStringW('play notepadx_note from 0', None, 0, None)
+            except Exception:
+                pass
+            return
+        if self.is_linux:
+            for player in (['paplay', sound_path], ['aplay', sound_path], ['ffplay', '-nodisp', '-autoexit', sound_path], ['xdg-open', sound_path]):
+                if shutil.which(player[0]):
+                    try:
+                        subprocess.Popen(player, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                        return
+                    except Exception:
+                        continue
 
     def play_unread_note_sound(self):
         self.play_sound(self.note_sound_path)
@@ -550,7 +583,7 @@ class NotepadX:
         self.play_sound(self.delete_note_sound_path)
 
     def hide_support_file(self, file_path):
-        if os.name != 'nt' or not file_path or not os.path.exists(file_path):
+        if not self.is_windows or not file_path or not os.path.exists(file_path):
             return
         try:
             attributes = self.kernel32.GetFileAttributesW(file_path)
@@ -732,6 +765,28 @@ class NotepadX:
         return "break"
 
     def get_memory_usage_mb(self):
+        if not self.kernel32 or not self.psapi:
+            if self.is_linux:
+                try:
+                    with open('/proc/self/status', 'r', encoding='utf-8', errors='replace') as status_file:
+                        for line in status_file:
+                            if line.startswith('VmRSS:'):
+                                parts = line.split()
+                                if len(parts) >= 2:
+                                    return max(1, round(int(parts[1]) / 1024))
+                except Exception:
+                    pass
+            if resource is not None:
+                try:
+                    usage = resource.getrusage(resource.RUSAGE_SELF)
+                    rss = int(getattr(usage, 'ru_maxrss', 0))
+                    if rss > 0:
+                        if self.is_linux:
+                            return max(1, round(rss / 1024))
+                        return max(1, round(rss / (1024 * 1024)))
+                except Exception:
+                    pass
+            return 0
         try:
             counters = self.PROCESS_MEMORY_COUNTERS()
             counters.cb = ctypes.sizeof(counters)
@@ -1236,13 +1291,19 @@ class NotepadX:
         except tk.TclError:
             return None
 
+    def safe_focus_get(self):
+        try:
+            return self.root.focus_get()
+        except (tk.TclError, KeyError):
+            return None
+
     def get_active_search_widget(self):
         valid_widgets = [doc['text'] for doc in self.documents.values() if doc.get('text')]
         compare_widget = self.get_compare_text_widget()
         if compare_widget is not None:
             valid_widgets.append(compare_widget)
 
-        focus_widget = self.root.focus_get()
+        focus_widget = self.safe_focus_get()
         if focus_widget in valid_widgets:
             self.set_last_active_editor_widget(focus_widget)
             return focus_widget
@@ -1897,6 +1958,91 @@ class NotepadX:
             raise OSError("Unsafe interpreter or script path for Windows shell integration.")
         return f'"{interpreter_path}" "{script_path}" "%1"'
 
+    def get_linux_open_command(self):
+        if getattr(sys, 'frozen', False):
+            executable_path = os.path.abspath(sys.executable)
+            if not self.path_looks_safe_for_shell(executable_path):
+                raise OSError("Unsafe executable path for Linux desktop integration.")
+            return f'"{executable_path}" %F'
+        interpreter_path = os.path.abspath(sys.executable)
+        script_path = os.path.abspath(__file__)
+        if not self.path_looks_safe_for_shell(interpreter_path) or not self.path_looks_safe_for_shell(script_path):
+            raise OSError("Unsafe interpreter or script path for Linux desktop integration.")
+        return f'"{interpreter_path}" "{script_path}" %F'
+
+    def get_linux_mime_types(self):
+        return [
+            'text/plain',
+            'text/markdown',
+            'application/json',
+            'text/x-python',
+            'text/x-csrc',
+            'text/x-chdr',
+            'text/x-c++src',
+            'text/x-c++hdr',
+            'text/x-java',
+            'application/javascript',
+            'text/javascript',
+            'text/html',
+            'application/xhtml+xml',
+            'text/css',
+            'application/xml',
+            'text/xml',
+            'application/x-shellscript',
+            'text/x-script.python',
+            'text/x-script.sh',
+            'text/x-php',
+            'text/x-sql',
+            'text/x-diff',
+            'text/x-patch',
+            'text/x-tex',
+            'text/x-csharp',
+        ]
+
+    def set_edit_with_shell_linux(self, enabled):
+        desktop_entry_path = self.get_linux_desktop_entry_path()
+        applications_dir = os.path.dirname(desktop_entry_path)
+        if enabled:
+            os.makedirs(applications_dir, exist_ok=True)
+            icon_path = self.splash_path if os.path.exists(self.splash_path) else self.icon_path
+            desktop_entry = [
+                '[Desktop Entry]',
+                'Type=Application',
+                'Version=1.0',
+                'Name=Notepad-X',
+                'GenericName=Text Editor',
+                'Comment=Edit text files with Notepad-X',
+                f'Exec={self.get_linux_open_command()}',
+                'Terminal=false',
+                'Categories=Utility;TextEditor;',
+                f'Icon={icon_path}',
+                f'MimeType={";".join(self.get_linux_mime_types())};',
+                'Actions=EditWithNotepadX;',
+                '',
+                '[Desktop Action EditWithNotepadX]',
+                'Name=Edit with Notepad-X',
+                f'Exec={self.get_linux_open_command()}',
+                'Terminal=false',
+                '',
+            ]
+            if not self.write_file_atomically(desktop_entry_path, '\n'.join(desktop_entry).rstrip('\n')):
+                raise OSError(f"Could not write Linux desktop entry to {desktop_entry_path}")
+            update_db = shutil.which('update-desktop-database')
+            if update_db:
+                try:
+                    subprocess.run([update_db, applications_dir], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+                except Exception:
+                    pass
+        else:
+            if os.path.exists(desktop_entry_path):
+                os.remove(desktop_entry_path)
+            update_db = shutil.which('update-desktop-database')
+            if update_db:
+                try:
+                    subprocess.run([update_db, applications_dir], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+                except Exception:
+                    pass
+
     def delete_registry_tree(self, root, subkey_path):
         try:
             with winreg.OpenKey(root, subkey_path, 0, winreg.KEY_READ | winreg.KEY_WRITE) as key:
@@ -1911,7 +2057,7 @@ class NotepadX:
             pass
 
     def set_edit_with_shell_for_extension(self, extension, enabled):
-        if os.name != 'nt' or winreg is None or not extension:
+        if not self.is_windows or winreg is None or not extension:
             return
         menu_key = rf"Software\Classes\SystemFileAssociations\{extension}\shell\EditWithNotepadX"
         if enabled:
@@ -1927,7 +2073,9 @@ class NotepadX:
             self.delete_registry_tree(winreg.HKEY_CURRENT_USER, menu_key)
 
     def is_edit_with_shell_registered(self):
-        if os.name != 'nt' or winreg is None:
+        if self.is_linux:
+            return os.path.exists(self.get_linux_desktop_entry_path())
+        if not self.is_windows or winreg is None:
             return bool(self.edit_with_shell_enabled.get())
         for extension in self.get_edit_with_shell_extensions():
             menu_key = rf"Software\Classes\SystemFileAssociations\{extension}\shell\EditWithNotepadX"
@@ -1941,7 +2089,7 @@ class NotepadX:
         return False
 
     def notify_windows_shell_change(self):
-        if os.name != 'nt' or not self.shell32:
+        if not self.is_windows or not self.shell32:
             return
         try:
             self.shell32.SHChangeNotify(0x08000000, 0x0000, None, None)
@@ -1949,19 +2097,23 @@ class NotepadX:
             pass
 
     def sync_edit_with_shell_menu(self, show_errors=False):
-        if os.name != 'nt' or winreg is None:
-            return True
         try:
-            for extension in self.get_edit_with_shell_extensions():
-                self.set_edit_with_shell_for_extension(extension, bool(self.edit_with_shell_enabled.get()))
-            self.notify_windows_shell_change()
+            enabled = bool(self.edit_with_shell_enabled.get())
+            if self.is_windows:
+                if winreg is None:
+                    return True
+                for extension in self.get_edit_with_shell_extensions():
+                    self.set_edit_with_shell_for_extension(extension, enabled)
+                self.notify_windows_shell_change()
+            elif self.is_linux:
+                self.set_edit_with_shell_linux(enabled)
             return True
         except OSError as exc:
             self.log_exception("sync edit with shell menu", exc)
             if show_errors:
                 messagebox.showerror(
                     "Edit with Notepad-X",
-                    "Notepad-X could not update the Windows Explorer context menu.\n\n"
+                    "Notepad-X could not update the OS shell integration.\n\n"
                     f"{exc}",
                     parent=self.root
                 )
@@ -3148,7 +3300,9 @@ class NotepadX:
             except tk.TclError:
                 pass
             self.ensure_virtual_line_visible(doc)
-        if event_type in {'4', '5', '6', 'Motion', 'ButtonPress', 'ButtonRelease'}:
+        if self.is_shift_selection_navigation(event):
+            self.hide_autocomplete_popup()
+        elif event_type in {'4', '5', '6', 'Motion', 'ButtonPress', 'ButtonRelease'}:
             self.hide_autocomplete_popup()
         elif event_type not in {'35'}:
             self.update_autocomplete_popup(doc)
@@ -3161,9 +3315,19 @@ class NotepadX:
             self.set_last_active_editor_widget(doc['text'])
         return None
 
+    def is_shift_selection_navigation(self, event):
+        keysym = str(getattr(event, 'keysym', ''))
+        state = int(getattr(event, 'state', 0) or 0)
+        navigation_keys = {'Up', 'Down', 'Left', 'Right', 'Home', 'End', 'Prior', 'Next'}
+        return bool((state & 0x1) and keysym in navigation_keys)
+
     def handle_text_keypress(self, event, tab_id):
         doc = self.documents.get(str(tab_id))
         if not doc:
+            return
+
+        if self.is_shift_selection_navigation(event):
+            self.hide_autocomplete_popup()
             return
 
         if not doc.get('virtual_mode') and not doc.get('preview_mode'):
@@ -3194,6 +3358,9 @@ class NotepadX:
     def handle_compare_keypress(self, event):
         compare_doc = self.compare_view
         source_doc = self.documents.get(self.compare_source_tab) if self.compare_source_tab else None
+        if self.is_shift_selection_navigation(event):
+            self.hide_autocomplete_popup()
+            return
         if source_doc and not source_doc.get('virtual_mode') and not source_doc.get('preview_mode'):
             compare_doc_id = str(compare_doc['frame']) if compare_doc else None
             if self.autocomplete_popup_visible() and self.autocomplete_doc_id == compare_doc_id:
@@ -3229,7 +3396,9 @@ class NotepadX:
             return
         self.set_last_active_editor_widget(compare_text)
         event_type = str(getattr(event, 'type', ''))
-        if event_type in {'4', '5', '6', 'Motion', 'ButtonPress', 'ButtonRelease'}:
+        if self.is_shift_selection_navigation(event):
+            self.hide_autocomplete_popup()
+        elif event_type in {'4', '5', '6', 'Motion', 'ButtonPress', 'ButtonRelease'}:
             self.hide_autocomplete_popup()
         elif event_type not in {'35'}:
             self.update_autocomplete_popup(compare_doc)
@@ -4695,7 +4864,7 @@ class NotepadX:
 
     def get_current_doc(self):
         compare_widget = self.get_compare_text_widget()
-        focus_widget = self.root.focus_get()
+        focus_widget = self.safe_focus_get()
         last_widget = getattr(self, 'last_active_editor_widget', None)
         if compare_widget is not None and (focus_widget == compare_widget or last_widget == compare_widget):
             if self.compare_source_tab:
@@ -5845,34 +6014,51 @@ class NotepadX:
             doc = self.get_current_doc()
 
         if not self.path_looks_safe_for_shell(doc['file_path']):
-            messagebox.showerror("Print Failed", "That file path could not be sent to the Windows print command safely.", parent=self.root)
+            messagebox.showerror("Print Failed", "That file path could not be sent to the print command safely.", parent=self.root)
             return "break"
 
         print_error = None
-        try:
-            if hasattr(os, 'startfile'):
-                os.startfile(doc['file_path'], 'print')
-                return "break"
-            elif self.shell32:
-                result = self.shell32.ShellExecuteW(None, 'print', doc['file_path'], None, None, 0)
-                if result <= 32:
-                    raise OSError(f"Windows print action failed with code {result}")
-                return "break"
-        except OSError as exc:
-            print_error = exc
-
-        try:
-            subprocess.Popen(
-                ['notepad.exe', '/p', doc['file_path']],
-                creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0)
-            )
-            return "break"
-        except OSError as exc:
-            if print_error is None:
+        if self.is_windows:
+            try:
+                if hasattr(os, 'startfile'):
+                    os.startfile(doc['file_path'], 'print')
+                    return "break"
+                elif self.shell32:
+                    result = self.shell32.ShellExecuteW(None, 'print', doc['file_path'], None, None, 0)
+                    if result <= 32:
+                        raise OSError(f"Windows print action failed with code {result}")
+                    return "break"
+            except OSError as exc:
                 print_error = exc
 
+            try:
+                subprocess.Popen(
+                    ['notepad.exe', '/p', doc['file_path']],
+                    creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0)
+                )
+                return "break"
+            except OSError as exc:
+                if print_error is None:
+                    print_error = exc
+        elif self.is_linux:
+            for command in (['lp', doc['file_path']], ['lpr', doc['file_path']]):
+                if shutil.which(command[0]):
+                    try:
+                        subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                        return "break"
+                    except OSError as exc:
+                        if print_error is None:
+                            print_error = exc
+            if shutil.which('xdg-open'):
+                try:
+                    subprocess.Popen(['xdg-open', doc['file_path']], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    return "break"
+                except OSError as exc:
+                    if print_error is None:
+                        print_error = exc
+
         if print_error is None:
-            print_error = OSError("Print is only available on Windows.")
+            print_error = OSError("Print is not available on this platform.")
         self.log_exception("print file", print_error)
         messagebox.showerror("Print Failed", str(print_error), parent=self.root)
         return "break"
@@ -5922,7 +6108,8 @@ class NotepadX:
     def undo(self, event=None):
         if self.current_doc_is_large_readonly():
             return "break"
-        target = self.root.focus_get() if isinstance(self.root.focus_get(), tk.Text) else self.text
+        focused_widget = self.safe_focus_get()
+        target = focused_widget if isinstance(focused_widget, tk.Text) else self.text
         try:
             target.edit_undo()
         except tk.TclError:
@@ -5939,7 +6126,8 @@ class NotepadX:
     def redo(self, event=None):
         if self.current_doc_is_large_readonly():
             return "break"
-        target = self.root.focus_get() if isinstance(self.root.focus_get(), tk.Text) else self.text
+        focused_widget = self.safe_focus_get()
+        target = focused_widget if isinstance(focused_widget, tk.Text) else self.text
         try:
             target.edit_redo()
         except tk.TclError:
@@ -5954,7 +6142,8 @@ class NotepadX:
         return "break"
 
     def select_all(self, event=None):
-        target = self.root.focus_get() if isinstance(self.root.focus_get(), tk.Text) else self.text
+        focused_widget = self.safe_focus_get()
+        target = focused_widget if isinstance(focused_widget, tk.Text) else self.text
         if not target:
             return "break"
         target.tag_add('sel', '1.0', 'end-1c')
@@ -5968,9 +6157,11 @@ class NotepadX:
         target = None
         if event is not None and isinstance(getattr(event, 'widget', None), tk.Text):
             target = event.widget
-        elif isinstance(self.root.focus_get(), tk.Text):
-            target = self.root.focus_get()
-        elif isinstance(self.text, tk.Text):
+        else:
+            focused_widget = self.safe_focus_get()
+            if isinstance(focused_widget, tk.Text):
+                target = focused_widget
+        if target is None and isinstance(self.text, tk.Text):
             target = self.text
 
         if target is None:
@@ -6009,9 +6200,11 @@ class NotepadX:
         target = None
         if event is not None and isinstance(getattr(event, 'widget', None), tk.Text):
             target = event.widget
-        elif isinstance(self.root.focus_get(), tk.Text):
-            target = self.root.focus_get()
-        elif isinstance(self.text, tk.Text):
+        else:
+            focused_widget = self.safe_focus_get()
+            if isinstance(focused_widget, tk.Text):
+                target = focused_widget
+        if target is None and isinstance(self.text, tk.Text):
             target = self.text
 
         if target is None:
@@ -6031,9 +6224,11 @@ class NotepadX:
         target = None
         if event is not None and isinstance(getattr(event, 'widget', None), tk.Text):
             target = event.widget
-        elif isinstance(self.root.focus_get(), tk.Text):
-            target = self.root.focus_get()
-        elif isinstance(self.text, tk.Text):
+        else:
+            focused_widget = self.safe_focus_get()
+            if isinstance(focused_widget, tk.Text):
+                target = focused_widget
+        if target is None and isinstance(self.text, tk.Text):
             target = self.text
 
         compare_widget = self.get_compare_text_widget()
