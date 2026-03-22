@@ -53,6 +53,7 @@ File Menu
 - Save all: Saves every normal editable tab. Modified untitled tabs prompt for a file name. Large virtual/read-only tabs are skipped.
 - Save As: Opens the standard save dialog with file type filters for text, markdown, .gitignore, and supported source/config formats.
 - Save Copy As: Saves a copy of the current tab. In very large virtual or preview modes, this copies the source file stream to a new path without trying to edit the original. It uses its own Save Copy As dialog title and the same file type filters as Save As.
+- Save As Encrypted: Saves a passphrase-protected encrypted copy. It suggests a .npxe filename automatically and adds .npxe if you leave it off.
 - Print: Sends the current saved file to the Windows print action. If the tab has never been saved, Notepad-X prompts you to save it first.
 - Export Notes: Exports the current tab's notes to JSON or Markdown.
 - Exit: Closes the app. If Find or Replace is open, Ctrl+Shift+X closes the panel first and exits only when no panel is open.
@@ -107,6 +108,17 @@ Saving and Save Safety
 - Very large virtual-mode files are intentionally read-only and cannot be directly saved from that mode.
 - Save Copy As is the supported way to create a second copy of a very large read-only tab.
 - Session files, recovery files, editor identity files, note sidecars, and JSON note exports also use atomic writes.
+
+Encrypted Files
+- Notepad-X can save encrypted copies using Save As Encrypted.
+- Encrypted files use the .npxe extension.
+- On open, Notepad-X detects its encrypted file format automatically and prompts for a passphrase.
+- Encrypted files use:
+  scrypt for passphrase-based key derivation
+  AES-256-GCM for authenticated encryption
+  a random salt and nonce per file
+- Normal Save As and Save Copy As remain plain-text save flows.
+- Encrypted open/save support needs the Python cryptography package installed on that machine.
 
 Find and Replace
 - Find highlights matches live while you type.
@@ -255,8 +267,8 @@ Crash Logging
 Support Files
 - Notepad-X keeps several support files in its app directory.
 - These can include:
-  cfg/Notepad-X.session.json
-  cfg/Notepad-X.editor.json
+  cfg/Notepad-X.<host>-<user>.session.json
+  cfg/Notepad-X.<host>-<user>.editor.json
   Notepad-X.recovery.json
   Notepad-X.crash.log
   per-file *.notepadx.notes.json sidecars
@@ -285,6 +297,7 @@ Keyboard Shortcuts
 - Ctrl+S: Save
 - Ctrl+Shift+S: Save all
 - Ctrl+Shift+Q: Save Copy As
+- Ctrl+Shift+E: Save As Encrypted
 - Ctrl+E: Export Notes
 - Ctrl+P: Print
 - Ctrl+Shift+X: Close compare mode or Find/Replace if open, otherwise exit

@@ -19,6 +19,7 @@ It keeps a simple desktop-editor feel, but adds project opening, persistent sess
 - Syntax theme presets and manual syntax override per tab
 - Large-file protection with buffered virtual mode
 - `Save Copy As` for huge read-only files
+- `Save As Encrypted` for passphrase-protected encrypted copies
 - Save dialogs with text, markdown, `.gitignore`, and code/config file type filters
 - Color-coded shared notes on selected text
 - Shared note sidecars with unread tracking
@@ -96,6 +97,20 @@ Notes support:
 - shared sidecar files for collaboration
 - export to JSON or Markdown
 
+## Encrypted Files
+
+Notepad-X can create and open encrypted document copies.
+
+- `Save As Encrypted` creates encrypted `.npxe` files
+- encrypted save suggests `file.ext.npxe` automatically
+- Notepad-X detects its encrypted format on open and asks for the passphrase
+- normal `Save As` and `Save Copy As` remain plain-text save flows
+- encryption uses:
+  - `scrypt` for passphrase-based key derivation
+  - `AES-256-GCM` for authenticated encryption
+  - a random salt and nonce per file
+- encrypted open/save support requires the Python `cryptography` package
+
 ## Large File Handling
 
 Very large files are protected with a buffered virtual mode so Notepad-X does not try to load the entire file into the Tk text widget at once.
@@ -128,6 +143,7 @@ Notepad-X also treats binary-like files more cautiously:
 - Windows or Linux
 - Python 3.11 recommended
 - Tkinter available in the Python install
+- `cryptography` installed if you want `.npxe` encrypted files
 
 ## Run
 
@@ -144,6 +160,7 @@ python Notepad-X.py
 - `Ctrl+S` Save
 - `Ctrl+Shift+S` Save all
 - `Ctrl+Shift+Q` Save Copy As
+- `Ctrl+Shift+E` Save As Encrypted
 - `Ctrl+P` Print
 - `Ctrl+E` Export Notes
 - `Ctrl+Shift+X` Close compare / close Find or Replace / exit
@@ -171,8 +188,8 @@ Notepad-X keeps support files for sessions, editor identity, recovery, crash log
 
 These can include:
 
-- `cfg/Notepad-X.session.json`
-- `cfg/Notepad-X.editor.json`
+- `cfg/Notepad-X.<host>-<user>.session.json`
+- `cfg/Notepad-X.<host>-<user>.editor.json`
 - `Notepad-X.recovery.json`
 - `Notepad-X.crash.log`
 - `*.notepadx.notes.json`
