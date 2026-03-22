@@ -66,7 +66,7 @@ Edit Menu
 - Find Next: Moves to the next match. If Find and Replace are closed, F3 jumps through unread notes instead.
 - Cycle Notes: Moves through every note in the current tab from first to last, then wraps back to the beginning.
 - Replace: Opens the Find/Replace panel.
-- Filter Notes: Filters note cycling to All, Unread, Allowed, or Denied notes.
+- Filter Notes: Filters note cycling to All, Unread, Yellow, Green, or Red notes.
 - Go To Line: Jumps to a specific line number.
 - Top of Document: Jumps to line 1, column 1.
 - Bottom of Document: Jumps to the last line, column 1.
@@ -182,57 +182,40 @@ Large Files
 Code Notes
 - Select text, right-click, and choose Add note.
 - Add note is disabled if no text is selected.
-- Notes highlight the selected code in yellow.
+- New notes ask for:
+  author name
+  note text
+  note color
+- Notes can be yellow, green, or red.
 - Clicking highlighted code opens the note popup.
 - The popup title is Code note.
 - Popups can show:
   the note author
-  the creation timestamp
+  the creation timestamp in local machine time
   the original note text
-- Notes are stored per file and synced through a hidden sidecar JSON file next to the document.
-
-Allow and Deny Workflow
 - Right-clicking an existing note can show:
-  Allow change
-  Deny change
+  Note Color
   Remove note
-- Allow change asks for:
-  a name
-  a short reason
-- Deny change asks for:
-  a name
-  a short reason
-- Allowed notes turn green.
-- Denied notes turn red.
-- Clicking an allowed or denied section opens a popup that can show:
-  Code note
-  the original note text
-  Allowed by: <name> or Denied by: <name>
-  Code note replay
-  the short reply text left by the reviewer
-- Allow change is greyed out if the note is already allowed.
-- Deny change is greyed out if the note is already denied.
+- Note Color lets you switch the note between Yellow, Green, and Red.
 - Remove note deletes the note highlight and note data.
+- Notes are stored per file and synced through a sidecar JSON file next to the document.
 
 Shared Notes and Collaboration
-- Each file-backed document can have a hidden sidecar file named:
+- Each file-backed document can have a sidecar file named:
   <filename>.notepadx.notes.json
 - The sidecar stores:
   note text
   note IDs
+  note color
   author information
   read state
-  allow or deny state
-  reply text
   timestamps
-  editor-tracking information
 - Notepad-X validates and sanitizes note payloads when reading the sidecar so malformed entries are ignored instead of blindly trusted.
 - Shared editor tracking includes stale-editor cleanup so dead editor entries eventually age out instead of lingering forever.
 - The sync system polls for sidecar changes and reloads notes when another editor updates them.
 - The status bar shows Notes Synced, unread count, and how many editors are currently tracked on that file.
 - In compare mode, the compared file also shows its own status readout aligned on the right side of the bottom bar.
 - Notes you authored do not count as unread for you.
-- If another editor allows or denies your note, that response is marked unread for you so the result comes back to the author.
 - Clicking a note or jumping to it marks it read for your current editor identity.
 
 Unread Notes and Navigation

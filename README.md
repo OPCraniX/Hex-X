@@ -1,6 +1,6 @@
 # Notepad-X
 
-Notepad-X is a tabbed Windows text editor for plain text, source code, shared code notes, and safer handling of large files.
+Notepad-X is a tabbed desktop text editor for plain text, source code, shared code notes, and safer handling of large files.
 
 It keeps a simple desktop-editor feel, but adds project opening, persistent sessions, syntax highlighting, live search, collaborative note sidecars, inline compare mode, recovery, and a built-in help viewer.
 
@@ -20,9 +20,8 @@ It keeps a simple desktop-editor feel, but adds project opening, persistent sess
 - Large-file protection with buffered virtual mode
 - `Save Copy As` for huge read-only files
 - Save dialogs with text, markdown, `.gitignore`, and code/config file type filters
-- Code notes on selected text
+- Color-coded shared notes on selected text
 - Shared note sidecars with unread tracking
-- Allow / Deny review flow with reviewer name and reply
 - Export notes to JSON or Markdown
 - Inline compare mode inside the main editor
 - `Find Next` and `F3` follow the active pane during compare mode
@@ -84,14 +83,13 @@ Notepad-X includes a lightweight local autocomplete system for normal editable t
 
 ## Code Notes
 
-You can select text, right-click, and attach a note to the selection.
+You can select text, right-click, and attach a shared note to the selection.
 
 Notes support:
 
-- yellow highlight for normal notes
-- green highlight for allowed changes
-- red highlight for denied changes
-- note author and timestamp display
+- yellow, green, or red note colors
+- note author and local-time timestamp display
+- right-click note recoloring
 - unread tracking between editors
 - `F3` to jump unread notes
 - `F4` to cycle notes
@@ -127,7 +125,7 @@ Notepad-X also treats binary-like files more cautiously:
 
 ## Requirements
 
-- Windows
+- Windows or Linux
 - Python 3.11 recommended
 - Tkinter available in the Python install
 
