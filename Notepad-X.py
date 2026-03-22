@@ -393,6 +393,14 @@ class NotepadX:
         except ValueError:
             return None
 
+    def format_note_timestamp(self, value):
+        parsed = self.parse_iso_datetime(value)
+        if parsed is None:
+            if not value:
+                return None
+            return str(value).replace('T', ' ')
+        return parsed.strftime('%Y-%m-%d %I:%M:%S %p')
+
     def read_json_file(self, file_path, context_name, default):
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
@@ -4031,9 +4039,8 @@ class NotepadX:
             meta_parts.append(f"Author: {note_data['author_label']}")
         elif note_data.get('author_id'):
             meta_parts.append(f"Author ID: {note_data['author_id']}")
-        meta_parts.append(f"Color: {self.get_note_color_label(note_data.get('color'))}")
         if note_data.get('created_at'):
-            meta_parts.append(f"Created: {note_data['created_at'].replace('T', ' ')}")
+            meta_parts.append(f"Created: {self.format_note_timestamp(note_data.get('created_at'))}")
         if meta_parts:
             tk.Label(
                 frame,
