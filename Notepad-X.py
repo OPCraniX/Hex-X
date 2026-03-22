@@ -16,7 +16,7 @@ import time
 import shutil
 import stat
 import socket
-from datetime import datetime
+from datetime import datetime, timezone
 from ctypes import wintypes
 
 try:
@@ -399,6 +399,12 @@ class NotepadX:
             if not value:
                 return None
             return str(value).replace('T', ' ')
+        try:
+            if parsed.tzinfo is None:
+                parsed = parsed.replace(tzinfo=timezone.utc)
+            parsed = parsed.astimezone()
+        except Exception:
+            pass
         return parsed.strftime('%Y-%m-%d %I:%M:%S %p')
 
     def read_json_file(self, file_path, context_name, default):
