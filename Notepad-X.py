@@ -14,6 +14,8 @@ import tempfile
 import traceback
 import time
 import shutil
+import stat
+import socket
 from datetime import datetime
 from ctypes import wintypes
 
@@ -43,6 +45,7 @@ class NotepadX:
         self.resource_dir = self.get_resource_dir()
         self.app_dir = self.get_app_dir()
         self.isolated_session = isolated_session
+        self.machine_profile_slug = self.get_machine_profile_slug()
         self.icon_path = self.resolve_gfx_path("Notepad-X.ico")
         self.splash_path = self.resolve_gfx_path("splash.png")
         self.splash_max_width = 430
@@ -70,7 +73,17 @@ class NotepadX:
         self.cursor_color = '#58a6ff'
         self.select_bg    = '#264f78'
         self.match_bg     = '#e3b505'    # search highlight
-        self.note_bg      = '#f2cc60'
+        self.note_colors  = {
+            'yellow': '#f2cc60',
+            'green': '#7ee787',
+            'red': '#f85149',
+        }
+        self.note_color_labels = {
+            'yellow': 'Yellow',
+            'green': 'Green',
+            'red': 'Red',
+        }
+        self.note_bg      = self.note_colors['yellow']
         self.panel_bg     = '#252525'
 
         self.current_file = None
@@ -87,12 +100,8 @@ class NotepadX:
         self.virtual_file_margin_lines = 800
         config_dir = self.get_config_dir(self.app_dir)
         os.makedirs(config_dir, exist_ok=True)
-        self.session_path = os.path.join(config_dir, "Notepad-X.session.json")
-        if self.isolated_session:
-            self.session_path = os.path.join(config_dir, f"Notepad-X.{os.getpid()}.session.json")
-        self.editor_identity_path = os.path.join(config_dir, "Notepad-X.editor.json")
-        if self.isolated_session:
-            self.editor_identity_path = os.path.join(config_dir, f"Notepad-X.{os.getpid()}.editor.json")
+        self.session_path = self.build_session_path(config_dir)
+        self.editor_identity_path = self.build_editor_identity_path(config_dir)
         self.recovery_path = os.path.join(self.app_dir, "Notepad-X.recovery.json")
         self.crash_log_path = os.path.join(self.app_dir, "Notepad-X.crash.log")
         self.help_path = os.path.join(self.resource_dir, "Notepad-X-help.txt")
@@ -108,8 +117,8 @@ class NotepadX:
         self.live_find_max_matches_typing = 150
         self.recent_files = []
         self.closed_session_files = set()
-        self.note_sync_interval_ms = 150
-        self.note_editor_heartbeat_interval_ms = 2000
+        self.note_sync_interval_ms = 100
+        self.note_editor_heartbeat_interval_ms = 1500
         self.kernel32 = None
         self.psapi = None
         if self.is_windows:
@@ -287,6 +296,25 @@ class NotepadX:
     def get_config_dir(self, base_dir):
         return os.path.join(base_dir, 'cfg')
 
+    def get_machine_profile_slug(self):
+        user_name = os.environ.get('USERNAME') or os.environ.get('USER') or 'user'
+        host_name = socket.gethostname() or 'host'
+        raw_slug = f"{host_name}-{user_name}".lower()
+        safe_slug = re.sub(r'[^a-z0-9._-]+', '-', raw_slug).strip('-')
+        return safe_slug or 'default'
+
+    def build_session_path(self, config_dir):
+        base_name = f"Notepad-X.{self.machine_profile_slug}.session.json"
+        if self.isolated_session:
+            base_name = f"Notepad-X.{self.machine_profile_slug}.{os.getpid()}.session.json"
+        return os.path.join(config_dir, base_name)
+
+    def build_editor_identity_path(self, config_dir):
+        base_name = f"Notepad-X.{self.machine_profile_slug}.editor.json"
+        if self.isolated_session:
+            base_name = f"Notepad-X.{self.machine_profile_slug}.{os.getpid()}.editor.json"
+        return os.path.join(config_dir, base_name)
+
     def get_linux_desktop_entry_path(self):
         applications_dir = os.path.join(os.path.expanduser('~'), '.local', 'share', 'applications')
         return os.path.join(applications_dir, 'notepad-x.desktop')
@@ -317,12 +345,8 @@ class NotepadX:
         self.app_dir = fallback_dir
         config_dir = self.get_config_dir(self.app_dir)
         os.makedirs(config_dir, exist_ok=True)
-        self.session_path = os.path.join(config_dir, "Notepad-X.session.json")
-        if self.isolated_session:
-            self.session_path = os.path.join(config_dir, f"Notepad-X.{os.getpid()}.session.json")
-        self.editor_identity_path = os.path.join(config_dir, "Notepad-X.editor.json")
-        if self.isolated_session:
-            self.editor_identity_path = os.path.join(config_dir, f"Notepad-X.{os.getpid()}.editor.json")
+        self.session_path = self.build_session_path(config_dir)
+        self.editor_identity_path = self.build_editor_identity_path(config_dir)
         self.recovery_path = os.path.join(self.app_dir, "Notepad-X.recovery.json")
         self.crash_log_path = os.path.join(self.app_dir, "Notepad-X.crash.log")
 
@@ -332,12 +356,8 @@ class NotepadX:
         self.app_dir = fallback_dir
         config_dir = self.get_config_dir(self.app_dir)
         os.makedirs(config_dir, exist_ok=True)
-        self.session_path = os.path.join(config_dir, "Notepad-X.session.json")
-        if self.isolated_session:
-            self.session_path = os.path.join(config_dir, f"Notepad-X.{os.getpid()}.session.json")
-        self.editor_identity_path = os.path.join(config_dir, "Notepad-X.editor.json")
-        if self.isolated_session:
-            self.editor_identity_path = os.path.join(config_dir, f"Notepad-X.{os.getpid()}.editor.json")
+        self.session_path = self.build_session_path(config_dir)
+        self.editor_identity_path = self.build_editor_identity_path(config_dir)
         self.recovery_path = os.path.join(self.app_dir, "Notepad-X.recovery.json")
         self.crash_log_path = os.path.join(self.app_dir, "Notepad-X.crash.log")
 
@@ -351,6 +371,19 @@ class NotepadX:
         if not text:
             return None
         return text[:max_length]
+
+    def normalize_note_color(self, value):
+        color_key = str(value or '').strip().lower()
+        if color_key in self.note_colors:
+            return color_key
+        return 'yellow'
+
+    def get_note_color_hex(self, value):
+        return self.note_colors[self.normalize_note_color(value)]
+
+    def get_note_color_label(self, value):
+        color_key = self.normalize_note_color(value)
+        return self.note_color_labels.get(color_key, color_key.title())
 
     def parse_iso_datetime(self, value):
         if not isinstance(value, str):
@@ -372,6 +405,12 @@ class NotepadX:
     def write_json_atomically(self, file_path, payload, prefix, context_name):
         directory = os.path.dirname(file_path) or '.'
         os.makedirs(directory, exist_ok=True)
+        target_mode = None
+        if not self.is_windows:
+            try:
+                target_mode = stat.S_IMODE(os.stat(file_path).st_mode) | 0o664
+            except OSError:
+                target_mode = 0o664
         fd, temp_path = tempfile.mkstemp(prefix=prefix, suffix='.tmp', dir=directory)
         try:
             with os.fdopen(fd, 'w', encoding='utf-8') as temp_file:
@@ -379,6 +418,8 @@ class NotepadX:
                 temp_file.flush()
                 os.fsync(temp_file.fileno())
             os.replace(temp_path, file_path)
+            if target_mode is not None:
+                os.chmod(file_path, target_mode)
             return True
         except OSError as exc:
             self.log_exception(context_name, exc)
@@ -599,6 +640,18 @@ class NotepadX:
                 return
             hidden_attributes = attributes | 0x2
             self.kernel32.SetFileAttributesW(file_path, hidden_attributes)
+        except Exception:
+            pass
+
+    def show_support_file(self, file_path):
+        if not self.is_windows or not file_path or not os.path.exists(file_path):
+            return
+        try:
+            attributes = self.kernel32.GetFileAttributesW(file_path)
+            if attributes == 0xFFFFFFFF:
+                return
+            visible_attributes = attributes & ~0x2
+            self.kernel32.SetFileAttributesW(file_path, visible_attributes)
         except Exception:
             pass
 
@@ -1684,10 +1737,8 @@ class NotepadX:
             return True
         if filter_mode == 'unread':
             return note_tag in self.get_unread_note_tags(doc)
-        if filter_mode == 'allowed':
-            return bool(note_data.get('approved_by'))
-        if filter_mode == 'denied':
-            return bool(note_data.get('dissapproved_by'))
+        if filter_mode in self.note_colors:
+            return self.normalize_note_color(note_data.get('color')) == filter_mode
         return True
 
     def goto_next_note(self, event=None):
@@ -3807,16 +3858,22 @@ class NotepadX:
             return
 
         menu = tk.Menu(self.root, tearoff=0, bg='#2d2d2d', fg=self.fg_color, activebackground='#3a3a3a')
+        note_color_menu = tk.Menu(menu, tearoff=0, bg='#2d2d2d', fg=self.fg_color, activebackground='#3a3a3a')
+        for color_key in ('yellow', 'green', 'red'):
+            note_color_menu.add_command(
+                label=self.get_note_color_label(color_key),
+                command=lambda value=color_key, frame=tab_id: self.run_context_menu_action(lambda: self.set_note_color(value, frame))
+            )
         menu.add_command(label="Cut", command=lambda: self.run_context_menu_action(self.cut_or_close_panel))
         menu.add_command(label="Copy", command=lambda: self.run_context_menu_action(self.copy))
         menu.add_command(label="Paste", command=lambda: self.run_context_menu_action(self.paste))
         menu.add_separator()
         menu.add_command(label="Select All", command=lambda: self.run_context_menu_action(self.select_all))
         menu.add_command(label="Add note", command=lambda frame=tab_id: self.run_context_menu_action(lambda: self.add_note_to_selection(frame)))
-        menu.add_command(label="Allow change", command=lambda frame=tab_id: self.run_context_menu_action(lambda: self.approve_note(frame)))
-        menu.add_command(label="Deny change", command=lambda frame=tab_id: self.run_context_menu_action(lambda: self.dissapprove_note(frame)))
+        menu.add_cascade(label="Note Color", menu=note_color_menu)
         menu.add_command(label="Remove note", command=lambda frame=tab_id: self.run_context_menu_action(lambda: self.remove_note(frame)))
         doc['context_menu'] = menu
+        doc['context_note_color_menu'] = note_color_menu
 
     def run_context_menu_action(self, callback):
         self.dismiss_context_menu()
@@ -3929,16 +3986,7 @@ class NotepadX:
 
         doc['context_menu'].entryconfig("Add note", state=note_state)
         note_action_state = 'normal' if doc.get('context_note_tag') else 'disabled'
-        approve_state = note_action_state
-        dissapprove_state = note_action_state
-        if doc.get('context_note_tag'):
-            note_data = doc['notes'].get(doc['context_note_tag'], {})
-            if note_data.get('approved_by'):
-                approve_state = 'disabled'
-            if note_data.get('dissapproved_by'):
-                dissapprove_state = 'disabled'
-        doc['context_menu'].entryconfig("Allow change", state=approve_state)
-        doc['context_menu'].entryconfig("Deny change", state=dissapprove_state)
+        doc['context_menu'].entryconfig("Note Color", state=note_action_state)
         doc['context_menu'].entryconfig("Remove note", state=note_action_state)
         try:
             self.dismiss_context_menu()
@@ -3965,21 +4013,7 @@ class NotepadX:
         popup.wm_overrideredirect(True)
         popup.configure(bg='#1f2430')
 
-        if note_data.get('dissapproved_by'):
-            highlight_color = '#f85149'
-            status_text = f"Denied by: {note_data['dissapproved_by']}"
-            status_fg = '#ffb3ad'
-            reply_text = note_data.get('dissapproved_note')
-        elif note_data.get('approved_by'):
-            highlight_color = '#3fb950'
-            status_text = f"Allowed by: {note_data['approved_by']}"
-            status_fg = '#86efac'
-            reply_text = note_data.get('approved_note')
-        else:
-            highlight_color = self.note_bg
-            status_text = None
-            status_fg = None
-            reply_text = None
+        highlight_color = self.get_note_color_hex(note_data.get('color'))
         frame = tk.Frame(popup, bg='#1f2430', highlightthickness=1, highlightbackground=highlight_color)
         frame.pack(fill='both', expand=True)
 
@@ -3997,6 +4031,7 @@ class NotepadX:
             meta_parts.append(f"Author: {note_data['author_label']}")
         elif note_data.get('author_id'):
             meta_parts.append(f"Author ID: {note_data['author_id']}")
+        meta_parts.append(f"Color: {self.get_note_color_label(note_data.get('color'))}")
         if note_data.get('created_at'):
             meta_parts.append(f"Created: {note_data['created_at'].replace('T', ' ')}")
         if meta_parts:
@@ -4021,38 +4056,6 @@ class NotepadX:
             wraplength=280,
             anchor='w'
         ).pack(fill='both', expand=True, padx=10, pady=(0, 8))
-
-        if status_text:
-            tk.Label(
-                frame,
-                text=status_text,
-                bg='#1f2430',
-                fg=status_fg,
-                font=('Segoe UI', 9, 'bold'),
-                justify='left',
-                anchor='w'
-            ).pack(fill='x', padx=10, pady=(0, 8))
-
-        if reply_text:
-            tk.Label(
-                frame,
-                text="Code note replay",
-                bg='#1f2430',
-                fg=highlight_color,
-                font=('Segoe UI', 9, 'bold'),
-                anchor='w'
-            ).pack(fill='x', padx=10, pady=(0, 2))
-
-            tk.Label(
-                frame,
-                text=reply_text,
-                bg='#1f2430',
-                fg='#f5f5f5',
-                font=('Segoe UI', 9),
-                justify='left',
-                wraplength=280,
-                anchor='w'
-            ).pack(fill='both', expand=True, padx=10, pady=(0, 8))
 
         popup.update_idletasks()
         popup.geometry(f"+{x + 12}+{y + 12}")
@@ -4124,6 +4127,78 @@ class NotepadX:
             self.autocomplete_suspended = max(0, self.autocomplete_suspended - 1)
             self.hide_autocomplete_popup()
 
+    def prompt_note_color(self, title="Note Color", initialvalue='yellow', parent=None):
+        parent = parent or self.root
+        self.hide_autocomplete_popup()
+        self.autocomplete_suspended += 1
+        dialog = tk.Toplevel(parent)
+        dialog.title(title)
+        dialog.transient(parent)
+        dialog.resizable(False, False)
+        dialog.configure(bg='#f0f0f0', padx=14, pady=12)
+
+        result = {'value': None}
+        color_var = tk.StringVar(value=self.normalize_note_color(initialvalue))
+
+        tk.Label(
+            dialog,
+            text="Color:",
+            bg='#f0f0f0',
+            fg='black',
+            font=('Segoe UI', 9)
+        ).pack(anchor='w', pady=(0, 6))
+
+        choices_frame = tk.Frame(dialog, bg='#f0f0f0')
+        choices_frame.pack(fill='x')
+        for color_key in ('yellow', 'green', 'red'):
+            tk.Radiobutton(
+                choices_frame,
+                text=self.get_note_color_label(color_key),
+                variable=color_var,
+                value=color_key,
+                bg='#f0f0f0',
+                anchor='w',
+                selectcolor=self.get_note_color_hex(color_key)
+            ).pack(anchor='w')
+
+        button_row = tk.Frame(dialog, bg='#f0f0f0')
+        button_row.pack(fill='x', pady=(10, 0))
+
+        def submit(event=None):
+            result['value'] = self.normalize_note_color(color_var.get())
+            dialog.destroy()
+            return "break"
+
+        def cancel(event=None):
+            result['value'] = None
+            dialog.destroy()
+            return "break"
+
+        tk.Button(button_row, text="OK", width=10, command=submit).pack(side='left')
+        tk.Button(button_row, text="Cancel", width=10, command=cancel).pack(side='right')
+
+        dialog.bind('<Return>', submit)
+        dialog.bind('<Escape>', cancel)
+        dialog.protocol("WM_DELETE_WINDOW", cancel)
+
+        dialog.update_idletasks()
+        w = dialog.winfo_width()
+        h = dialog.winfo_height()
+        x = parent.winfo_rootx() + (parent.winfo_width() - w) // 2
+        y = parent.winfo_rooty() + (parent.winfo_height() - h) // 2
+        dialog.geometry(f"{w}x{h}+{x}+{y}")
+        dialog.lift()
+        dialog.attributes('-topmost', True)
+        dialog.grab_set()
+        try:
+            dialog.wait_visibility()
+            dialog.after(50, lambda: dialog.attributes('-topmost', False) if dialog.winfo_exists() else None)
+            parent.wait_window(dialog)
+            return result['value']
+        finally:
+            self.autocomplete_suspended = max(0, self.autocomplete_suspended - 1)
+            self.hide_autocomplete_popup()
+
     def export_notes_report(self):
         doc = self.get_current_doc()
         if not doc or not doc.get('notes'):
@@ -4153,10 +4228,7 @@ class NotepadX:
                 'note': note_data.get('text'),
                 'author': note_data.get('author_label') or note_data.get('author_id'),
                 'created_at': note_data.get('created_at'),
-                'allowed_by': note_data.get('approved_by'),
-                'allowed_note': note_data.get('approved_note'),
-                'denied_by': note_data.get('dissapproved_by'),
-                'denied_note': note_data.get('dissapproved_note'),
+                'color': self.get_note_color_label(note_data.get('color')),
             }
             note_rows.append(row)
         try:
@@ -4167,22 +4239,14 @@ class NotepadX:
                     markdown_parts.append(f"\n- Range: `{row['selection_start']}` to `{row['selection_end']}`\n")
                     if row['author']:
                         markdown_parts.append(f"- Author: {row['author']}\n")
+                    if row['color']:
+                        markdown_parts.append(f"- Color: {row['color']}\n")
                     if row['created_at']:
                         markdown_parts.append(f"- Created: {row['created_at']}\n")
-                    if row['allowed_by']:
-                        markdown_parts.append(f"- Allowed by: {row['allowed_by']}\n")
-                    if row['denied_by']:
-                        markdown_parts.append(f"- Denied by: {row['denied_by']}\n")
                     markdown_parts.append("\n### Selected Text\n\n```\n")
                     markdown_parts.append(row['selected_text'])
                     markdown_parts.append("\n```\n\n### Code Note\n\n")
                     markdown_parts.append(row['note'] or '')
-                    if row['allowed_note']:
-                        markdown_parts.append("\n\n### Allow Reply\n\n")
-                        markdown_parts.append(row['allowed_note'])
-                    if row['denied_note']:
-                        markdown_parts.append("\n\n### Deny Reply\n\n")
-                        markdown_parts.append(row['denied_note'])
                     markdown_parts.append("\n")
                 self.write_file_atomically(output_path, ''.join(markdown_parts))
             else:
@@ -4230,17 +4294,21 @@ class NotepadX:
             note_text = self.trim_text(note_text[7:], self.max_note_text_length)
         if not note_text:
             return "break"
+        note_color = self.prompt_note_color(parent=self.root)
+        if not note_color:
+            return "break"
 
         note_tag = self.create_note_tag(
             doc,
             start,
             end,
             note_text,
+            note_color=note_color,
             author_id=self.editor_id,
             author_label=author_name,
             read_by=[self.editor_id]
         )
-        self.sync_single_note_to_sidecar(doc, note_tag=note_tag, fallback_start=start, fallback_end=end)
+        self.persist_doc_notes(doc)
         return "break"
 
     def create_note_tag(
@@ -4249,8 +4317,7 @@ class NotepadX:
         start,
         end,
         note_text,
-        approved_by=None,
-        dissapproved_by=None,
+        note_color='yellow',
         note_id=None,
         author_id=None,
         author_label=None,
@@ -4270,8 +4337,7 @@ class NotepadX:
             if editor_text and editor_text not in normalized_read_by:
                 normalized_read_by.append(editor_text)
         safe_note_text = self.trim_text(note_text, self.max_note_text_length)
-        safe_approved_by = self.trim_text(approved_by, self.max_note_name_length)
-        safe_denied_by = self.trim_text(dissapproved_by, self.max_note_name_length)
+        safe_note_color = self.normalize_note_color(note_color)
         safe_author_id = self.trim_text(author_id, 128)
         safe_author_label = self.trim_text(author_label, self.max_note_name_length)
         safe_anchor_text = anchor_text if anchor_text is not None else doc['text'].get(start, end)
@@ -4279,10 +4345,7 @@ class NotepadX:
         doc['notes'][note_tag] = {
             'id': str(note_id),
             'text': safe_note_text,
-            'approved_by': safe_approved_by,
-            'dissapproved_by': safe_denied_by,
-            'approved_note': None,
-            'dissapproved_note': None,
+            'color': safe_note_color,
             'author_id': safe_author_id,
             'author_label': safe_author_label,
             'read_by': normalized_read_by[:64],
@@ -4296,19 +4359,14 @@ class NotepadX:
 
     def apply_note_tag(self, doc, note_tag, start, end):
         note_data = doc['notes'][note_tag]
-        if note_data.get('dissapproved_by'):
-            highlight_color = '#f85149'
-        elif note_data.get('approved_by'):
-            highlight_color = '#7ee787'
-        else:
-            highlight_color = self.note_bg
+        highlight_color = self.get_note_color_hex(note_data.get('color'))
         doc['text'].tag_add(note_tag, start, end)
         doc['text'].tag_config(note_tag, background=highlight_color, foreground='black')
         doc['text'].tag_bind(note_tag, '<Button-1>', lambda e, frame=doc['frame'], tag=note_tag: self.open_note_from_tag(e, frame, tag))
         doc['text'].tag_bind(note_tag, '<Enter>', lambda e, text=doc['text']: text.config(cursor='hand2'))
         doc['text'].tag_bind(note_tag, '<Leave>', lambda e, text=doc['text']: text.config(cursor='xterm'))
 
-    def approve_note(self, tab_id=None):
+    def set_note_color(self, color_key, tab_id=None):
         doc = self.documents.get(str(tab_id)) if tab_id is not None else self.get_current_doc()
         if not doc or not doc.get('context_note_tag'):
             return "break"
@@ -4318,84 +4376,12 @@ class NotepadX:
         if not note_data:
             return "break"
 
-        self.hide_note_popup(doc)
-        approver = self.prompt_note_input("Allow Change", "Name:", parent=self.root)
-        if not approver:
-            return "break"
-        review_note = self.prompt_note_input("Allow Change", "Why:", parent=self.root)
-        if review_note is None:
-            return "break"
-
-        note_data = doc['notes'].get(note_tag)
-        if not note_data:
-            return "break"
-
-        note_data['approved_by'] = self.trim_text(approver, self.max_note_name_length)
-        note_data['dissapproved_by'] = None
-        note_data['approved_note'] = self.trim_text(review_note, self.max_note_reply_length)
-        note_data['dissapproved_note'] = None
-        read_by = [str(editor_id) for editor_id in note_data.get('read_by', []) if str(editor_id).strip()]
-        if self.editor_id not in read_by:
-            read_by.append(self.editor_id)
-        note_data['read_by'] = read_by
-        if note_data.get('author_id') in self.editor_aliases:
-            note_data['author_unread'] = False
-        if note_data.get('author_id') and note_data.get('author_id') not in self.editor_aliases:
-            note_data['author_unread'] = True
-            note_data['read_by'] = [
-                str(editor_id) for editor_id in note_data.get('read_by', [])
-                if str(editor_id).strip() and str(editor_id).strip() != note_data.get('author_id')
-            ]
+        note_data['color'] = self.normalize_note_color(color_key)
         ranges = doc['text'].tag_ranges(note_tag)
         if len(ranges) >= 2:
             doc['text'].tag_remove(note_tag, '1.0', tk.END)
             self.apply_note_tag(doc, note_tag, str(ranges[0]), str(ranges[1]))
-        self.sync_single_note_to_sidecar(doc, note_tag=note_tag)
-        return "break"
-
-    def dissapprove_note(self, tab_id=None):
-        doc = self.documents.get(str(tab_id)) if tab_id is not None else self.get_current_doc()
-        if not doc or not doc.get('context_note_tag'):
-            return "break"
-
-        note_tag = doc.get('context_note_tag')
-        note_data = doc['notes'].get(note_tag)
-        if not note_data:
-            return "break"
-
-        self.hide_note_popup(doc)
-        reviewer = self.prompt_note_input("Deny Change", "Name:", parent=self.root)
-        if not reviewer:
-            return "break"
-        review_note = self.prompt_note_input("Deny Change", "Why:", parent=self.root)
-        if review_note is None:
-            return "break"
-
-        note_data = doc['notes'].get(note_tag)
-        if not note_data:
-            return "break"
-
-        note_data['dissapproved_by'] = self.trim_text(reviewer, self.max_note_name_length)
-        note_data['approved_by'] = None
-        note_data['dissapproved_note'] = self.trim_text(review_note, self.max_note_reply_length)
-        note_data['approved_note'] = None
-        read_by = [str(editor_id) for editor_id in note_data.get('read_by', []) if str(editor_id).strip()]
-        if self.editor_id not in read_by:
-            read_by.append(self.editor_id)
-        note_data['read_by'] = read_by
-        if note_data.get('author_id') in self.editor_aliases:
-            note_data['author_unread'] = False
-        if note_data.get('author_id') and note_data.get('author_id') not in self.editor_aliases:
-            note_data['author_unread'] = True
-            note_data['read_by'] = [
-                str(editor_id) for editor_id in note_data.get('read_by', [])
-                if str(editor_id).strip() and str(editor_id).strip() != note_data.get('author_id')
-            ]
-        ranges = doc['text'].tag_ranges(note_tag)
-        if len(ranges) >= 2:
-            doc['text'].tag_remove(note_tag, '1.0', tk.END)
-            self.apply_note_tag(doc, note_tag, str(ranges[0]), str(ranges[1]))
-        self.sync_single_note_to_sidecar(doc, note_tag=note_tag)
+        self.persist_doc_notes(doc)
         return "break"
 
     def remove_note(self, tab_id=None):
@@ -4411,7 +4397,7 @@ class NotepadX:
         doc['notes'].pop(note_tag, None)
         doc['context_note_tag'] = None
         self.hide_note_popup(doc)
-        self.sync_single_note_to_sidecar(doc, remove_note_id=removed_note_id)
+        self.persist_doc_notes(doc)
         self.play_delete_note_sound()
         return "break"
 
@@ -4474,7 +4460,7 @@ class NotepadX:
             note_data['read_by'] = read_by
             changed = True
         if changed and doc.get('file_path') and not doc.get('virtual_mode') and not doc.get('preview_mode'):
-            self.sync_single_note_to_sidecar(doc, note_tag=note_tag)
+            self.persist_doc_notes(doc)
 
     def get_canonical_document_filename(self, file_path):
         directory = os.path.dirname(file_path)
@@ -4540,30 +4526,55 @@ class NotepadX:
     def get_editors_sidecar_path(self, file_path):
         return self.resolve_sidecar_path(file_path, ".notepadx.editors.json")
 
-    def get_sidecar_file_signature(self, sidecar_path):
-        signatures = []
-        for variant_path in self.get_sidecar_variants(sidecar_path):
-            if not os.path.exists(variant_path):
-                continue
-            try:
-                stat = os.stat(variant_path)
-            except OSError:
-                continue
-            signatures.append((
-                os.path.basename(variant_path).lower(),
-                stat.st_mtime_ns,
-                stat.st_size
-            ))
-        if not signatures:
-            return None
-        signatures.sort()
-        return tuple(signatures)
-
     def get_notes_sidecar_signature(self, sidecar_path):
-        return self.get_sidecar_file_signature(sidecar_path)
+        variant_paths = [path for path in self.get_sidecar_variants(sidecar_path) if os.path.exists(path)]
+        if not variant_paths:
+            return None
+        notes = []
+        found_payload = False
+        try:
+            variant_paths.sort(key=lambda path: (os.path.getmtime(path), path.lower()))
+        except OSError:
+            variant_paths.sort(key=lambda path: path.lower())
+        for variant_path in variant_paths:
+            payload = self.read_json_file(variant_path, "load shared notes signature", None)
+            if not isinstance(payload, dict):
+                continue
+            found_payload = True
+            raw_notes = payload.get('notes', [])
+            for note in raw_notes if isinstance(raw_notes, list) else []:
+                sanitized_note = self.sanitize_note_payload(note)
+                if sanitized_note is not None:
+                    notes.append(sanitized_note)
+        if not found_payload:
+            return None
+        notes = self.dedupe_notes_payload(notes)
+        serialized_notes = json.dumps(notes, sort_keys=True, separators=(',', ':'))
+        return hashlib.md5(serialized_notes.encode('utf-8')).hexdigest()
 
     def get_editors_sidecar_signature(self, sidecar_path):
-        return self.get_sidecar_file_signature(sidecar_path)
+        variant_paths = [path for path in self.get_sidecar_variants(sidecar_path) if os.path.exists(path)]
+        if not variant_paths:
+            return None
+        editors = []
+        found_payload = False
+        try:
+            variant_paths.sort(key=lambda path: (os.path.getmtime(path), path.lower()))
+        except OSError:
+            variant_paths.sort(key=lambda path: path.lower())
+        for variant_path in variant_paths:
+            payload = self.read_json_file(variant_path, "load shared editors signature", None)
+            if not isinstance(payload, dict):
+                continue
+            found_payload = True
+            raw_editors = payload.get('editors', [])
+            if isinstance(raw_editors, list):
+                editors.extend(raw_editors)
+        if not found_payload:
+            return None
+        editors = self.prune_inactive_shared_editors(editors)
+        serialized_editors = json.dumps(editors, sort_keys=True, separators=(',', ':'))
+        return hashlib.md5(serialized_editors.encode('utf-8')).hexdigest()
 
     def apply_shared_editors_to_doc(self, doc, shared_editors_payload):
         doc['note_editors'] = self.sanitize_shared_editors(shared_editors_payload.get('editors', []))
@@ -4681,10 +4692,7 @@ class NotepadX:
             'start': start,
             'end': end,
             'text': note_data['text'],
-            'approved_by': note_data.get('approved_by'),
-            'dissapproved_by': note_data.get('dissapproved_by'),
-            'approved_note': note_data.get('approved_note'),
-            'dissapproved_note': note_data.get('dissapproved_note'),
+            'color': self.normalize_note_color(note_data.get('color')),
             'author_id': note_data.get('author_id'),
             'author_label': note_data.get('author_label'),
             'read_by': [str(editor_id).strip()[:128] for editor_id in note_data.get('read_by', []) if str(editor_id).strip()][:64],
@@ -4693,6 +4701,77 @@ class NotepadX:
             'anchor_text': (note_data.get('anchor_text') or '')[:self.max_note_text_length],
             'anchor_line': note_data.get('anchor_line'),
         }
+
+    def refresh_doc_note_signatures(self, doc):
+        if not doc or not doc.get('file_path'):
+            return
+        notes_sidecar_path = self.get_notes_sidecar_path(doc['file_path'])
+        editors_sidecar_path = self.get_editors_sidecar_path(doc['file_path'])
+        doc['note_sync_mtime'] = os.path.getmtime(notes_sidecar_path) if os.path.exists(notes_sidecar_path) else None
+        doc['note_sync_signature'] = self.get_notes_sidecar_signature(notes_sidecar_path)
+        doc['note_editors_signature'] = self.get_editors_sidecar_signature(editors_sidecar_path)
+        doc['note_last_heartbeat_at'] = time.monotonic()
+        doc['last_unread_count'] = self.get_unread_note_count(doc)
+
+    def write_doc_notes_payload(self, doc, notes_payload):
+        if not doc or not doc.get('file_path') or doc.get('virtual_mode') or doc.get('preview_mode'):
+            return False
+        sidecar_path = self.get_notes_sidecar_path(doc['file_path'])
+        try:
+            self.write_shared_notes(sidecar_path, notes_payload, doc.get('note_active_editors', 0), doc.get('note_editors', []))
+            self.refresh_doc_note_signatures(doc)
+            return True
+        except PermissionError as exc:
+            self.show_filesystem_error("Code Notes", sidecar_path, exc)
+        except OSError as exc:
+            self.log_exception("write doc notes payload", exc)
+            self.show_filesystem_error("Code Notes", sidecar_path, exc)
+        return False
+
+    def append_shared_note_to_sidecar(self, doc, exported_note):
+        if not exported_note:
+            return False
+        sidecar_path = self.get_notes_sidecar_path(doc['file_path'])
+        payload = self.load_shared_notes(sidecar_path)
+        notes = []
+        target_note_id = str(exported_note.get('id', '')).strip()
+        for note in payload.get('notes', []):
+            if target_note_id and str(note.get('id', '')).strip() == target_note_id:
+                continue
+            sanitized_note = self.sanitize_note_payload(note)
+            if sanitized_note is not None:
+                notes.append(sanitized_note)
+        notes.append(exported_note)
+        return self.write_doc_notes_payload(doc, notes)
+
+    def mutate_shared_note_in_sidecar(self, doc, note_id, mutate_callback):
+        if not doc or not doc.get('file_path') or not note_id:
+            return False
+        sidecar_path = self.get_notes_sidecar_path(doc['file_path'])
+        payload = self.load_shared_notes(sidecar_path)
+        notes = []
+        found_note = False
+        target_note_id = str(note_id).strip()
+        for note in payload.get('notes', []):
+            current_note_id = str(note.get('id', '')).strip()
+            if current_note_id != target_note_id:
+                sanitized_note = self.sanitize_note_payload(note)
+                if sanitized_note is not None:
+                    notes.append(sanitized_note)
+                continue
+            found_note = True
+            updated_note = dict(note)
+            callback_result = mutate_callback(updated_note)
+            if callback_result is False:
+                continue
+            if isinstance(callback_result, dict):
+                updated_note = callback_result
+            sanitized_note = self.sanitize_note_payload(updated_note)
+            if sanitized_note is not None:
+                notes.append(sanitized_note)
+        if not found_note:
+            return False
+        return self.write_doc_notes_payload(doc, notes)
 
     def sync_single_note_to_sidecar(self, doc, note_tag=None, remove_note_id=None, fallback_start=None, fallback_end=None):
         if not doc.get('file_path') or doc.get('virtual_mode') or doc.get('preview_mode'):
@@ -4729,10 +4808,7 @@ class NotepadX:
                         exported_note = dict(existing_note)
                         exported_note.update({
                             'text': local_note.get('text'),
-                            'approved_by': local_note.get('approved_by'),
-                            'dissapproved_by': local_note.get('dissapproved_by'),
-                            'approved_note': local_note.get('approved_note'),
-                            'dissapproved_note': local_note.get('dissapproved_note'),
+                            'color': self.normalize_note_color(local_note.get('color')),
                             'author_id': local_note.get('author_id'),
                             'author_label': local_note.get('author_label'),
                             'read_by': [str(editor_id).strip()[:128] for editor_id in local_note.get('read_by', []) if str(editor_id).strip()][:64],
@@ -4782,15 +4858,20 @@ class NotepadX:
             anchor_line = int(anchor_line) if anchor_line is not None else None
         except (TypeError, ValueError):
             anchor_line = None
+        note_color = self.normalize_optional_metadata(saved_note.get('color'))
+        if not note_color:
+            if self.normalize_optional_metadata(saved_note.get('dissapproved_by')):
+                note_color = 'red'
+            elif self.normalize_optional_metadata(saved_note.get('approved_by')):
+                note_color = 'green'
+            else:
+                note_color = 'yellow'
         return {
             'id': note_id or None,
             'start': start,
             'end': end,
             'text': note_text,
-            'approved_by': self.trim_text(self.normalize_optional_metadata(saved_note.get('approved_by')), self.max_note_name_length),
-            'dissapproved_by': self.trim_text(self.normalize_optional_metadata(saved_note.get('dissapproved_by')), self.max_note_name_length),
-            'approved_note': self.trim_text(self.normalize_optional_metadata(saved_note.get('approved_note')), self.max_note_reply_length),
-            'dissapproved_note': self.trim_text(self.normalize_optional_metadata(saved_note.get('dissapproved_note')), self.max_note_reply_length),
+            'color': self.normalize_note_color(note_color),
             'author_id': self.trim_text(self.normalize_optional_metadata(saved_note.get('author_id')), 128),
             'author_label': self.trim_text(self.normalize_optional_metadata(saved_note.get('author_label')), self.max_note_name_length),
             'read_by': [str(editor_id).strip()[:128] for editor_id in read_by if str(editor_id).strip()][:64],
@@ -4871,7 +4952,7 @@ class NotepadX:
         if not self.write_json_atomically(sidecar_path, payload, 'notepadx-notes-', 'write shared notes'):
             raise OSError(f"Could not write note sidecar: {sidecar_path}")
         self.cleanup_duplicate_sidecar_variants(sidecar_path)
-        self.hide_support_file(sidecar_path)
+        self.show_support_file(sidecar_path)
 
     def load_shared_notes(self, sidecar_path):
         variant_paths = [path for path in self.get_sidecar_variants(sidecar_path) if os.path.exists(path)]
@@ -4924,7 +5005,7 @@ class NotepadX:
         if not self.write_json_atomically(sidecar_path, payload, 'notepadx-editors-', 'write shared editors'):
             raise OSError(f"Could not write editor sidecar: {sidecar_path}")
         self.cleanup_duplicate_sidecar_variants(sidecar_path)
-        self.hide_support_file(sidecar_path)
+        self.show_support_file(sidecar_path)
 
     def load_shared_editors(self, sidecar_path, fallback_payload=None):
         variant_paths = [path for path in self.get_sidecar_variants(sidecar_path) if os.path.exists(path)]
@@ -5004,10 +5085,7 @@ class NotepadX:
             start, end = resolved_range
             note_id = saved_note.get('id')
             note_text = saved_note.get('text', '').strip()
-            approved_by = saved_note.get('approved_by')
-            dissapproved_by = saved_note.get('dissapproved_by')
-            approved_note = saved_note.get('approved_note')
-            dissapproved_note = saved_note.get('dissapproved_note')
+            note_color = saved_note.get('color')
             author_id = saved_note.get('author_id')
             author_label = saved_note.get('author_label')
             read_by = saved_note.get('read_by', [])
@@ -5020,8 +5098,7 @@ class NotepadX:
             try:
                 note_tag = self.create_note_tag(
                     doc, start, end, note_text,
-                    approved_by=approved_by,
-                    dissapproved_by=dissapproved_by,
+                    note_color=note_color,
                     note_id=note_id,
                     author_id=author_id,
                     author_label=author_label,
@@ -5034,10 +5111,6 @@ class NotepadX:
             except tk.TclError as exc:
                 self.log_exception("restore note tag", exc)
                 continue
-            restored_note = doc['notes'].get(note_tag)
-            if restored_note is not None:
-                restored_note['approved_note'] = approved_note
-                restored_note['dissapproved_note'] = dissapproved_note
         doc['note_sync_mtime'] = os.path.getmtime(sidecar_path) if os.path.exists(sidecar_path) else None
         doc['note_sync_signature'] = self.get_notes_sidecar_signature(sidecar_path)
         doc['note_editors_signature'] = self.get_editors_sidecar_signature(editors_sidecar_path)
@@ -5718,8 +5791,9 @@ class NotepadX:
         edit_menu.add_cascade(label="Filter Notes", menu=note_filter_menu)
         note_filter_menu.add_radiobutton(label="All", variable=self.note_filter, value='all')
         note_filter_menu.add_radiobutton(label="Unread", variable=self.note_filter, value='unread')
-        note_filter_menu.add_radiobutton(label="Allowed", variable=self.note_filter, value='allowed')
-        note_filter_menu.add_radiobutton(label="Denied", variable=self.note_filter, value='denied')
+        note_filter_menu.add_radiobutton(label="Yellow", variable=self.note_filter, value='yellow')
+        note_filter_menu.add_radiobutton(label="Green", variable=self.note_filter, value='green')
+        note_filter_menu.add_radiobutton(label="Red", variable=self.note_filter, value='red')
         edit_menu.add_separator()
         edit_menu.add_command(label="Go To Line", command=self.goto_line_dialog, accelerator="Ctrl+G")
         edit_menu.add_command(label="Top of Document", command=self.goto_document_start, accelerator="Ctrl+PgUp")
@@ -6448,6 +6522,12 @@ class NotepadX:
 
     def write_file_atomically(self, file_path, content):
         directory = os.path.dirname(file_path) or '.'
+        target_mode = None
+        if not self.is_windows:
+            try:
+                target_mode = stat.S_IMODE(os.stat(file_path).st_mode)
+            except OSError:
+                target_mode = 0o664
         fd, temp_path = tempfile.mkstemp(prefix='notepadx-save-', suffix='.tmp', dir=directory)
         try:
             with os.fdopen(fd, 'w', encoding='utf-8') as temp_file:
@@ -6455,6 +6535,8 @@ class NotepadX:
                 temp_file.flush()
                 os.fsync(temp_file.fileno())
             os.replace(temp_path, file_path)
+            if target_mode is not None:
+                os.chmod(file_path, target_mode)
             return True
         finally:
             if os.path.exists(temp_path):
