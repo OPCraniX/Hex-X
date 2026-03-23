@@ -211,6 +211,20 @@ DEFAULT_LOCALE_STRINGS = {
 
 RTL_LOCALE_CODES = {'ar', 'ar_sa', 'ar_ae', 'ar_eg', 'ar_ma'}
 
+LOCALE_DISPLAY_NAMES = {
+    'en_us': 'English (US)',
+    'ar': 'العربية',
+    'ar_sa': 'العربية (السعودية)',
+    'ar_ae': 'العربية (الإمارات)',
+    'ar_eg': 'العربية (مصر)',
+    'ar_ma': 'العربية (المغرب)',
+    'fr_ca': 'Français (Canada)',
+    'hi_in': 'हिन्दी (भारत)',
+    'ja_jp': '日本語 (日本)',
+    'ru_ru': 'Русский (Россия)',
+    'zh_cn': '简体中文 (中国)',
+}
+
 class NotepadX:
     def __init__(self, isolated_session=False, startup_files=None):
         self.root = tk.Tk()
@@ -624,6 +638,13 @@ class NotepadX:
         if 'en_us' not in codes:
             codes.append('en_us')
         return sorted(set(codes), key=lambda value: (value != 'en_us', value))
+
+    def get_language_display_name(self, locale_code):
+        code = str(locale_code or '').strip().lower()
+        if code in LOCALE_DISPLAY_NAMES:
+            return LOCALE_DISPLAY_NAMES[code]
+        parts = [part.upper() if len(part) <= 3 else part.title() for part in code.split('_') if part]
+        return " / ".join(parts) if parts else 'Unknown'
 
     def is_rtl_locale(self, locale_code=None):
         code = str(locale_code or self.locale_code or '').strip().lower()
@@ -6806,7 +6827,7 @@ class NotepadX:
         self.language_menu.delete(0, tk.END)
         for language_code in self.get_available_language_codes():
             self.language_menu.add_radiobutton(
-                label=language_code,
+                label=self.get_language_display_name(language_code),
                 variable=self.language_selection,
                 value=language_code,
                 command=lambda code=language_code: self.apply_locale(code)
