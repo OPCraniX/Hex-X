@@ -10,6 +10,7 @@ import re
 import hashlib
 import base64
 import secrets
+import difflib
 import subprocess
 import tempfile
 import traceback
@@ -44,6 +45,62 @@ try:
 except ImportError:
     ColorDelegator = None
     Percolator = None
+
+try:
+    import enchant
+except ImportError:
+    enchant = None
+
+BUILTIN_EN_US_WORDS = set("""
+a about above accept access action active add added adding after again against age ago all allow almost alone along already also always am among amount an and another any anyone anything app appear apply are area around as ask asks at attach author auto autocomplete available away back be because become been before begin below best better between big binary blank blue body both bottom box brief bring built but by call can cancel caret case center change changed changes changing characters check checked choose clear click clicked close closes closing code color colors col compare compared compare-mode computer confirm conflict contents control copy could count create created current cursor custom cut cycle dark data date day default delete deny desktop detect detected dialog different directly directory disable disabled display do doc document documents does doesn't doing done down drag drop during each edit editable editor editors effect else enabled end english enough enter entry error escape even every exact exit export extension file files fill filter find first flow font for force form format found frame from full function further get give go goes going good green group gutter had handling has have he heartbeat help here hide high highlight highlighted highlighting history hold how huge icon id if ignored import in include includes indicator info input inside instead integration into invalid is it its itself json jump jumps just keep key keyboard keys kind language languages large larger last latest left length let like line lines linux list live load loading local location locked long look lower machine malformed many markdown mark match matches matter may me menu metadata might minimal mode modified more motion move moving much multi multiple must name named names navigation near need never new next no no-op normal not note notes nothing now null number numbered of off on once one only open opening operation optional or order original os other otherwise out overwrite own page panel parts pass passphrase paste path paths per permission persist persistent place plain popup position post put python quick radio range read real really recent red reduce reference refresh related reload remove reopened reply report replace response responses restore restored restoring return right root row run safe save saved saving scan scroll scrolling search second section see select selected selection send separate separator set setting settings several shared short show shown side simplified since single so some sound source specific spelling split start startup state stays still stored strip style submenu support supported syntax system tab tabs tags take target text than that the their them then there these they thing things this through time timestamp timestamps title to toggle top total track trim true try txt under underline unread update updated updates up use useful user users using utf value values very view visible virtual want was way we well went what when where whether which while who whole why will window windows with without word words work workflow wrap write writer writing x you your
+add note remove spelling respond english us language save open close copy paste cut select all file files text note notes color yellow green red blue light author created response responses shared synced unread compare search find replace help about status tab tabs line lines document documents clock time date font zoom print export recent project session recovery spell check checking checked spellcheck
+import from class def return true false none break continue try except finally raise with lambda self root text widget frame menu dialog popup scrollbar status compare note notepad x notepadx json markdown utf normal virtual preview
+""".split())
+
+COMMON_EN_US_FALLBACK_WORDS = set("""
+i i'm ive i'd ill me my mine myself we we're we've we'd we'll our ours ourselves you you're you've you'd you'll your yours yourself yourselves he he's he'd he'll him his himself she she's she'd she'll her hers herself they they're they've they'd they'll them their theirs themselves it it's its itself this that these those
+who whom whose what when where why how whichever whatever whoever
+the a an and or but if then else because as while although though unless until than so also too very more most less least own same other another such
+is are was were be been being do does did have has had can could may might must shall should will would
+not no yes just really quite rather pretty even still only already yet ever never always often sometimes usually maybe perhaps
+down street other day when noticed beautiful sunset orange red stood against sky there cool breeze blowing made everything feel calm usual anywhere important stopped minute watched before heading home was walking
+walk walking walked notice noticed noticing beauty beautiful beautifully sunset sun sky orange orangey red stand stood standing cool cooler coolest breeze breezy blow blowing blown make made making every thing everything calm calmer calmest usual unusually anywhere somewhere nowhere important importance stop stopped stopping minute minutes watch watched watching before after head heading headed home house
+people person friend friends family world place places area areas part parts kind kinds side sides point points time times year years month months week weeks hour hours minute minutes second seconds morning afternoons afternoon evening night nights today tomorrow yesterday now soon later early late
+see saw seen seeing look looked looking find found finding know knew known knowing think thought thinking say said saying tell told telling ask asked asking want wanted wanting need needed needing use used using work worked working play played playing make made making take took taken taking come came coming go goes going went gone keep kept keeping leave left leaving start started starting stop stopped stopping move moved moving change changed changing
+good bad great better best worse worst small smaller smallest large larger largest long longer longest short shorter shortest high higher highest low lower lowest new newer newest old older oldest young younger youngest
+happy sad easy easier easiest hard harder hardest simple simpler simplest clear clearer clearest bright brighter brightest dark darker darkest warm warmer warmest cold colder coldest quiet quieter quietest loud louder loudest
+important different possible available certain common special general local global open opened opening close closed closing true false plain normal
+text letter letters word words sentence sentences paragraph paragraphs story stories message messages response responses note notes document documents file files folder folders window windows menu menus button buttons
+street notice beauty sunset orange breeze calm usual stopped minute watched heading home walking cool blowing everything anywhere important beautiful noticed
+sunrise moonlight cloudy windy rainy snowy autumn winter spring summer grass tree trees flower flowers bird birds water river lake ocean beach mountain mountains road roads city town room table chair light lights color colours colors
+shouldnt couldnt wouldnt didnt cant wont isnt arent wasnt werent havent hasnt hadnt doesnt dont thats theres whats whos youre theyre wereve ive youve
+""".split())
+
+FALLBACK_SPELL_ROOT_OVERRIDES = {
+    'stood': {'stand', 'stood'},
+    'made': {'make', 'made'},
+    'went': {'go', 'went'},
+    'gone': {'go', 'gone'},
+    'felt': {'feel', 'felt'},
+    'found': {'find', 'found'},
+    'thought': {'think', 'thought'},
+    'bought': {'buy', 'bought'},
+    'brought': {'bring', 'brought'},
+    'wrote': {'write', 'wrote'},
+    'written': {'write', 'written'},
+    'read': {'read'},
+    'saw': {'see', 'saw'},
+    'seen': {'see', 'seen'},
+    'took': {'take', 'took'},
+    'taken': {'take', 'taken'},
+    'came': {'come', 'came'},
+    'kept': {'keep', 'kept'},
+    'left': {'leave', 'left'},
+    'better': {'good', 'better'},
+    'best': {'good', 'best'},
+    'worse': {'bad', 'worse'},
+    'worst': {'bad', 'worst'},
+}
 
 class NotepadX:
     def __init__(self, isolated_session=False, startup_files=None):
@@ -86,12 +143,15 @@ class NotepadX:
             'yellow': '#f2cc60',
             'green': '#7ee787',
             'red': '#f85149',
+            'blue': '#79c0ff',
         }
         self.note_color_labels = {
             'yellow': 'Yellow',
             'green': 'Green',
             'red': 'Red',
+            'blue': 'Light Blue',
         }
+        self.note_color_order = ('yellow', 'green', 'red', 'blue')
         self.note_bg      = self.note_colors['yellow']
         self.panel_bg     = '#252525'
 
@@ -186,7 +246,6 @@ class NotepadX:
         self.context_menu_posted_at = 0.0
         self.hovered_editor_widget = None
         self.sync_page_navigation_enabled = tk.BooleanVar(value=False)
-
         # Panel visibility flags
         self.find_panel_visible = False
         self.replace_panel_visible = False
@@ -337,6 +396,505 @@ class NotepadX:
         applications_dir = os.path.join(os.path.expanduser('~'), '.local', 'share', 'applications')
         return os.path.join(applications_dir, 'notepad-x.desktop')
 
+    def load_custom_spell_languages(self):
+        self.custom_spell_languages = []
+        try:
+            os.makedirs(self.spellcheck_dir, exist_ok=True)
+            for entry in sorted(os.listdir(self.spellcheck_dir)):
+                if not entry.lower().endswith('.txt'):
+                    continue
+                language_id = os.path.splitext(entry)[0]
+                if language_id and language_id not in self.custom_spell_languages:
+                    self.custom_spell_languages.append(language_id)
+        except OSError:
+            pass
+
+    def get_spell_language_path(self, language_id):
+        if language_id == 'en-US':
+            return None
+        safe_name = re.sub(r'[^A-Za-z0-9._ -]+', '_', str(language_id)).strip()
+        if not safe_name:
+            return None
+        return os.path.join(self.spellcheck_dir, f"{safe_name}.txt")
+
+    def get_spell_language_label(self, language_id):
+        if language_id == 'en-US':
+            return 'English US'
+        return str(language_id)
+
+    def get_fallback_spell_words(self):
+        return BUILTIN_EN_US_WORDS | COMMON_EN_US_FALLBACK_WORDS
+
+    def get_system_spell_dictionary_candidates(self, language_id):
+        candidates = []
+        if language_id != 'en-US':
+            return candidates
+        if self.is_linux:
+            candidates.extend([
+                '/usr/share/hunspell/en_US.dic',
+                '/usr/share/myspell/en_US.dic',
+                '/usr/share/dict/american-english',
+                '/usr/share/dict/words',
+            ])
+        if self.is_windows:
+            for base_dir in filter(None, [
+                os.environ.get('ProgramFiles'),
+                os.environ.get('ProgramFiles(x86)'),
+                os.environ.get('ProgramW6432'),
+            ]):
+                candidates.extend([
+                    os.path.join(base_dir, 'LibreOffice', 'share', 'dict', 'ooo', 'en_US.dic'),
+                    os.path.join(base_dir, 'Git', 'usr', 'share', 'dict', 'words'),
+                ])
+        return [path for path in candidates if isinstance(path, str) and os.path.exists(path)]
+
+    def load_words_from_spell_file(self, file_path):
+        words = set()
+        if not file_path or not os.path.exists(file_path):
+            return words
+        try:
+            with open(file_path, 'r', encoding='utf-8', errors='replace') as dictionary_file:
+                lines = dictionary_file.readlines()
+        except OSError:
+            return words
+        for line_number, raw_line in enumerate(lines):
+            line = raw_line.strip()
+            if not line or line.startswith('#'):
+                continue
+            if line_number == 0 and line.isdigit() and file_path.lower().endswith('.dic'):
+                continue
+            if '/' in line:
+                line = line.split('/', 1)[0]
+            normalized = line.strip().lower()
+            if normalized:
+                words.add(normalized)
+        return words
+
+    def get_spell_backend(self, language_id=None):
+        language_id = language_id or self.spellcheck_language.get() or 'en-US'
+        cached = self.spellcheck_cache.get(language_id)
+        if cached is not None:
+            return cached
+        backend = {
+            'kind': 'set',
+            'checker': None,
+            'words': set(),
+            'fallback': False,
+        }
+        if language_id == 'en-US' and enchant is not None:
+            try:
+                backend['checker'] = enchant.Dict('en_US')
+                backend['kind'] = 'enchant'
+                self.spellcheck_cache[language_id] = backend
+                return backend
+            except Exception:
+                backend['checker'] = None
+
+        language_path = self.get_spell_language_path(language_id)
+        if language_path:
+            backend['words'].update(self.load_words_from_spell_file(language_path))
+        elif language_id == 'en-US':
+            for candidate_path in self.get_system_spell_dictionary_candidates(language_id):
+                backend['words'].update(self.load_words_from_spell_file(candidate_path))
+                if len(backend['words']) >= 5000:
+                    break
+            if not backend['words']:
+                backend['words'].update(self.get_fallback_spell_words())
+                backend['fallback'] = True
+        self.spellcheck_cache[language_id] = backend
+        return backend
+
+    def invalidate_spell_dictionaries(self):
+        self.spellcheck_cache = {}
+        self.load_custom_spell_languages()
+
+    def generate_fallback_spell_variants(self, word):
+        normalized = str(word or '').strip().lower()
+        if not normalized:
+            return set()
+        variants = {normalized}
+        variants.update(FALLBACK_SPELL_ROOT_OVERRIDES.get(normalized, set()))
+
+        if normalized.endswith("'s") and len(normalized) > 3:
+            variants.add(normalized[:-2])
+        if normalized.endswith("s'") and len(normalized) > 3:
+            variants.add(normalized[:-1])
+        if normalized.endswith('ies') and len(normalized) > 4:
+            variants.add(normalized[:-3] + 'y')
+        if normalized.endswith('ied') and len(normalized) > 4:
+            variants.add(normalized[:-3] + 'y')
+        if normalized.endswith('es') and len(normalized) > 4:
+            variants.add(normalized[:-2])
+            variants.add(normalized[:-1])
+        if normalized.endswith('s') and len(normalized) > 3:
+            variants.add(normalized[:-1])
+
+        if normalized.endswith('ing') and len(normalized) > 5:
+            base = normalized[:-3]
+            variants.add(base)
+            variants.add(base + 'e')
+            if len(base) > 2 and base[-1] == base[-2]:
+                variants.add(base[:-1])
+        if normalized.endswith('ed') and len(normalized) > 4:
+            base = normalized[:-2]
+            variants.add(base)
+            variants.add(base + 'e')
+            if len(base) > 2 and base[-1] == base[-2]:
+                variants.add(base[:-1])
+        if normalized.endswith('er') and len(normalized) > 4:
+            base = normalized[:-2]
+            variants.add(base)
+            variants.add(base + 'e')
+        if normalized.endswith('est') and len(normalized) > 5:
+            base = normalized[:-3]
+            variants.add(base)
+            variants.add(base + 'e')
+        if normalized.endswith('ly') and len(normalized) > 4:
+            base = normalized[:-2]
+            variants.add(base)
+            variants.add(base + 'le')
+        if normalized.endswith('ness') and len(normalized) > 6:
+            variants.add(normalized[:-4])
+        if normalized.endswith('ment') and len(normalized) > 6:
+            variants.add(normalized[:-4])
+        if normalized.endswith('ful') and len(normalized) > 5:
+            variants.add(normalized[:-3])
+        if normalized.endswith('less') and len(normalized) > 6:
+            variants.add(normalized[:-4])
+        if normalized.endswith('able') and len(normalized) > 6:
+            variants.add(normalized[:-4])
+        if normalized.endswith('ible') and len(normalized) > 6:
+            variants.add(normalized[:-4])
+        if normalized.endswith('ous') and len(normalized) > 5:
+            variants.add(normalized[:-3])
+        if normalized.endswith('ish') and len(normalized) > 5:
+            variants.add(normalized[:-3])
+        if normalized.endswith('y') and len(normalized) > 4:
+            variants.add(normalized[:-1])
+
+        return {variant for variant in variants if variant}
+
+    def fallback_spell_word_known(self, word, dictionary):
+        normalized = str(word or '').strip().lower()
+        if not normalized:
+            return True
+        variants = self.generate_fallback_spell_variants(normalized)
+        if any(variant in dictionary for variant in variants):
+            return True
+        if len(normalized) >= 6:
+            for split_index in range(3, len(normalized) - 2):
+                left = normalized[:split_index]
+                right = normalized[split_index:]
+                if self.fallback_spell_word_known(left, dictionary) and self.fallback_spell_word_known(right, dictionary):
+                    return True
+        return False
+
+    def is_known_spelling_word(self, word, backend):
+        checker = backend.get('checker')
+        dictionary = backend.get('words', set())
+        if checker is not None:
+            try:
+                return bool(checker.check(word))
+            except Exception:
+                return False
+        normalized = str(word or '').strip().lower()
+        if not normalized:
+            return True
+        if backend.get('fallback'):
+            return self.fallback_spell_word_known(normalized, dictionary)
+        return normalized in dictionary
+
+    def should_flag_fallback_spelling_word(self, word, backend):
+        if not backend.get('fallback'):
+            return True
+        suggestions = self.get_spelling_suggestions(word, max_suggestions=3, backend=backend)
+        if suggestions:
+            return True
+        normalized = str(word or '').strip().lower()
+        if len(normalized) <= 3:
+            return True
+        if not re.search(r'[aeiouy]', normalized):
+            return True
+        return False
+
+    def should_ignore_spelling_word(self, word):
+        if not word or len(word) <= 1:
+            return True
+        if any(char.isdigit() for char in word):
+            return True
+        if '_' in word:
+            return True
+        if word.isupper() and len(word) > 1:
+            return True
+        if re.search(r'[A-Z].*[A-Z]', word) and not word.istitle():
+            return True
+        return False
+
+    def find_word_spans(self, text_content):
+        return list(re.finditer(r"[A-Za-z]+(?:['’-][A-Za-z]+)*", text_content))
+
+    def schedule_spellcheck(self, doc, delay_ms=250):
+        if not doc:
+            return
+        existing_job = doc.get('spell_job')
+        if existing_job:
+            try:
+                self.root.after_cancel(existing_job)
+            except tk.TclError:
+                pass
+        try:
+            doc['spell_job'] = self.root.after(delay_ms, lambda current=doc: self.apply_spellcheck(current))
+        except tk.TclError:
+            doc['spell_job'] = None
+
+    def clear_spellcheck(self, doc):
+        if not doc:
+            return
+        text_widget = doc.get('text')
+        if not text_widget:
+            return
+        try:
+            text_widget.tag_remove('spell_error', '1.0', tk.END)
+        except tk.TclError:
+            pass
+
+    def apply_spellcheck(self, doc):
+        if not doc:
+            return
+        doc['spell_job'] = None
+        text_widget = doc.get('text')
+        if not text_widget:
+            return
+        try:
+            if not text_widget.winfo_exists():
+                return
+        except tk.TclError:
+            return
+        self.clear_spellcheck(doc)
+        if not self.spellcheck_enabled.get():
+            return
+        if doc.get('virtual_mode') or doc.get('preview_mode'):
+            return
+        backend = self.get_spell_backend()
+        if not backend.get('checker') and not backend.get('words'):
+            return
+        try:
+            content = text_widget.get('1.0', 'end-1c')
+        except tk.TclError:
+            return
+        if not content:
+            return
+        max_chars = 100000
+        if len(content) > max_chars:
+            content = content[:max_chars]
+        for match in self.find_word_spans(content):
+            word = match.group(0)
+            if self.should_ignore_spelling_word(word):
+                continue
+            if self.is_known_spelling_word(word, backend):
+                continue
+            if not self.should_flag_fallback_spelling_word(word, backend):
+                continue
+            start_index = self.text_index_from_offset(text_widget, match.start(), content=content)
+            end_index = self.text_index_from_offset(text_widget, match.end(), content=content)
+            if not start_index or not end_index:
+                continue
+            try:
+                text_widget.tag_add('spell_error', start_index, end_index)
+            except tk.TclError:
+                continue
+        self.raise_find_tags(text_widget)
+
+    def get_spelling_suggestions(self, word, max_suggestions=5, backend=None):
+        base_word = str(word or '').strip()
+        if not base_word:
+            return []
+        backend = backend or self.get_spell_backend()
+        dictionary = backend.get('words', set())
+        checker = backend.get('checker')
+        lowered = base_word.lower()
+        if checker is not None:
+            try:
+                suggestions = checker.suggest(base_word)[:max_suggestions]
+            except Exception:
+                suggestions = []
+        else:
+            candidates = [
+                candidate for candidate in dictionary
+                if candidate and candidate[0] == lowered[:1] and abs(len(candidate) - len(lowered)) <= 3
+            ]
+            if not candidates:
+                candidates = list(dictionary)
+            cutoff = 0.86 if backend.get('fallback') else 0.72
+            suggestions = difflib.get_close_matches(lowered, sorted(candidates), n=max_suggestions, cutoff=cutoff)
+        if base_word.istitle():
+            return [suggestion.title() for suggestion in suggestions]
+        if base_word.isupper():
+            return [suggestion.upper() for suggestion in suggestions]
+        return suggestions
+
+    def hide_spell_popup(self):
+        popup = getattr(self, 'spell_popup', None)
+        if popup is not None:
+            try:
+                popup.destroy()
+            except tk.TclError:
+                pass
+        self.spell_popup = None
+        self.spell_popup_widget = None
+        self.spell_popup_range = None
+
+    def is_spell_popup_widget(self, widget):
+        popup = getattr(self, 'spell_popup', None)
+        if widget is None or popup is None:
+            return False
+        current = widget
+        while current is not None:
+            if current == popup:
+                return True
+            current = getattr(current, 'master', None)
+        return False
+
+    def replace_spelling_with_suggestion(self, text_widget, start_index, end_index, replacement):
+        if not isinstance(text_widget, tk.Text):
+            return "break"
+        try:
+            text_widget.delete(start_index, end_index)
+            text_widget.insert(start_index, replacement)
+            text_widget.tag_remove('sel', '1.0', tk.END)
+            text_widget.mark_set(tk.INSERT, f"{start_index}+{len(replacement)}c")
+            text_widget.see(start_index)
+            text_widget.edit_modified(True)
+            text_widget.focus_set()
+        except tk.TclError:
+            pass
+        self.hide_spell_popup()
+        return "break"
+
+    def show_spell_popup(self, text_widget, word, start_index, end_index, x_root, y_root):
+        self.hide_spell_popup()
+        suggestions = self.get_spelling_suggestions(word, max_suggestions=5)
+        popup = tk.Toplevel(self.root)
+        popup.wm_overrideredirect(True)
+        popup.configure(bg='#1f2430')
+
+        frame = tk.Frame(popup, bg='#1f2430', highlightthickness=1, highlightbackground='#79c0ff')
+        frame.pack(fill='both', expand=True)
+
+        tk.Label(
+            frame,
+            text="Spelling",
+            bg='#1f2430',
+            fg='#79c0ff',
+            font=('Segoe UI', 9, 'bold'),
+            anchor='w'
+        ).pack(fill='x', padx=10, pady=(8, 2))
+
+        tk.Label(
+            frame,
+            text=f"Word: {word}",
+            bg='#1f2430',
+            fg='#9aa0a6',
+            font=('Segoe UI', 8),
+            anchor='w',
+            justify='left',
+            wraplength=280
+        ).pack(fill='x', padx=10, pady=(0, 6))
+
+        if suggestions:
+            for suggestion in suggestions:
+                tk.Button(
+                    frame,
+                    text=suggestion,
+                    anchor='w',
+                    relief='flat',
+                    borderwidth=0,
+                    bg='#1f2430',
+                    fg='#f5f5f5',
+                    activebackground='#2d333b',
+                    activeforeground='#ffffff',
+                    command=lambda value=suggestion, widget=text_widget, start=start_index, end=end_index: self.replace_spelling_with_suggestion(widget, start, end, value)
+                ).pack(fill='x', padx=10, pady=1)
+        else:
+            tk.Label(
+                frame,
+                text="No suggestions",
+                bg='#1f2430',
+                fg='#f5f5f5',
+                font=('Segoe UI', 9),
+                anchor='w'
+            ).pack(fill='x', padx=10, pady=(0, 8))
+
+        popup.update_idletasks()
+        popup.geometry(f"+{x_root + 12}+{y_root + 12}")
+        popup.bind('<Escape>', lambda e: self.hide_spell_popup())
+        self.spell_popup = popup
+        self.spell_popup_widget = text_widget
+        self.spell_popup_range = (start_index, end_index)
+
+    def open_spelling_popup(self, event, text_widget):
+        if not isinstance(text_widget, tk.Text):
+            return "break"
+        try:
+            index = text_widget.index(f"@{event.x},{event.y}")
+            tag_ranges = text_widget.tag_prevrange('spell_error', f"{index}+1c")
+            if not tag_ranges:
+                return "break"
+            start_index, end_index = str(tag_ranges[0]), str(tag_ranges[1])
+            if text_widget.compare(index, '<', start_index) or text_widget.compare(index, '>=', end_index):
+                return "break"
+            word = text_widget.get(start_index, end_index)
+        except tk.TclError:
+            return "break"
+        self.show_spell_popup(text_widget, word, start_index, end_index, event.x_root, event.y_root)
+        return "break"
+
+    def refresh_spellcheck_all(self):
+        for doc in self.documents.values():
+            self.schedule_spellcheck(doc, delay_ms=1)
+        if self.compare_view:
+            self.schedule_spellcheck(self.compare_view, delay_ms=1)
+
+    def set_spellcheck_enabled(self, enabled):
+        self.spellcheck_enabled.set(bool(enabled))
+        self.refresh_spellcheck_all()
+        self.save_session()
+        return "break"
+
+    def set_spellcheck_language(self, language_id):
+        self.spellcheck_language.set(language_id)
+        self.refresh_spellcheck_all()
+        self.save_session()
+        return "break"
+
+    def add_spell_language(self):
+        selected_path = filedialog.askopenfilename(
+            parent=self.root,
+            title="Add Language",
+            filetypes=[("Dictionary Text", "*.txt"), ("All Files", "*.*")]
+        )
+        if not selected_path:
+            return "break"
+        language_id = os.path.splitext(os.path.basename(selected_path))[0]
+        safe_language_id = re.sub(r'[^A-Za-z0-9._ -]+', '_', language_id).strip()
+        if not safe_language_id:
+            messagebox.showinfo("Add Language", "Choose a dictionary file with a valid name.", parent=self.root)
+            return "break"
+        destination_path = self.get_spell_language_path(safe_language_id)
+        if not destination_path:
+            return "break"
+        try:
+            with open(selected_path, 'r', encoding='utf-8', errors='replace') as source_file:
+                dictionary_text = source_file.read()
+            if not self.write_file_atomically(destination_path, dictionary_text):
+                raise OSError(destination_path)
+        except OSError as exc:
+            self.show_filesystem_error("Add Language", destination_path, exc)
+            return "break"
+        self.invalidate_spell_dictionaries()
+        self.set_spellcheck_language(safe_language_id)
+        return "break"
+
     def directory_is_writable(self, directory):
         try:
             os.makedirs(directory, exist_ok=True)
@@ -395,6 +953,25 @@ class NotepadX:
         if color_key in self.note_colors:
             return color_key
         return 'yellow'
+
+    def sanitize_note_responses(self, responses):
+        sanitized = []
+        if not isinstance(responses, list):
+            return sanitized
+        for response in responses:
+            if not isinstance(response, dict):
+                continue
+            response_text = self.trim_text(response.get('text', ''), self.max_note_text_length)
+            if not response_text:
+                continue
+            sanitized.append({
+                'author_id': self.trim_text(self.normalize_optional_metadata(response.get('author_id')), 128),
+                'author_label': self.trim_text(self.normalize_optional_metadata(response.get('author_label')), self.max_note_name_length),
+                'text': response_text,
+                'color': self.normalize_note_color(response.get('color')),
+                'created_at': self.normalize_optional_metadata(response.get('created_at')),
+            })
+        return sanitized
 
     def get_note_color_hex(self, value):
         return self.note_colors[self.normalize_note_color(value)]
@@ -455,7 +1032,17 @@ class NotepadX:
             return True
         except OSError as exc:
             self.log_exception(context_name, exc)
-            return False
+            try:
+                with open(file_path, 'w', encoding='utf-8') as direct_file:
+                    json.dump(payload, direct_file, indent=2)
+                    direct_file.flush()
+                    os.fsync(direct_file.fileno())
+                if target_mode is not None:
+                    os.chmod(file_path, target_mode)
+                return True
+            except OSError as direct_exc:
+                self.log_exception(f"{context_name} direct fallback", direct_exc)
+                return False
         finally:
             if os.path.exists(temp_path):
                 try:
@@ -1408,9 +1995,12 @@ class NotepadX:
 
         if hasattr(self, 'compare_status') and self.compare_view and self.compare_active:
             try:
-                compare_doc = self.documents.get(self.compare_source_tab) if self.compare_source_tab else self.compare_view
+                compare_widget = self.compare_view.get('text')
+                compare_doc = self.get_doc_for_text_widget(compare_widget) if compare_widget is not None else None
+                if compare_widget is None or compare_doc is None:
+                    raise tk.TclError
                 self.compare_status.config(
-                    text=self.build_editor_status_text(compare_doc, self.compare_view['text'])
+                    text=self.build_editor_status_text(compare_doc, compare_widget)
                 )
                 self.position_compare_status()
             except tk.TclError:
@@ -1862,6 +2452,14 @@ class NotepadX:
             return [active_widget]
         return []
 
+    def sync_widget_insert_to_visible_line(self, widget):
+        try:
+            visible_index = widget.index("@0,0")
+            visible_line = visible_index.split('.')[0]
+            widget.mark_set(tk.INSERT, f"{visible_line}.0")
+        except tk.TclError:
+            pass
+
     def page_up(self, event=None):
         targets = self.get_page_navigation_targets()
         if not targets:
@@ -1869,6 +2467,7 @@ class NotepadX:
         for widget in targets:
             try:
                 widget.yview_scroll(-1, 'page')
+                self.sync_widget_insert_to_visible_line(widget)
                 self.set_last_active_editor_widget(widget)
             except tk.TclError:
                 continue
@@ -1888,6 +2487,7 @@ class NotepadX:
         for widget in targets:
             try:
                 widget.yview_scroll(1, 'page')
+                self.sync_widget_insert_to_visible_line(widget)
                 self.set_last_active_editor_widget(widget)
             except tk.TclError:
                 continue
@@ -4279,22 +4879,15 @@ class NotepadX:
 
         action_target = action_tab_id if action_tab_id is not None else tab_id
         menu = tk.Menu(self.root, tearoff=0, bg='#2d2d2d', fg=self.fg_color, activebackground='#3a3a3a')
-        note_color_menu = tk.Menu(menu, tearoff=0, bg='#2d2d2d', fg=self.fg_color, activebackground='#3a3a3a')
-        for color_key in ('yellow', 'green', 'red'):
-            note_color_menu.add_command(
-                label=self.get_note_color_label(color_key),
-                command=lambda value=color_key, frame=action_target: self.run_context_menu_action(lambda: self.set_note_color(value, frame))
-            )
         menu.add_command(label="Cut", command=lambda frame=action_target: self.run_context_menu_widget_action(frame, self.cut))
         menu.add_command(label="Copy", command=lambda frame=action_target: self.run_context_menu_widget_action(frame, self.copy))
         menu.add_command(label="Paste", command=lambda frame=action_target: self.run_context_menu_widget_action(frame, self.paste))
         menu.add_separator()
         menu.add_command(label="Select All", command=lambda frame=action_target: self.run_context_menu_widget_action(frame, self.select_all))
         menu.add_command(label="Add note", command=lambda frame=action_target: self.run_context_menu_action(lambda: self.add_note_to_selection(frame)))
-        menu.add_cascade(label="Note Color", menu=note_color_menu)
+        menu.add_command(label="Respond", command=lambda frame=action_target: self.run_context_menu_action(lambda: self.respond_to_note(frame)))
         menu.add_command(label="Remove note", command=lambda frame=action_target: self.run_context_menu_action(lambda: self.remove_note(frame)))
         doc['context_menu'] = menu
-        doc['context_note_color_menu'] = note_color_menu
 
     def run_context_menu_action(self, callback):
         self.dismiss_context_menu()
@@ -4472,7 +5065,7 @@ class NotepadX:
 
         doc['context_menu'].entryconfig("Add note", state=note_state)
         note_action_state = 'normal' if doc.get('context_note_tag') else 'disabled'
-        doc['context_menu'].entryconfig("Note Color", state=note_action_state)
+        doc['context_menu'].entryconfig("Respond", state=note_action_state)
         doc['context_menu'].entryconfig("Remove note", state=note_action_state)
         try:
             self.dismiss_context_menu()
@@ -4541,6 +5134,48 @@ class NotepadX:
             wraplength=280,
             anchor='w'
         ).pack(fill='both', expand=True, padx=10, pady=(0, 8))
+
+        responses = self.sanitize_note_responses(note_data.get('responses', []))
+        if responses:
+            tk.Frame(frame, bg=highlight_color, height=1).pack(fill='x', padx=10, pady=(0, 6))
+            tk.Label(
+                frame,
+                text="Responses",
+                bg='#1f2430',
+                fg='#c9d1d9',
+                font=('Segoe UI', 8, 'bold'),
+                anchor='w'
+            ).pack(fill='x', padx=10, pady=(0, 4))
+            for response in responses:
+                response_color = self.get_note_color_hex(response.get('color'))
+                response_meta = []
+                if response.get('author_label'):
+                    response_meta.append(response['author_label'])
+                elif response.get('author_id'):
+                    response_meta.append(response['author_id'])
+                if response.get('created_at'):
+                    response_meta.append(self.format_note_timestamp(response.get('created_at')))
+                if response_meta:
+                    tk.Label(
+                        frame,
+                        text=" | ".join(response_meta),
+                        bg='#1f2430',
+                        fg=response_color,
+                        font=('Segoe UI', 8, 'bold'),
+                        justify='left',
+                        wraplength=280,
+                        anchor='w'
+                    ).pack(fill='x', padx=10, pady=(0, 2))
+                tk.Label(
+                    frame,
+                    text=response.get('text', ''),
+                    bg='#1f2430',
+                    fg='#f5f5f5',
+                    font=('Segoe UI', 9),
+                    justify='left',
+                    wraplength=280,
+                    anchor='w'
+                ).pack(fill='x', padx=10, pady=(0, 6))
 
         popup.update_idletasks()
         popup.geometry(f"+{x + 12}+{y + 12}")
@@ -4612,6 +5247,37 @@ class NotepadX:
             self.autocomplete_suspended = max(0, self.autocomplete_suspended - 1)
             self.hide_autocomplete_popup()
 
+    def populate_spelling_menu(self, spelling_menu):
+        spelling_menu.delete(0, tk.END)
+        spelling_menu.add_radiobutton(
+            label="On",
+            variable=self.spellcheck_enabled,
+            value=True,
+            command=lambda: self.set_spellcheck_enabled(True)
+        )
+        spelling_menu.add_radiobutton(
+            label="Off",
+            variable=self.spellcheck_enabled,
+            value=False,
+            command=lambda: self.set_spellcheck_enabled(False)
+        )
+        spelling_menu.add_separator()
+        spelling_menu.add_radiobutton(
+            label="English US",
+            variable=self.spellcheck_language,
+            value='en-US',
+            command=lambda: self.set_spellcheck_language('en-US')
+        )
+        for language_id in self.custom_spell_languages:
+            spelling_menu.add_radiobutton(
+                label=self.get_spell_language_label(language_id),
+                variable=self.spellcheck_language,
+                value=language_id,
+                command=lambda value=language_id: self.set_spellcheck_language(value)
+            )
+        spelling_menu.add_separator()
+        spelling_menu.add_command(label="Add Language", command=lambda: self.run_context_menu_action(self.add_spell_language))
+
     def prompt_note_color(self, title="Note Color", initialvalue='yellow', parent=None):
         parent = parent or self.root
         self.hide_autocomplete_popup()
@@ -4635,7 +5301,7 @@ class NotepadX:
 
         choices_frame = tk.Frame(dialog, bg='#f0f0f0')
         choices_frame.pack(fill='x')
-        for color_key in ('yellow', 'green', 'red'):
+        for color_key in self.note_color_order:
             tk.Radiobutton(
                 choices_frame,
                 text=self.get_note_color_label(color_key),
@@ -4714,6 +5380,7 @@ class NotepadX:
                 'author': note_data.get('author_label') or note_data.get('author_id'),
                 'created_at': note_data.get('created_at'),
                 'color': self.get_note_color_label(note_data.get('color')),
+                'responses': self.sanitize_note_responses(note_data.get('responses', [])),
             }
             note_rows.append(row)
         try:
@@ -4733,6 +5400,17 @@ class NotepadX:
                     markdown_parts.append("\n```\n\n### Code Note\n\n")
                     markdown_parts.append(row['note'] or '')
                     markdown_parts.append("\n")
+                    responses = row.get('responses') or []
+                    if responses:
+                        markdown_parts.append("\n### Responses\n")
+                        for response in responses:
+                            author = response.get('author_label') or response.get('author_id') or 'Unknown'
+                            color = self.get_note_color_label(response.get('color'))
+                            created = response.get('created_at') or ''
+                            markdown_parts.append(f"\n- {author} | {color}")
+                            if created:
+                                markdown_parts.append(f" | {created}")
+                            markdown_parts.append(f"\n\n  {response.get('text', '')}\n")
                 self.write_file_atomically(output_path, ''.join(markdown_parts))
             else:
                 if not self.write_json_atomically(output_path, note_rows, 'notepadx-export-', 'export notes report'):
@@ -4817,7 +5495,8 @@ class NotepadX:
         author_unread=False,
         created_at=None,
         anchor_text=None,
-        anchor_line=None
+        anchor_line=None,
+        responses=None
     ):
         if note_id is None:
             note_id = doc['note_counter']
@@ -4845,9 +5524,66 @@ class NotepadX:
             'created_at': created_at or self.utc_timestamp(),
             'anchor_text': safe_anchor_text,
             'anchor_line': anchor_line if anchor_line is not None else int(str(start).split('.')[0]),
+            'responses': self.sanitize_note_responses(responses),
         }
         self.apply_note_tag(doc, note_tag, start, end)
         return note_tag
+
+    def respond_to_note(self, tab_id=None):
+        if tab_id == '__compare__':
+            doc = self.documents.get(self.compare_source_tab) if self.compare_source_tab else None
+        else:
+            doc = self.documents.get(str(tab_id)) if tab_id is not None else self.get_current_doc()
+        if not doc or not doc.get('context_note_tag'):
+            return "break"
+
+        note_tag = doc.get('context_note_tag')
+        note_data = doc['notes'].get(note_tag)
+        if not note_data:
+            return "break"
+
+        suggested_author = getattr(self, 'note_author_name', '') or ''
+        author_name = self.prompt_note_input("Respond", "Name:", initialvalue=suggested_author, parent=self.root)
+        if author_name is None:
+            return "break"
+        author_name = self.trim_text(author_name, self.max_note_name_length)
+        if not author_name:
+            messagebox.showinfo("Respond", "Enter a name first.", parent=self.root)
+            return "break"
+        self.note_author_name = author_name
+
+        response_text = self.prompt_note_input("Respond", "Response:", parent=self.root)
+        if response_text is None:
+            return "break"
+        response_text = self.trim_text(response_text, self.max_note_text_length)
+        if not response_text:
+            return "break"
+
+        response_color = self.prompt_note_color(title="Response Color", initialvalue=note_data.get('color', 'yellow'), parent=self.root)
+        if not response_color:
+            return "break"
+
+        responses = list(note_data.get('responses', []))
+        responses.append({
+            'author_id': self.editor_id,
+            'author_label': author_name,
+            'text': response_text,
+            'color': self.normalize_note_color(response_color),
+            'created_at': self.utc_timestamp(),
+        })
+        note_data['responses'] = self.sanitize_note_responses(responses)
+        note_data['color'] = self.normalize_note_color(response_color)
+        note_data['read_by'] = [self.editor_id]
+        note_data['author_unread'] = note_data.get('author_id') not in self.editor_aliases
+
+        ranges = doc['text'].tag_ranges(note_tag)
+        if len(ranges) >= 2:
+            doc['text'].tag_remove(note_tag, '1.0', tk.END)
+            self.apply_note_tag(doc, note_tag, str(ranges[0]), str(ranges[1]))
+        self.persist_doc_notes(doc)
+        if self.compare_active and self.compare_source_tab == str(doc['frame']):
+            self.sync_compare_note_tags(doc)
+        return "break"
 
     def apply_note_tag(self, doc, note_tag, start, end):
         note_data = doc['notes'][note_tag]
@@ -4919,7 +5655,6 @@ class NotepadX:
         doc = self.documents.get(str(tab_id))
         if not doc:
             return
-
         index = doc['text'].index(f"@{event.x},{event.y}")
         tags = doc['text'].tag_names(index)
         note_tags = [tag for tag in tags if tag in doc['notes']]
@@ -5202,6 +5937,7 @@ class NotepadX:
             'created_at': note_data.get('created_at'),
             'anchor_text': (note_data.get('anchor_text') or '')[:self.max_note_text_length],
             'anchor_line': note_data.get('anchor_line'),
+            'responses': self.sanitize_note_responses(note_data.get('responses', [])),
         }
 
     def refresh_doc_note_signatures(self, doc):
@@ -5318,6 +6054,7 @@ class NotepadX:
                             'created_at': local_note.get('created_at'),
                             'anchor_text': (local_note.get('anchor_text') or '')[:self.max_note_text_length],
                             'anchor_line': local_note.get('anchor_line'),
+                            'responses': self.sanitize_note_responses(local_note.get('responses', [])),
                         })
                 if exported_note is not None:
                     notes.append(exported_note)
@@ -5381,6 +6118,7 @@ class NotepadX:
             'created_at': self.normalize_optional_metadata(saved_note.get('created_at')),
             'anchor_text': str(saved_note.get('anchor_text', ''))[:self.max_note_text_length],
             'anchor_line': anchor_line,
+            'responses': self.sanitize_note_responses(saved_note.get('responses', [])),
         }
 
     def dedupe_notes_payload(self, notes):
@@ -5595,6 +6333,7 @@ class NotepadX:
             created_at = saved_note.get('created_at')
             anchor_text = saved_note.get('anchor_text')
             anchor_line = saved_note.get('anchor_line')
+            responses = saved_note.get('responses', [])
             if not start or not end or not note_text:
                 continue
             try:
@@ -5608,7 +6347,8 @@ class NotepadX:
                     author_unread=author_unread,
                     created_at=created_at,
                     anchor_text=anchor_text,
-                    anchor_line=anchor_line
+                    anchor_line=anchor_line,
+                    responses=responses
                 )
             except tk.TclError as exc:
                 self.log_exception("restore note tag", exc)
@@ -6325,6 +7065,7 @@ class NotepadX:
         note_filter_menu.add_radiobutton(label="Yellow", variable=self.note_filter, value='yellow')
         note_filter_menu.add_radiobutton(label="Green", variable=self.note_filter, value='green')
         note_filter_menu.add_radiobutton(label="Red", variable=self.note_filter, value='red')
+        note_filter_menu.add_radiobutton(label="Light Blue", variable=self.note_filter, value='blue')
         edit_menu.add_separator()
         edit_menu.add_command(label="Go To Line", command=self.goto_line_dialog, accelerator="Ctrl+G")
         edit_menu.add_command(label="Top of Document", command=self.goto_document_start, accelerator="Ctrl+PgUp")
@@ -7078,6 +7819,19 @@ class NotepadX:
             if target_mode is not None:
                 os.chmod(file_path, target_mode)
             return True
+        except OSError as exc:
+            self.log_exception("write file atomically", exc)
+            try:
+                with open(file_path, 'w', encoding='utf-8') as direct_file:
+                    direct_file.write(content)
+                    direct_file.flush()
+                    os.fsync(direct_file.fileno())
+                if target_mode is not None:
+                    os.chmod(file_path, target_mode)
+                return True
+            except OSError as direct_exc:
+                self.log_exception("write file direct fallback", direct_exc)
+                raise
         finally:
             if os.path.exists(temp_path):
                 try:

@@ -194,7 +194,7 @@ Code Notes
   author name
   note text
   note color
-- Notes can be yellow, green, or red.
+- Notes can be yellow, green, red, or light blue.
 - Clicking highlighted code opens the note popup.
 - The popup title is Code note.
 - Popups can show:
@@ -202,9 +202,14 @@ Code Notes
   the creation timestamp in local machine time
   the original note text
 - Right-clicking an existing note can show:
-  Note Color
+  Respond
   Remove note
-- Note Color lets you switch the note between Yellow, Green, and Red.
+- Respond asks for:
+  responder name
+  response text
+  response color
+- A note can have more than one response.
+- The latest response color is used for the current highlight color.
 - Remove note deletes the note highlight and note data.
 - Notes are stored per file and synced through a sidecar JSON file next to the document.
 
@@ -216,6 +221,7 @@ Shared Notes and Collaboration
   note IDs
   note color
   author information
+  responses
   read state
   timestamps
 - Notepad-X validates and sanitizes note payloads when reading the sidecar so malformed entries are ignored instead of blindly trusted.
@@ -239,6 +245,7 @@ Note Anchoring and Export
 - Export Notes writes the current tab's notes to:
   JSON for machine-readable export
   Markdown for a readable report
+- Exported note data includes the original note plus any saved responses.
 
 Audio Notifications
 - note.mp3 plays when a new unread note arrives for the active file.

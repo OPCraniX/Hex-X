@@ -88,9 +88,10 @@ You can select text, right-click, and attach a shared note to the selection.
 
 Notes support:
 
-- yellow, green, or red note colors
+- yellow, green, red, or light blue note colors
 - note author and local-time timestamp display
-- right-click note recoloring
+- multiple responses on the same note
+- right-click `Respond` workflow
 - unread tracking between editors
 - `F3` to jump unread notes
 - `F4` to cycle notes
