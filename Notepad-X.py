@@ -209,6 +209,8 @@ DEFAULT_LOCALE_STRINGS = {
     "accel.close_compare_tabs": "Ctrl+Shift+X"
 }
 
+RTL_LOCALE_CODES = {'ar', 'ar_sa', 'ar_ae', 'ar_eg', 'ar_ma'}
+
 class NotepadX:
     def __init__(self, isolated_session=False, startup_files=None):
         self.root = tk.Tk()
@@ -495,22 +497,69 @@ class NotepadX:
     def get_config_dir(self, base_dir):
         return os.path.join(base_dir, 'cfg')
 
+    def serialize_locale_strings(self, strings):
+        lines = []
+        for key in sorted(strings):
+            value = strings[key]
+            if not isinstance(value, str):
+                value = str(value)
+            lines.append(f"{key}: {json.dumps(value, ensure_ascii=False)}")
+        return "\n".join(lines) + "\n"
+
+    def parse_locale_strings(self, content):
+        try:
+            payload = json.loads(content)
+        except json.JSONDecodeError:
+            payload = None
+        if isinstance(payload, dict):
+            parsed = {}
+            for key, value in payload.items():
+                if isinstance(key, str) and isinstance(value, str):
+                    parsed[key] = value
+            return parsed
+
+        parsed = {}
+        for raw_line in content.splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith('#') or ':' not in raw_line:
+                continue
+            key, value = raw_line.split(':', 1)
+            key = key.strip()
+            value = value.strip()
+            if not key:
+                continue
+            if not value:
+                parsed[key] = ""
+                continue
+            try:
+                decoded = json.loads(value)
+            except json.JSONDecodeError:
+                if len(value) >= 2 and value[0] == value[-1] and value[0] in {'"', "'"}:
+                    decoded = value[1:-1]
+                else:
+                    decoded = value
+            if isinstance(decoded, str):
+                parsed[key] = decoded
+            elif decoded is not None:
+                parsed[key] = str(decoded)
+        return parsed
+
     def load_locale_strings(self, locale_path):
         strings = dict(DEFAULT_LOCALE_STRINGS)
         if not os.path.exists(locale_path):
             try:
                 with open(locale_path, 'w', encoding='utf-8') as f:
-                    json.dump(strings, f, ensure_ascii=False, indent=2)
+                    f.write(self.serialize_locale_strings(strings))
             except OSError:
                 return strings
         try:
             with open(locale_path, 'r', encoding='utf-8') as f:
-                payload = json.load(f)
+                payload = self.parse_locale_strings(f.read())
             if isinstance(payload, dict):
                 for key, value in payload.items():
                     if isinstance(key, str) and isinstance(value, str):
                         strings[key] = value
-        except (OSError, json.JSONDecodeError):
+        except OSError:
             pass
         return strings
 
@@ -528,10 +577,10 @@ class NotepadX:
     def get_locale_file_path(self, locale_code, config_dir=None):
         safe_code = str(locale_code or 'en_us').strip().lower()
         config_dir = config_dir or (os.path.dirname(self.locale_path) if getattr(self, 'locale_path', None) else self.get_config_dir(self.app_dir))
-        candidate = os.path.join(config_dir, f'{safe_code}.cfg')
+        candidate = os.path.join(config_dir, f'{safe_code}.yml')
         try:
             for entry in os.listdir(config_dir):
-                if not entry.lower().endswith('.cfg'):
+                if not entry.lower().endswith('.yml'):
                     continue
                 if os.path.splitext(entry)[0].strip().lower() == safe_code:
                     return os.path.join(config_dir, entry)
@@ -544,7 +593,7 @@ class NotepadX:
         codes = []
         try:
             for entry in os.listdir(config_dir):
-                if not entry.lower().endswith('.cfg'):
+                if not entry.lower().endswith('.yml'):
                     continue
                 code = os.path.splitext(entry)[0].strip().lower()
                 if code:
@@ -554,6 +603,19 @@ class NotepadX:
         if 'en_us' not in codes:
             codes.append('en_us')
         return sorted(set(codes), key=lambda value: (value != 'en_us', value))
+
+    def is_rtl_locale(self, locale_code=None):
+        code = str(locale_code or self.locale_code or '').strip().lower()
+        return code in RTL_LOCALE_CODES
+
+    def ui_anchor_start(self):
+        return 'e' if self.is_rtl_locale() else 'w'
+
+    def ui_anchor_end(self):
+        return 'w' if self.is_rtl_locale() else 'e'
+
+    def ui_justify(self):
+        return 'right' if self.is_rtl_locale() else 'left'
 
     def apply_locale(self, locale_code, persist=True):
         target_code = str(locale_code or 'en_us').strip().lower()
@@ -577,10 +639,17 @@ class NotepadX:
             self.create_menu()
         if hasattr(self, 'status'):
             self.status.config(text=self.tr('status.initial', "Ln 1 of 1, Col 1 | 0 characters | UTF-8 | Normal"))
+            self.status.config(anchor=self.ui_anchor_start())
         if hasattr(self, 'status_tail'):
             self.status_tail.config(text=self.tr('status.memory_initial', " | Memory used: 0MB"))
+            self.status_tail.config(anchor=self.ui_anchor_start())
         if hasattr(self, 'status_sync'):
             self.status_sync.config(text="")
+            self.status_sync.config(anchor=self.ui_anchor_start())
+        if hasattr(self, 'status_clock'):
+            self.status_clock.config(anchor=self.ui_anchor_end())
+        if hasattr(self, 'compare_status'):
+            self.compare_status.config(anchor=self.ui_anchor_start())
         if hasattr(self, 'compare_title'):
             self.refresh_compare_header()
         if hasattr(self, 'root'):
@@ -1575,7 +1644,7 @@ class NotepadX:
         self.status = tk.Label(
             self.status_left,
             text=self.tr('status.initial', "Ln 1 of 1, Col 1 | 0 characters | UTF-8 | Normal"),
-            anchor='w',
+            anchor=self.ui_anchor_start(),
             bg='#2d2d2d',
             fg='#d4d4d4',
             font=('Segoe UI', 9),
@@ -1586,7 +1655,7 @@ class NotepadX:
         self.status_sync = tk.Label(
             self.status_left,
             text="",
-            anchor='w',
+            anchor=self.ui_anchor_start(),
             bg='#2d2d2d',
             fg='#4ecb71',
             font=('Segoe UI', 9, 'bold'),
@@ -1597,7 +1666,7 @@ class NotepadX:
         self.status_tail = tk.Label(
             self.status_left,
             text=self.tr('status.memory_initial', " | Memory used: 0MB"),
-            anchor='w',
+            anchor=self.ui_anchor_start(),
             bg='#2d2d2d',
             fg='#d4d4d4',
             font=('Segoe UI', 9),
@@ -1608,7 +1677,7 @@ class NotepadX:
         self.status_clock = tk.Label(
             self.status_frame,
             text="",
-            anchor='e',
+            anchor=self.ui_anchor_end(),
             bg='#2d2d2d',
             fg='#d4d4d4',
             font=('Segoe UI', 9),
@@ -1619,7 +1688,7 @@ class NotepadX:
         self.compare_status = tk.Label(
             self.status_frame,
             text="",
-            anchor='w',
+            anchor=self.ui_anchor_start(),
             bg='#2d2d2d',
             fg='#d4d4d4',
             font=('Segoe UI', 9),
@@ -4947,7 +5016,7 @@ class NotepadX:
             bg='#1f2430',
             fg=highlight_color,
             font=('Segoe UI', 9, 'bold'),
-            anchor='w'
+            anchor=self.ui_anchor_start()
         ).pack(fill='x', padx=10, pady=(8, 2))
 
         meta_parts = []
@@ -4964,9 +5033,9 @@ class NotepadX:
                 bg='#1f2430',
                 fg='#9aa0a6',
                 font=('Segoe UI', 8),
-                justify='left',
+                justify=self.ui_justify(),
                 wraplength=280,
-                anchor='w'
+                anchor=self.ui_anchor_start()
             ).pack(fill='x', padx=10, pady=(0, 6))
 
         tk.Label(
@@ -4975,9 +5044,9 @@ class NotepadX:
             bg='#1f2430',
             fg='#f5f5f5',
             font=('Segoe UI', 9),
-            justify='left',
+            justify=self.ui_justify(),
             wraplength=280,
-            anchor='w'
+            anchor=self.ui_anchor_start()
         ).pack(fill='both', expand=True, padx=10, pady=(0, 8))
 
         responses = self.sanitize_note_responses(note_data.get('responses', []))
@@ -4989,7 +5058,7 @@ class NotepadX:
                 bg='#1f2430',
                 fg='#c9d1d9',
                 font=('Segoe UI', 8, 'bold'),
-                anchor='w'
+                anchor=self.ui_anchor_start()
             ).pack(fill='x', padx=10, pady=(0, 4))
             for response in responses:
                 response_color = self.get_note_color_hex(response.get('color'))
@@ -5007,9 +5076,9 @@ class NotepadX:
                         bg='#1f2430',
                         fg=response_color,
                         font=('Segoe UI', 8, 'bold'),
-                        justify='left',
+                        justify=self.ui_justify(),
                         wraplength=280,
-                        anchor='w'
+                        anchor=self.ui_anchor_start()
                     ).pack(fill='x', padx=10, pady=(0, 2))
                 tk.Label(
                     frame,
@@ -5017,9 +5086,9 @@ class NotepadX:
                     bg='#1f2430',
                     fg='#f5f5f5',
                     font=('Segoe UI', 9),
-                    justify='left',
+                    justify=self.ui_justify(),
                     wraplength=280,
-                    anchor='w'
+                    anchor=self.ui_anchor_start()
                 ).pack(fill='x', padx=10, pady=(0, 6))
 
         popup.update_idletasks()
@@ -5046,7 +5115,7 @@ class NotepadX:
             bg='#f0f0f0',
             fg='black',
             font=('Segoe UI', 9)
-        ).pack(anchor='w', pady=(0, 6))
+        ).pack(anchor=self.ui_anchor_start(), pady=(0, 6))
 
         entry = tk.Entry(dialog, textvariable=value_var, width=34)
         entry.pack(fill='x')
@@ -5064,8 +5133,8 @@ class NotepadX:
             dialog.destroy()
             return "break"
 
-        tk.Button(button_row, text="OK", width=10, command=submit).pack(side='left')
-        tk.Button(button_row, text="Cancel", width=10, command=cancel).pack(side='right')
+        tk.Button(button_row, text="OK", width=10, command=submit).pack(side='right' if self.is_rtl_locale() else 'left')
+        tk.Button(button_row, text="Cancel", width=10, command=cancel).pack(side='left' if self.is_rtl_locale() else 'right')
 
         entry.bind('<Return>', submit)
         dialog.bind('<Return>', submit)
@@ -5111,7 +5180,7 @@ class NotepadX:
             bg='#f0f0f0',
             fg='black',
             font=('Segoe UI', 9)
-        ).pack(anchor='w', pady=(0, 6))
+        ).pack(anchor=self.ui_anchor_start(), pady=(0, 6))
 
         choices_frame = tk.Frame(dialog, bg='#f0f0f0')
         choices_frame.pack(fill='x')
@@ -5122,9 +5191,9 @@ class NotepadX:
                 variable=color_var,
                 value=color_key,
                 bg='#f0f0f0',
-                anchor='w',
+                anchor=self.ui_anchor_start(),
                 selectcolor=self.get_note_color_hex(color_key)
-            ).pack(anchor='w')
+            ).pack(anchor=self.ui_anchor_start())
 
         button_row = tk.Frame(dialog, bg='#f0f0f0')
         button_row.pack(fill='x', pady=(10, 0))
@@ -5139,8 +5208,8 @@ class NotepadX:
             dialog.destroy()
             return "break"
 
-        tk.Button(button_row, text="OK", width=10, command=submit).pack(side='left')
-        tk.Button(button_row, text="Cancel", width=10, command=cancel).pack(side='right')
+        tk.Button(button_row, text="OK", width=10, command=submit).pack(side='right' if self.is_rtl_locale() else 'left')
+        tk.Button(button_row, text="Cancel", width=10, command=cancel).pack(side='left' if self.is_rtl_locale() else 'right')
 
         dialog.bind('<Return>', submit)
         dialog.bind('<Escape>', cancel)
@@ -7071,7 +7140,7 @@ class NotepadX:
             text=self.tr('compare.choose_prompt', 'Choose a tab to compare with the current one:'),
             bg=self.bg_color,
             fg=self.fg_color
-        ).pack(anchor='w', pady=(0, 8))
+        ).pack(anchor=self.ui_anchor_start(), pady=(0, 8))
         listbox = tk.Listbox(dialog, width=50, height=min(10, len(choices)))
         for label, _ in choices:
             listbox.insert(tk.END, label)

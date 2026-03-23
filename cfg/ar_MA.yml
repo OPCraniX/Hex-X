@@ -1,0 +1,200 @@
+app:
+  name: "Notepad-X"
+  about_title: "حول Notepad-X"
+  help_title: "مساعدة Notepad-X"
+  compare_title: "المقارنة مع علامة تبويب"
+
+about:
+  heading: "Notepad-X"
+  tagline: "تم تطويره لأن Microsoft نسيت الشكل الذي يجب أن تكون عليه المفكرة."
+
+common:
+  close: "إغلاق"
+  compare: "مقارنة"
+  clear_list: "مسح القائمة"
+  empty: "(فارغ)"
+  ok: "موافق"
+
+context:
+  cut: "قص"
+  copy: "نسخ"
+  paste: "لصق"
+  select_all: "تحديد الكل"
+  add_note: "إضافة ملاحظة"
+  respond: "رد"
+  remove_note: "حذف الملاحظة"
+
+menu:
+  file:
+    label: "ملف"
+    open: "فتح"
+    open_project: "فتح مشروع"
+    recent: "الملفات الأخيرة"
+    new_tab: "علامة تبويب جديدة"
+    close_tab: "إغلاق علامة التبويب"
+    save: "حفظ"
+    save_all: "حفظ الكل"
+    save_as: "حفظ باسم"
+    save_as_encrypted: "حفظ باسم (مشفّر)"
+    print: "طباعة"
+    export_notes: "تصدير الملاحظات"
+    exit: "خروج"
+
+  edit:
+    label: "تحرير"
+    undo: "تراجع"
+    redo: "إعادة"
+    cut: "قص"
+    copy: "نسخ"
+    paste: "لصق"
+    select_all: "تحديد الكل"
+    find: "بحث"
+    find_next: "التالي"
+    find_previous: "السابق"
+    replace: "استبدال"
+    cycle_notes: "التنقل بين الملاحظات"
+    filter_notes: "تصفية الملاحظات"
+    goto_line: "الانتقال إلى سطر"
+    top_of_document: "بداية المستند"
+    bottom_of_document: "نهاية المستند"
+    sync_page_navigation: "مزامنة PgUp/PgDn أثناء المقارنة"
+    date: "التاريخ"
+    time_date: "الوقت/التاريخ"
+    font: "الخط"
+    language: "اللغة"
+
+  view:
+    label: "عرض"
+    full_screen: "ملء الشاشة"
+    switch_tab: "تبديل علامة التبويب"
+    status_bar: "شريط الحالة"
+    numbered_lines: "ترقيم الأسطر"
+    autocomplete: "إكمال تلقائي"
+    edit_with_notepadx: "تحرير باستخدام Notepad-X"
+    word_wrap: "التفاف النص"
+    sound: "الصوت"
+    syntax_theme: "سمة الصياغة"
+    syntax_mode: "وضع الصياغة"
+    compare_tabs: "مقارنة علامات التبويب"
+    close_compare_tabs: "إغلاق المقارنة"
+
+  help:
+    label: "مساعدة"
+    contents: "محتويات المساعدة"
+    about: "حول Notepad-X"
+
+note:
+  filter:
+    all: "الكل"
+    unread: "غير مقروء"
+    yellow: "أصفر"
+    green: "أخضر"
+    red: "أحمر"
+    blue: "أزرق فاتح"
+
+  popup:
+    title: "ملاحظة كود"
+    author: "المؤلف"
+    author_id: "معرّف المؤلف"
+    created: "تاريخ الإنشاء"
+    responses: "الردود"
+
+  prompt:
+    add_title: "إضافة ملاحظة"
+    author: "المؤلف:"
+    note: "الملاحظة:"
+    select_text_first: "يرجى تحديد نص أولاً."
+    author_required: "يرجى إدخال اسم المؤلف أولاً."
+    respond_title: "رد"
+    name: "الاسم:"
+    response: "الرد:"
+    response_color: "لون الرد"
+    name_required: "يرجى إدخال الاسم أولاً."
+
+status:
+  initial: "سطر 1 من 1، عمود 1 | 0 حرف | UTF-8 | عادي"
+  memory_initial: " | الذاكرة المستخدمة: 0MB"
+  synced: "| تمت مزامنة الملاحظات"
+  line: "سطر"
+  col: "عمود"
+  of: "من"
+  characters: "حرف"
+  bytes: "بايت"
+  encoding: "UTF-8"
+
+  mode:
+    normal: "عادي"
+    virtual: "افتراضي"
+    preview: "معاينة"
+
+  main: "{line_label} {row} {of_label} {total_lines}، {col_label} {col} | {char_info} | {encoding} | {zoom_text}{mode_suffix}"
+  char_count: "{total_chars} {characters_label}"
+  selected_char_count: "{selected_count} {of_label} {total_chars} {characters_label}"
+  byte_count: "{total_bytes} {bytes_label}"
+  memory: " | الذاكرة المستخدمة: {memory_mb}MB"
+  editor_id: " | المعرّف: {editor_id}"
+  unread_tail: " | {unread_count} غير مقروء (F3 للعرض) | ({active_editors} قيد التحرير)"
+
+compare:
+  need_two_tabs: "افتح علامتي تبويب على الأقل للمقارنة."
+  choose_prompt: "اختر علامة تبويب للمقارنة مع الحالية:"
+  header: "المقارنة مع: {title}"
+
+help:
+  open_failed: "تعذر فتح ملف مساعدة Notepad-X."
+  not_found: "لم يتم العثور على ملف مساعدة Notepad-X."
+
+syntax:
+  theme:
+    default: "افتراضي"
+    soft: "ناعم"
+    vivid: "حيوي"
+
+  mode:
+    auto: "تلقائي"
+    plain: "نص عادي"
+    python: "Python"
+    c: "C"
+    cpp: "C++"
+    rust: "Rust"
+    java: "Java"
+    javascript: "JavaScript"
+    html: "HTML"
+    php: "PHP"
+    xml: "XML"
+    sql: "SQL"
+
+accel:
+  open: "Ctrl+W"
+  open_project: "Ctrl+Shift+W"
+  new_tab: "Ctrl+T"
+  close_tab: "Ctrl+Shift+T"
+  save: "Ctrl+S"
+  save_all: "Ctrl+Shift+S"
+  save_as: "Ctrl+Shift+Q"
+  save_as_encrypted: "Ctrl+Shift+E"
+  print: "Ctrl+P"
+  export_notes: "Ctrl+E"
+  exit: "Ctrl+Shift+X"
+  undo: "Ctrl+Z"
+  redo: "Ctrl+Shift+Z"
+  cut: "Ctrl+X"
+  copy: "Ctrl+C"
+  paste: "Ctrl+V"
+  select_all: "Ctrl+A"
+  find: "Ctrl+F"
+  find_next: "F3"
+  find_previous: "Shift+F3"
+  replace: "Ctrl+R"
+  cycle_notes: "F4"
+  goto_line: "Ctrl+G"
+  top_of_document: "Ctrl+PgUp"
+  bottom_of_document: "Ctrl+PgDn"
+  date: "Ctrl+D"
+  time_date: "Ctrl+Shift+D"
+  font: "Ctrl+Shift+F"
+  full_screen: "F11"
+  switch_tab: "Ctrl+Tab"
+  status_bar: "Ctrl+B"
+  compare_tabs: "Ctrl+Q"
+  close_compare_tabs: "Ctrl+Shift+X"
