@@ -2,7 +2,7 @@
 
 Notepad-X is a tabbed desktop text editor for plain text, source code, shared code notes, and safer handling of large files.
 
-It keeps a simple desktop-editor feel, but adds project opening, persistent sessions, syntax highlighting, live search, collaborative note sidecars, inline compare mode, recovery, and a built-in help viewer.
+It keeps a simple desktop-editor feel, but adds project opening, persistent sessions, syntax highlighting, live search, collaborative note sidecars, inline compare mode, crash-safe recovery, and a built-in help viewer.
 
 ## Benchmark Snapshot
 
@@ -17,6 +17,8 @@ This benchmark compares the packaged Notepad-X build against Microsoft Notepad. 
 - Recent files and `Open Project`
 - Drag-reorder tabs
 - GitHub-style line number gutter with click-to-copy line support
+- Auto-indent on Enter
+- Live bracket matching for `()`, `[]`, and `{}`
 - Local autocomplete popup with syntax keywords and current-document word matching
 - Optional `Edit with Notepad-X` Explorer right-click integration for supported text/code file types
 - Live Find and Find/Replace
@@ -32,7 +34,7 @@ This benchmark compares the packaged Notepad-X build against Microsoft Notepad. 
 - Export notes to JSON or Markdown
 - Inline compare mode inside the main editor
 - `Find Next`, `Find Previous`, `F3`, and `Shift+F3` follow the active pane during compare mode
-- Autosave recovery for unsaved untitled tabs after a crash
+- Crash recovery for unsaved tabs and modified file-backed tabs
 - Crash logging for important failures and unhandled exceptions
 - Conflict detection before saving if a file changed on disk
 - Atomic writes for notes, session, recovery, editor identity, and JSON exports
@@ -43,7 +45,9 @@ This benchmark compares the packaged Notepad-X build against Microsoft Notepad. 
 - `View > Autocomplete` toggle with saved preference
 - `View > Edit with Notepad-X` toggle with saved preference
 - `Edit > Language` menu that scans `cfg/*.yml` and lets you switch UI language files
+- Friendly native language names in the Language menu with locale-aware font fallback
 - Built-in Help viewer and About dialog
+- About shows the current version and a clickable GitHub link
 
 ## Compare Mode
 
@@ -112,11 +116,12 @@ Notes support:
 Notepad-X now includes a translation/config layer for visible UI text.
 
 - `cfg/en_US.yml` is the default English language file
-- `Edit > Language` shows `en_us` selected by default
+- `Edit > Language` shows friendly locale names instead of raw codes
 - any additional `cfg/*.yml` file appears automatically in the Language menu
 - the selected language is saved in the session and restored on launch
 - current language coverage includes the main menus, displayed hotkeys, status bar text, note popup labels, and core dialog captions
 - Arabic language files such as `ar.yml`, `ar_SA.yml`, `ar_AE.yml`, `ar_EG.yml`, and `ar_MA.yml` automatically switch the UI text direction to right-to-left
+- locale changes can also switch the editor font to a better installed script-friendly fallback automatically
 
 ## Encrypted Files
 
@@ -156,6 +161,7 @@ Notepad-X also treats binary-like files more cautiously:
 - JSON support files and note sidecars are also written atomically
 - if a file changed on disk after it was opened, Notepad-X asks before overwriting it
 - recovery restores into tabs instead of overwriting user files directly
+- crash recovery can restore both untitled work and modified file-backed tabs
 - permissions errors are shown to the user instead of failing silently
 - shell and print integrations validate file paths before sending them to Windows
 

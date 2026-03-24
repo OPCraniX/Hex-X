@@ -1,7 +1,7 @@
 Notepad-X Help
 
 Overview
-Notepad-X is a tabbed desktop text editor for plain text, source code, shared review notes, and safer handling of very large files. It adds project opening, syntax highlighting, note sync, recovery, and a built-in help viewer.
+Notepad-X is a tabbed desktop text editor for plain text, source code, shared review notes, and safer handling of very large files. It adds project opening, syntax highlighting, note sync, crash-safe recovery, and a built-in help viewer.
 
 Main Window
 - The title bar shows Notepad-X and the active document name.
@@ -10,6 +10,7 @@ Main Window
 - The editor area shows the active tab.
 - A GitHub-style line number gutter appears on the left when numbered lines are enabled.
 - The bottom status bar shows editor position and document state on the left, and the live clock on the far right.
+- The About window shows the current version and a clickable GitHub project link.
 
 Status Bar
 - Position is shown as Ln X of Y, Col Z.
@@ -75,7 +76,13 @@ Edit Menu
 - Date: Inserts the current date.
 - Time/Date: Inserts the current time and date.
 - Font: Opens the font picker for editor family and size.
-- Language: Lists the available `cfg/*.yml` language files and lets you switch the visible UI text. `en_us` is selected by default.
+- Language: Lists the available `cfg/*.yml` language files and lets you switch the visible UI text. `English (US)` is selected by default.
+
+Editing Helpers
+- Pressing Enter in a normal editable tab now carries the current line indentation forward automatically.
+- If the text before the caret ends in `(`, `[`, `{`, or `:`, Notepad-X adds one extra indent level on the new line.
+- Bracket matching highlights the nearest matching `()`, `[]`, or `{}` pair around the caret.
+- These helpers work in the main editor and in the editable compare pane.
 
 View Menu
 - Full Screen: Toggles fullscreen while keeping the tab strip, text area, and status bar visible.
@@ -261,9 +268,11 @@ Language Files
 - Notepad-X includes a translation/config layer for visible UI text.
 - `cfg/en_US.yml` is the default English language file.
 - The Language submenu under Edit scans `cfg/*.yml` and shows any added language file automatically.
+- The Language menu shows friendly native language names instead of raw locale codes when it knows the locale.
 - The selected language is saved in the session and restored when Notepad-X starts again.
 - Current language-file coverage includes the main menus, displayed hotkeys, status bar text, note popup labels, and core dialog captions.
 - Arabic language files such as `ar.yml`, `ar_SA.yml`, `ar_AE.yml`, `ar_EG.yml`, and `ar_MA.yml` automatically switch the UI text direction to right-to-left.
+- Locale changes can also switch the editor font to a better installed script-friendly fallback automatically.
 
 Session Restore and Recovery
 - File-backed tabs are written to the session file and restored on startup.
@@ -271,8 +280,9 @@ Session Restore and Recovery
 - If compare mode was open when the app closed, the same compared file pair is restored on startup when both files still exist.
 - Sound, status bar, numbered lines, and syntax theme settings are also restored from the session file.
 - Unsaved untitled tabs are not part of normal session restore, but they can be recovered after a crash through the recovery system.
-- If Notepad-X finds recovery data from a previous crash, it asks whether you want to restore the unsaved tabs.
-- Recovery restores unsaved content back into tabs and never overwrites real user files directly.
+- Modified file-backed tabs can also be restored after a crash without overwriting the on-disk file automatically.
+- If Notepad-X finds recovery data from a previous crash, it asks whether you want to restore the saved recovery state.
+- Recovery restores content back into tabs and never overwrites real user files directly.
 
 Crash Logging
 - Important failure paths write to a crash log in the app folder.
