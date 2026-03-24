@@ -1,0 +1,200 @@
+app:
+  name: "Notepad-X"
+  about_title: "Про Notepad-X"
+  help_title: "Довідка Notepad-X"
+  compare_title: "Порівняти з вкладкою"
+
+about:
+  heading: "Notepad-X"
+  tagline: "Створено, бо Microsoft забула, яким мав бути Блокнот."
+
+common:
+  close: "Закрити"
+  compare: "Порівняти"
+  clear_list: "Очистити список"
+  empty: "(Порожньо)"
+  ok: "OK"
+
+context:
+  cut: "Вирізати"
+  copy: "Копіювати"
+  paste: "Вставити"
+  select_all: "Виділити все"
+  add_note: "Додати нотатку"
+  respond: "Відповісти"
+  remove_note: "Видалити нотатку"
+
+menu:
+  file:
+    label: "Файл"
+    open: "Відкрити"
+    open_project: "Відкрити проєкт"
+    recent: "Нещодавні"
+    new_tab: "Нова вкладка"
+    close_tab: "Закрити вкладку"
+    save: "Зберегти"
+    save_all: "Зберегти все"
+    save_as: "Зберегти як"
+    save_as_encrypted: "Зберегти як зашифрований файл"
+    print: "Друк"
+    export_notes: "Експортувати нотатки"
+    exit: "Вийти"
+
+  edit:
+    label: "Редагування"
+    undo: "Скасувати"
+    redo: "Повторити"
+    cut: "Вирізати"
+    copy: "Копіювати"
+    paste: "Вставити"
+    select_all: "Виділити все"
+    find: "Знайти"
+    find_next: "Знайти далі"
+    find_previous: "Знайти попереднє"
+    replace: "Замінити"
+    cycle_notes: "Перемикати нотатки"
+    filter_notes: "Фільтрувати нотатки"
+    goto_line: "Перейти до рядка"
+    top_of_document: "Початок документа"
+    bottom_of_document: "Кінець документа"
+    sync_page_navigation: "Синхронізувати PgUp/PgDn у порівнянні"
+    date: "Дата"
+    time_date: "Час/Дата"
+    font: "Шрифт"
+    language: "Мова"
+
+  view:
+    label: "Вигляд"
+    full_screen: "Повноекранний режим"
+    switch_tab: "Перемкнути вкладку"
+    status_bar: "Рядок стану"
+    numbered_lines: "Нумерація рядків"
+    autocomplete: "Автодоповнення"
+    edit_with_notepadx: "Редагувати в Notepad-X"
+    word_wrap: "Перенесення рядків"
+    sound: "Звук"
+    syntax_theme: "Тема синтаксису"
+    syntax_mode: "Режим синтаксису"
+    compare_tabs: "Порівняти вкладки"
+    close_compare_tabs: "Закрити порівняння"
+
+  help:
+    label: "Довідка"
+    contents: "Зміст довідки"
+    about: "Про Notepad-X"
+
+note:
+  filter:
+    all: "Усі"
+    unread: "Непрочитані"
+    yellow: "Жовтий"
+    green: "Зелений"
+    red: "Червоний"
+    blue: "Світло-блакитний"
+
+  popup:
+    title: "Нотатка до коду"
+    author: "Автор"
+    author_id: "ID автора"
+    created: "Створено"
+    responses: "Відповіді"
+
+  prompt:
+    add_title: "Додати нотатку"
+    author: "Автор:"
+    note: "Нотатка:"
+    select_text_first: "Спочатку виділіть текст."
+    author_required: "Спочатку введіть ім’я автора."
+    respond_title: "Відповісти"
+    name: "Ім’я:"
+    response: "Відповідь:"
+    response_color: "Колір відповіді"
+    name_required: "Спочатку введіть ім’я."
+
+status:
+  initial: "Рядок 1 з 1, стовпець 1 | 0 символів | UTF-8 | Звичайний"
+  memory_initial: " | Використано пам’яті: 0MB"
+  synced: "| Нотатки синхронізовано"
+  line: "Ряд"
+  col: "Стовп"
+  of: "з"
+  characters: "символів"
+  bytes: "байтів"
+  encoding: "UTF-8"
+
+  mode:
+    normal: "Звичайний"
+    virtual: "Віртуальний"
+    preview: "Попередній перегляд"
+
+  main: "{line_label} {row} {of_label} {total_lines}, {col_label} {col} | {char_info} | {encoding} | {zoom_text}{mode_suffix}"
+  char_count: "{total_chars} {characters_label}"
+  selected_char_count: "{selected_count} {of_label} {total_chars} {characters_label}"
+  byte_count: "{total_bytes} {bytes_label}"
+  memory: " | Використано пам’яті: {memory_mb}MB"
+  editor_id: " | ID: {editor_id}"
+  unread_tail: " | {unread_count} непрочитаних (F3 для перегляду) | ({active_editors} редагують)"
+
+compare:
+  need_two_tabs: "Відкрийте щонайменше дві вкладки для порівняння."
+  choose_prompt: "Виберіть вкладку для порівняння з поточною:"
+  header: "Порівняння з: {title}"
+
+help:
+  open_failed: "Не вдалося відкрити файл довідки Notepad-X."
+  not_found: "Файл довідки Notepad-X не знайдено."
+
+syntax:
+  theme:
+    default: "За замовчуванням"
+    soft: "М’яка"
+    vivid: "Яскрава"
+
+  mode:
+    auto: "Авто"
+    plain: "Звичайний текст"
+    python: "Python"
+    c: "C"
+    cpp: "C++"
+    rust: "Rust"
+    java: "Java"
+    javascript: "JavaScript"
+    html: "HTML"
+    php: "PHP"
+    xml: "XML"
+    sql: "SQL"
+
+accel:
+  open: "Ctrl+W"
+  open_project: "Ctrl+Shift+W"
+  new_tab: "Ctrl+T"
+  close_tab: "Ctrl+Shift+T"
+  save: "Ctrl+S"
+  save_all: "Ctrl+Shift+S"
+  save_as: "Ctrl+Shift+Q"
+  save_as_encrypted: "Ctrl+Shift+E"
+  print: "Ctrl+P"
+  export_notes: "Ctrl+E"
+  exit: "Ctrl+Shift+X"
+  undo: "Ctrl+Z"
+  redo: "Ctrl+Shift+Z"
+  cut: "Ctrl+X"
+  copy: "Ctrl+C"
+  paste: "Ctrl+V"
+  select_all: "Ctrl+A"
+  find: "Ctrl+F"
+  find_next: "F3"
+  find_previous: "Shift+F3"
+  replace: "Ctrl+R"
+  cycle_notes: "F4"
+  goto_line: "Ctrl+G"
+  top_of_document: "Ctrl+PgUp"
+  bottom_of_document: "Ctrl+PgDn"
+  date: "Ctrl+D"
+  time_date: "Ctrl+Shift+D"
+  font: "Ctrl+Shift+F"
+  full_screen: "F11"
+  switch_tab: "Ctrl+Tab"
+  status_bar: "Ctrl+B"
+  compare_tabs: "Ctrl+Q"
+  close_compare_tabs: "Ctrl+Shift+X"

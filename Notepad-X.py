@@ -225,6 +225,42 @@ LOCALE_DISPLAY_NAMES = {
     'zh_cn': '简体中文 (中国)',
 }
 
+LANGUAGE_NATIVE_NAMES = {
+    'en': 'English',
+    'ar': 'العربية',
+    'de': 'Deutsch',
+    'es': 'Español',
+    'fr': 'Français',
+    'hi': 'हिन्दी',
+    'it': 'Italiano',
+    'ja': '日本語',
+    'nl': 'Nederlands',
+    'pt': 'Português',
+    'ru': 'Русский',
+    'uk': 'Українська',
+    'zh': '简体中文',
+}
+
+REGION_DISPLAY_NAMES = {
+    'us': 'US',
+    'sa': 'السعودية',
+    'ae': 'الإمارات',
+    'eg': 'مصر',
+    'ma': 'المغرب',
+    'de': 'Deutschland',
+    '419': 'Latinoamérica',
+    'es': 'España',
+    'ca': 'Canada',
+    'in': 'भारत',
+    'it': 'Italia',
+    'jp': '日本',
+    'nl': 'Nederland',
+    'br': 'Brasil',
+    'ru': 'Россия',
+    'ua': 'Україна',
+    'cn': '中国',
+}
+
 class NotepadX:
     def __init__(self, isolated_session=False, startup_files=None):
         self.root = tk.Tk()
@@ -643,7 +679,17 @@ class NotepadX:
         code = str(locale_code or '').strip().lower()
         if code in LOCALE_DISPLAY_NAMES:
             return LOCALE_DISPLAY_NAMES[code]
-        parts = [part.upper() if len(part) <= 3 else part.title() for part in code.split('_') if part]
+        parts = [part for part in code.split('_') if part]
+        if parts:
+            language = parts[0]
+            region = parts[1] if len(parts) > 1 else ''
+            if language in LANGUAGE_NATIVE_NAMES:
+                language_name = LANGUAGE_NATIVE_NAMES[language]
+                if region:
+                    region_name = REGION_DISPLAY_NAMES.get(region, region.upper())
+                    return f"{language_name} ({region_name})"
+                return language_name
+        parts = [part.upper() if len(part) <= 3 else part.title() for part in parts]
         return " / ".join(parts) if parts else 'Unknown'
 
     def is_rtl_locale(self, locale_code=None):
@@ -8019,6 +8065,7 @@ class NotepadX:
             if old_file_path and old_file_path != file_path:
                 self.unregister_doc_from_shared_notes(doc)
             doc['file_path'] = os.path.abspath(file_path)
+            doc['untitled_name'] = None
             self.configure_syntax_highlighting(doc['frame'])
             self.set_active_document(doc['frame'])
             self.register_doc_for_shared_notes(doc)

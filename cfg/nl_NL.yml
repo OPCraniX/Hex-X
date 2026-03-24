@@ -1,0 +1,200 @@
+app:
+  name: "Notepad-X"
+  about_title: "Over Notepad-X"
+  help_title: "Notepad-X Help"
+  compare_title: "Vergelijken met tabblad"
+
+about:
+  heading: "Notepad-X"
+  tagline: "Gemaakt omdat Microsoft vergeten is hoe Kladblok hoort te zijn."
+
+common:
+  close: "Sluiten"
+  compare: "Vergelijken"
+  clear_list: "Lijst wissen"
+  empty: "(Leeg)"
+  ok: "OK"
+
+context:
+  cut: "Knippen"
+  copy: "Kopiëren"
+  paste: "Plakken"
+  select_all: "Alles selecteren"
+  add_note: "Notitie toevoegen"
+  respond: "Reageren"
+  remove_note: "Notitie verwijderen"
+
+menu:
+  file:
+    label: "Bestand"
+    open: "Openen"
+    open_project: "Project openen"
+    recent: "Recent"
+    new_tab: "Nieuw tabblad"
+    close_tab: "Tabblad sluiten"
+    save: "Opslaan"
+    save_all: "Alles opslaan"
+    save_as: "Opslaan als"
+    save_as_encrypted: "Versleuteld opslaan als"
+    print: "Afdrukken"
+    export_notes: "Notities exporteren"
+    exit: "Afsluiten"
+
+  edit:
+    label: "Bewerken"
+    undo: "Ongedaan maken"
+    redo: "Opnieuw"
+    cut: "Knippen"
+    copy: "Kopiëren"
+    paste: "Plakken"
+    select_all: "Alles selecteren"
+    find: "Zoeken"
+    find_next: "Volgende zoeken"
+    find_previous: "Vorige zoeken"
+    replace: "Vervangen"
+    cycle_notes: "Door notities bladeren"
+    filter_notes: "Notities filteren"
+    goto_line: "Ga naar regel"
+    top_of_document: "Begin van document"
+    bottom_of_document: "Einde van document"
+    sync_page_navigation: "PgUp/PgDn synchroniseren bij vergelijken"
+    date: "Datum"
+    time_date: "Tijd/Datum"
+    font: "Lettertype"
+    language: "Taal"
+
+  view:
+    label: "Beeld"
+    full_screen: "Volledig scherm"
+    switch_tab: "Tabblad wisselen"
+    status_bar: "Statusbalk"
+    numbered_lines: "Regelnummers"
+    autocomplete: "Automatisch aanvullen"
+    edit_with_notepadx: "Bewerken met Notepad-X"
+    word_wrap: "Regelterugloop"
+    sound: "Geluid"
+    syntax_theme: "Syntaxthema"
+    syntax_mode: "Syntaxis modus"
+    compare_tabs: "Tabbladen vergelijken"
+    close_compare_tabs: "Vergelijking sluiten"
+
+  help:
+    label: "Help"
+    contents: "Helpinhoud"
+    about: "Over Notepad-X"
+
+note:
+  filter:
+    all: "Alles"
+    unread: "Ongelezen"
+    yellow: "Geel"
+    green: "Groen"
+    red: "Rood"
+    blue: "Lichtblauw"
+
+  popup:
+    title: "Code notitie"
+    author: "Auteur"
+    author_id: "Auteur ID"
+    created: "Aangemaakt"
+    responses: "Reacties"
+
+  prompt:
+    add_title: "Notitie toevoegen"
+    author: "Auteur:"
+    note: "Notitie:"
+    select_text_first: "Selecteer eerst tekst."
+    author_required: "Voer eerst een auteur in."
+    respond_title: "Reageren"
+    name: "Naam:"
+    response: "Reactie:"
+    response_color: "Reactiekleur"
+    name_required: "Voer eerst een naam in."
+
+status:
+  initial: "Regel 1 van 1, Kol 1 | 0 tekens | UTF-8 | Normaal"
+  memory_initial: " | Geheugen gebruikt: 0MB"
+  synced: "| Notities gesynchroniseerd"
+  line: "Regel"
+  col: "Kol"
+  of: "van"
+  characters: "tekens"
+  bytes: "bytes"
+  encoding: "UTF-8"
+
+  mode:
+    normal: "Normaal"
+    virtual: "Virtueel"
+    preview: "Voorbeeld"
+
+  main: "{line_label} {row} {of_label} {total_lines}, {col_label} {col} | {char_info} | {encoding} | {zoom_text}{mode_suffix}"
+  char_count: "{total_chars} {characters_label}"
+  selected_char_count: "{selected_count} {of_label} {total_chars} {characters_label}"
+  byte_count: "{total_bytes} {bytes_label}"
+  memory: " | Geheugen gebruikt: {memory_mb}MB"
+  editor_id: " | ID: {editor_id}"
+  unread_tail: " | {unread_count} ongelezen (F3 om te bekijken) | ({active_editors} aan het bewerken)"
+
+compare:
+  need_two_tabs: "Open minimaal twee tabbladen om te vergelijken."
+  choose_prompt: "Kies een tabblad om te vergelijken met het huidige:"
+  header: "Vergelijken met: {title}"
+
+help:
+  open_failed: "Kon het Notepad-X helpbestand niet openen."
+  not_found: "Notepad-X helpbestand niet gevonden."
+
+syntax:
+  theme:
+    default: "Standaard"
+    soft: "Zacht"
+    vivid: "Levendig"
+
+  mode:
+    auto: "Automatisch"
+    plain: "Platte tekst"
+    python: "Python"
+    c: "C"
+    cpp: "C++"
+    rust: "Rust"
+    java: "Java"
+    javascript: "JavaScript"
+    html: "HTML"
+    php: "PHP"
+    xml: "XML"
+    sql: "SQL"
+
+accel:
+  open: "Ctrl+W"
+  open_project: "Ctrl+Shift+W"
+  new_tab: "Ctrl+T"
+  close_tab: "Ctrl+Shift+T"
+  save: "Ctrl+S"
+  save_all: "Ctrl+Shift+S"
+  save_as: "Ctrl+Shift+Q"
+  save_as_encrypted: "Ctrl+Shift+E"
+  print: "Ctrl+P"
+  export_notes: "Ctrl+E"
+  exit: "Ctrl+Shift+X"
+  undo: "Ctrl+Z"
+  redo: "Ctrl+Shift+Z"
+  cut: "Ctrl+X"
+  copy: "Ctrl+C"
+  paste: "Ctrl+V"
+  select_all: "Ctrl+A"
+  find: "Ctrl+F"
+  find_next: "F3"
+  find_previous: "Shift+F3"
+  replace: "Ctrl+R"
+  cycle_notes: "F4"
+  goto_line: "Ctrl+G"
+  top_of_document: "Ctrl+PgUp"
+  bottom_of_document: "Ctrl+PgDn"
+  date: "Ctrl+D"
+  time_date: "Ctrl+Shift+D"
+  font: "Ctrl+Shift+F"
+  full_screen: "F11"
+  switch_tab: "Ctrl+Tab"
+  status_bar: "Ctrl+B"
+  compare_tabs: "Ctrl+Q"
+  close_compare_tabs: "Ctrl+Shift+X"

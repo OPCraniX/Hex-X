@@ -1,0 +1,200 @@
+app:
+  name: "Notepad-X"
+  about_title: "Sobre o Notepad-X"
+  help_title: "Ajuda do Notepad-X"
+  compare_title: "Comparar com aba"
+
+about:
+  heading: "Notepad-X"
+  tagline: "Criado porque a Microsoft esqueceu como o Bloco de Notas deveria ser."
+
+common:
+  close: "Fechar"
+  compare: "Comparar"
+  clear_list: "Limpar lista"
+  empty: "(Vazio)"
+  ok: "OK"
+
+context:
+  cut: "Recortar"
+  copy: "Copiar"
+  paste: "Colar"
+  select_all: "Selecionar tudo"
+  add_note: "Adicionar nota"
+  respond: "Responder"
+  remove_note: "Remover nota"
+
+menu:
+  file:
+    label: "Arquivo"
+    open: "Abrir"
+    open_project: "Abrir projeto"
+    recent: "Recentes"
+    new_tab: "Nova aba"
+    close_tab: "Fechar aba"
+    save: "Salvar"
+    save_all: "Salvar tudo"
+    save_as: "Salvar como"
+    save_as_encrypted: "Salvar como (criptografado)"
+    print: "Imprimir"
+    export_notes: "Exportar notas"
+    exit: "Sair"
+
+  edit:
+    label: "Editar"
+    undo: "Desfazer"
+    redo: "Refazer"
+    cut: "Recortar"
+    copy: "Copiar"
+    paste: "Colar"
+    select_all: "Selecionar tudo"
+    find: "Localizar"
+    find_next: "Localizar próximo"
+    find_previous: "Localizar anterior"
+    replace: "Substituir"
+    cycle_notes: "Alternar notas"
+    filter_notes: "Filtrar notas"
+    goto_line: "Ir para linha"
+    top_of_document: "Início do documento"
+    bottom_of_document: "Fim do documento"
+    sync_page_navigation: "Sincronizar PgUp/PgDn na comparação"
+    date: "Data"
+    time_date: "Hora/Data"
+    font: "Fonte"
+    language: "Idioma"
+
+  view:
+    label: "Exibir"
+    full_screen: "Tela cheia"
+    switch_tab: "Alternar aba"
+    status_bar: "Barra de status"
+    numbered_lines: "Números de linha"
+    autocomplete: "Autocompletar"
+    edit_with_notepadx: "Editar com Notepad-X"
+    word_wrap: "Quebra de linha"
+    sound: "Som"
+    syntax_theme: "Tema de sintaxe"
+    syntax_mode: "Modo de sintaxe"
+    compare_tabs: "Comparar abas"
+    close_compare_tabs: "Fechar comparação"
+
+  help:
+    label: "Ajuda"
+    contents: "Conteúdo da ajuda"
+    about: "Sobre o Notepad-X"
+
+note:
+  filter:
+    all: "Todos"
+    unread: "Não lidos"
+    yellow: "Amarelo"
+    green: "Verde"
+    red: "Vermelho"
+    blue: "Azul claro"
+
+  popup:
+    title: "Nota de código"
+    author: "Autor"
+    author_id: "ID do autor"
+    created: "Criado"
+    responses: "Respostas"
+
+  prompt:
+    add_title: "Adicionar nota"
+    author: "Autor:"
+    note: "Nota:"
+    select_text_first: "Selecione um texto primeiro."
+    author_required: "Digite o nome do autor primeiro."
+    respond_title: "Responder"
+    name: "Nome:"
+    response: "Resposta:"
+    response_color: "Cor da resposta"
+    name_required: "Digite um nome primeiro."
+
+status:
+  initial: "Ln 1 de 1, Col 1 | 0 caracteres | UTF-8 | Normal"
+  memory_initial: " | Memória usada: 0MB"
+  synced: "| Notas sincronizadas"
+  line: "Ln"
+  col: "Col"
+  of: "de"
+  characters: "caracteres"
+  bytes: "bytes"
+  encoding: "UTF-8"
+
+  mode:
+    normal: "Normal"
+    virtual: "Virtual"
+    preview: "Pré-visualização"
+
+  main: "{line_label} {row} {of_label} {total_lines}, {col_label} {col} | {char_info} | {encoding} | {zoom_text}{mode_suffix}"
+  char_count: "{total_chars} {characters_label}"
+  selected_char_count: "{selected_count} {of_label} {total_chars} {characters_label}"
+  byte_count: "{total_bytes} {bytes_label}"
+  memory: " | Memória usada: {memory_mb}MB"
+  editor_id: " | ID: {editor_id}"
+  unread_tail: " | {unread_count} não lidos (F3 para ver) | ({active_editors} editando)"
+
+compare:
+  need_two_tabs: "Abra pelo menos duas abas para comparar."
+  choose_prompt: "Escolha uma aba para comparar com a atual:"
+  header: "Comparando com: {title}"
+
+help:
+  open_failed: "Não foi possível abrir o arquivo de ajuda do Notepad-X."
+  not_found: "Arquivo de ajuda do Notepad-X não encontrado."
+
+syntax:
+  theme:
+    default: "Padrão"
+    soft: "Suave"
+    vivid: "Vivo"
+
+  mode:
+    auto: "Automático"
+    plain: "Texto simples"
+    python: "Python"
+    c: "C"
+    cpp: "C++"
+    rust: "Rust"
+    java: "Java"
+    javascript: "JavaScript"
+    html: "HTML"
+    php: "PHP"
+    xml: "XML"
+    sql: "SQL"
+
+accel:
+  open: "Ctrl+W"
+  open_project: "Ctrl+Shift+W"
+  new_tab: "Ctrl+T"
+  close_tab: "Ctrl+Shift+T"
+  save: "Ctrl+S"
+  save_all: "Ctrl+Shift+S"
+  save_as: "Ctrl+Shift+Q"
+  save_as_encrypted: "Ctrl+Shift+E"
+  print: "Ctrl+P"
+  export_notes: "Ctrl+E"
+  exit: "Ctrl+Shift+X"
+  undo: "Ctrl+Z"
+  redo: "Ctrl+Shift+Z"
+  cut: "Ctrl+X"
+  copy: "Ctrl+C"
+  paste: "Ctrl+V"
+  select_all: "Ctrl+A"
+  find: "Ctrl+F"
+  find_next: "F3"
+  find_previous: "Shift+F3"
+  replace: "Ctrl+R"
+  cycle_notes: "F4"
+  goto_line: "Ctrl+G"
+  top_of_document: "Ctrl+PgUp"
+  bottom_of_document: "Ctrl+PgDn"
+  date: "Ctrl+D"
+  time_date: "Ctrl+Shift+D"
+  font: "Ctrl+Shift+F"
+  full_screen: "F11"
+  switch_tab: "Ctrl+Tab"
+  status_bar: "Ctrl+B"
+  compare_tabs: "Ctrl+Q"
+  close_compare_tabs: "Ctrl+Shift+X"
