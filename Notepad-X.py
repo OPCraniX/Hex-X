@@ -17,6 +17,7 @@ import time
 import shutil
 import stat
 import socket
+import webbrowser
 from datetime import datetime, timezone
 from ctypes import wintypes
 from types import SimpleNamespace
@@ -276,10 +277,11 @@ class NotepadX:
     def init_config(self):
         self.is_windows = os.name == 'nt'
         self.is_linux = sys.platform.startswith('linux')
-        self.app_version = "v0.9.2"
+        self.app_version = "v0.9.3"
         self.resource_dir = self.get_resource_dir()
         self.app_dir = self.get_app_dir()
         self.machine_profile_slug = self.get_machine_profile_slug()
+        self.repo_url = "https://github.com/OPCraniX/Notepad-X"
         self.icon_path = self.resolve_gfx_path("Notepad-X.ico")
         self.splash_path = self.resolve_gfx_path("splash.png")
         self.splash_max_width = 430
@@ -301,6 +303,10 @@ class NotepadX:
             'red': '#f85149',
             'blue': '#79c0ff',
         }
+        self.bracket_match_tag = 'bracket_match'
+        self.bracket_pairs = {'(': ')', '[': ']', '{': '}'}
+        self.reverse_bracket_pairs = {value: key for key, value in self.bracket_pairs.items()}
+        self.bracket_match_max_chars = 500000
         self.note_color_labels = {
             'yellow': 'Yellow',
             'green': 'Green',
@@ -1458,26 +1464,38 @@ class NotepadX:
     def sanitize_recovery_payload(self, recovery):
         if not isinstance(recovery, dict):
             return None
-        unsaved_tabs = []
-        for tab in recovery.get('unsaved_tabs', []):
+        recovery_tabs = []
+        source_tabs = recovery.get('recovery_tabs', recovery.get('unsaved_tabs', []))
+        for tab in source_tabs:
             if not isinstance(tab, dict):
                 continue
-            untitled_name = self.trim_text(tab.get('untitled_name'), 120) or self.next_untitled_name()
+            file_path = tab.get('file_path')
+            if isinstance(file_path, str) and file_path.strip():
+                file_path = os.path.abspath(file_path)
+            else:
+                file_path = None
+            untitled_name = self.trim_text(tab.get('untitled_name'), 120)
+            if not untitled_name and not file_path:
+                untitled_name = self.next_untitled_name()
             content = tab.get('content', '')
             if not isinstance(content, str):
                 content = str(content)
-            unsaved_tabs.append({
+            recovery_tabs.append({
+                'file_path': file_path,
                 'untitled_name': untitled_name,
                 'content': content,
                 'modified': bool(tab.get('modified', True))
             })
-            if len(unsaved_tabs) >= self.max_recovery_tabs:
+            if len(recovery_tabs) >= self.max_recovery_tabs:
                 break
-        selected_untitled = self.trim_text(recovery.get('selected_untitled'), 120)
+        selected_recovery_key = self.trim_text(
+            recovery.get('selected_recovery_key') or recovery.get('selected_untitled'),
+            260
+        )
         timestamp = self.trim_text(recovery.get('timestamp'), 64)
         return {
-            'unsaved_tabs': unsaved_tabs,
-            'selected_untitled': selected_untitled,
+            'recovery_tabs': recovery_tabs,
+            'selected_recovery_key': selected_recovery_key,
             'timestamp': timestamp,
         }
 
@@ -3834,6 +3852,7 @@ class NotepadX:
         self.compare_line_numbers.bind('<Button-1>', lambda e: self.copy_line_from_gutter(e, target_doc=self.compare_view))
         self.compare_text.tag_config(self.find_matches_tag, background=self.match_bg, foreground='black')
         self.compare_text.tag_config(self.find_current_tag, background='#ff8c42', foreground='black')
+        self.compare_text.tag_config(self.bracket_match_tag, background='#2f81f7', foreground='white')
         self.apply_syntax_tag_colors(self.compare_text)
         self.raise_find_tags(self.compare_text)
         self.create_text_context_menu(self.compare_container, doc_override=self.compare_view, action_tab_id='__compare__')
@@ -3904,6 +3923,7 @@ class NotepadX:
         text.bind('<<Modified>>', lambda e, frame=tab_frame: self.on_text_modified(frame))
         text.tag_config(self.find_matches_tag, background=self.match_bg, foreground='black')
         text.tag_config(self.find_current_tag, background='#ff8c42', foreground='black')
+        text.tag_config(self.bracket_match_tag, background='#2f81f7', foreground='white')
         self.raise_find_tags(text)
 
         if content:
@@ -4637,8 +4657,124 @@ class NotepadX:
             self.hide_autocomplete_popup()
         elif event_type not in {'35'}:
             self.update_autocomplete_popup(doc)
+        self.update_bracket_match_highlight(doc)
         self.update_line_number_gutter(doc)
         self.update_status()
+
+    def get_auto_indent_unit(self, line_prefix):
+        if '\t' in (line_prefix or '') and ' ' not in (line_prefix or ''):
+            return '\t'
+        return '    '
+
+    def build_auto_indent_prefix(self, text_widget, insert_index):
+        line_start = f"{insert_index} linestart"
+        before_cursor = text_widget.get(line_start, insert_index)
+        current_line = text_widget.get(line_start, f"{insert_index} lineend")
+        indent_match = re.match(r'[ \t]*', current_line)
+        base_indent = indent_match.group(0) if indent_match else ''
+        trimmed_prefix = before_cursor.rstrip()
+        if trimmed_prefix.endswith(tuple(self.bracket_pairs.keys())) or trimmed_prefix.endswith(':'):
+            return base_indent + self.get_auto_indent_unit(base_indent)
+        return base_indent
+
+    def insert_auto_indent_newline(self, text_widget):
+        try:
+            insert_index = text_widget.index(tk.INSERT)
+        except tk.TclError:
+            return None
+        indent_prefix = self.build_auto_indent_prefix(text_widget, insert_index)
+        if text_widget.tag_ranges('sel'):
+            try:
+                text_widget.delete('sel.first', 'sel.last')
+            except tk.TclError:
+                pass
+        text_widget.insert(tk.INSERT, '\n' + indent_prefix)
+        return "break"
+
+    def clear_bracket_match_highlight(self, text_widget):
+        if not isinstance(text_widget, tk.Text):
+            return
+        try:
+            if text_widget.winfo_exists():
+                text_widget.tag_remove(self.bracket_match_tag, '1.0', tk.END)
+        except tk.TclError:
+            pass
+
+    def find_matching_bracket_offset(self, content, bracket_offset):
+        if bracket_offset < 0 or bracket_offset >= len(content):
+            return None
+        current_char = content[bracket_offset]
+        if current_char in self.bracket_pairs:
+            target_char = self.bracket_pairs[current_char]
+            depth = 1
+            for offset in range(bracket_offset + 1, len(content)):
+                char = content[offset]
+                if char == current_char:
+                    depth += 1
+                elif char == target_char:
+                    depth -= 1
+                    if depth == 0:
+                        return offset
+        elif current_char in self.reverse_bracket_pairs:
+            target_char = self.reverse_bracket_pairs[current_char]
+            depth = 1
+            for offset in range(bracket_offset - 1, -1, -1):
+                char = content[offset]
+                if char == current_char:
+                    depth += 1
+                elif char == target_char:
+                    depth -= 1
+                    if depth == 0:
+                        return offset
+        return None
+
+    def get_bracket_offsets_near_insert(self, text_widget):
+        try:
+            insert_offset = self.get_text_char_offset(text_widget, tk.INSERT)
+            content = text_widget.get('1.0', 'end-1c')
+        except tk.TclError:
+            return None, None, None
+        if not content or len(content) > self.bracket_match_max_chars:
+            return None, None, content
+        candidate_offsets = []
+        if 0 <= insert_offset - 1 < len(content):
+            candidate_offsets.append(insert_offset - 1)
+        if 0 <= insert_offset < len(content):
+            candidate_offsets.append(insert_offset)
+        for candidate_offset in candidate_offsets:
+            char = content[candidate_offset]
+            if char in self.bracket_pairs or char in self.reverse_bracket_pairs:
+                match_offset = self.find_matching_bracket_offset(content, candidate_offset)
+                if match_offset is not None:
+                    return candidate_offset, match_offset, content
+        return None, None, content
+
+    def update_bracket_match_highlight(self, doc_or_widget):
+        if isinstance(doc_or_widget, dict):
+            doc = doc_or_widget
+            text_widget = doc.get('text')
+            if doc.get('virtual_mode') or doc.get('preview_mode'):
+                self.clear_bracket_match_highlight(text_widget)
+                return
+        else:
+            doc = None
+            text_widget = doc_or_widget
+        if not isinstance(text_widget, tk.Text):
+            return
+        self.clear_bracket_match_highlight(text_widget)
+        bracket_offset, match_offset, content = self.get_bracket_offsets_near_insert(text_widget)
+        if bracket_offset is None or match_offset is None:
+            return
+        start_index = self.text_index_from_offset(text_widget, bracket_offset, content=content)
+        end_index = self.text_index_from_offset(text_widget, bracket_offset + 1, content=content)
+        match_index = self.text_index_from_offset(text_widget, match_offset, content=content)
+        match_end_index = self.text_index_from_offset(text_widget, match_offset + 1, content=content)
+        try:
+            text_widget.tag_add(self.bracket_match_tag, start_index, end_index)
+            text_widget.tag_add(self.bracket_match_tag, match_index, match_end_index)
+            text_widget.tag_raise(self.bracket_match_tag)
+        except tk.TclError:
+            pass
 
     def remember_doc_focus(self, tab_id):
         doc = self.documents.get(str(tab_id))
@@ -4660,6 +4796,15 @@ class NotepadX:
         if self.is_shift_selection_navigation(event):
             self.hide_autocomplete_popup()
             return
+
+        if (
+            event.keysym in {'Return', 'KP_Enter'}
+            and not (int(getattr(event, 'state', 0) or 0) & 0x4)
+            and not (self.autocomplete_popup_visible() and self.autocomplete_doc_id == str(tab_id))
+        ):
+            if not doc.get('virtual_mode') and not doc.get('preview_mode'):
+                self.hide_autocomplete_popup()
+                return self.insert_auto_indent_newline(doc['text'])
 
         if not doc.get('virtual_mode') and not doc.get('preview_mode'):
             if self.autocomplete_popup_visible() and self.autocomplete_doc_id == str(tab_id):
@@ -4692,6 +4837,14 @@ class NotepadX:
         if self.is_shift_selection_navigation(event):
             self.hide_autocomplete_popup()
             return
+        if (
+            event.keysym in {'Return', 'KP_Enter'}
+            and not (int(getattr(event, 'state', 0) or 0) & 0x4)
+            and not (self.autocomplete_popup_visible() and self.autocomplete_doc_id == (str(compare_doc['frame']) if compare_doc else None))
+        ):
+            if source_doc and not source_doc.get('virtual_mode') and not source_doc.get('preview_mode'):
+                self.hide_autocomplete_popup()
+                return self.insert_auto_indent_newline(compare_doc['text'])
         if source_doc and not source_doc.get('virtual_mode') and not source_doc.get('preview_mode'):
             compare_doc_id = str(compare_doc['frame']) if compare_doc else None
             if self.autocomplete_popup_visible() and self.autocomplete_doc_id == compare_doc_id:
@@ -4733,6 +4886,7 @@ class NotepadX:
             self.hide_autocomplete_popup()
         elif event_type not in {'35'}:
             self.update_autocomplete_popup(compare_doc)
+        self.update_bracket_match_highlight(compare_doc)
         self.update_line_number_gutter(compare_doc)
         self.update_status()
 
@@ -6649,35 +6803,66 @@ class NotepadX:
         self.recovery_job = self.root.after(1500, self.persist_recovery_state)
 
     def get_recovery_state(self):
-        unsaved_tabs = []
-        selected_untitled = None
+        recovery_tabs = []
+        selected_recovery_key = None
+        current_doc = self.get_current_doc()
         for doc in self.documents.values():
-            if doc.get('file_path'):
-                continue
             content = doc['text'].get('1.0', 'end-1c')
-            if not content.strip() and not doc['text'].edit_modified():
-                continue
-            unsaved_tabs.append({
-                'untitled_name': self.trim_text(doc.get('untitled_name') or self.next_untitled_name(), 120),
-                'content': content,
-                'modified': bool(doc['text'].edit_modified())
-            })
-            if len(unsaved_tabs) >= self.max_recovery_tabs:
+            modified = bool(doc['text'].edit_modified())
+            file_path = doc.get('file_path')
+            if file_path:
+                if not modified:
+                    continue
+                recovery_tabs.append({
+                    'file_path': os.path.abspath(file_path),
+                    'untitled_name': None,
+                    'content': content,
+                    'modified': True,
+                })
+                recovery_key = f"file:{os.path.abspath(file_path)}"
+            else:
+                if not content.strip() and not modified:
+                    continue
+                untitled_name = self.trim_text(doc.get('untitled_name') or self.next_untitled_name(), 120)
+                recovery_tabs.append({
+                    'file_path': None,
+                    'untitled_name': untitled_name,
+                    'content': content,
+                    'modified': modified
+                })
+                recovery_key = f"untitled:{untitled_name}"
+            if len(recovery_tabs) >= self.max_recovery_tabs:
                 break
-            if self.get_current_doc() == doc:
-                selected_untitled = doc.get('untitled_name')
+            if current_doc == doc:
+                selected_recovery_key = recovery_key
         return {
-            'unsaved_tabs': unsaved_tabs,
-            'selected_untitled': self.trim_text(selected_untitled, 120),
+            'recovery_tabs': recovery_tabs,
+            'selected_recovery_key': self.trim_text(selected_recovery_key, 260),
             'timestamp': self.utc_timestamp()
         }
+
+    def apply_recovery_content_to_doc(self, doc, content, modified):
+        if not doc:
+            return
+        text = doc.get('text')
+        if not text:
+            return
+        doc['suspend_modified_events'] = True
+        try:
+            text.delete('1.0', tk.END)
+            text.insert('1.0', content)
+            text.edit_modified(bool(modified))
+        finally:
+            doc['suspend_modified_events'] = False
+        self.refresh_tab_title(doc['frame'])
+        self.update_doc_file_signature(doc)
 
     def persist_recovery_state(self):
         self.recovery_job = None
         if self.isolated_session:
             return
         recovery = self.get_recovery_state()
-        if not recovery['unsaved_tabs']:
+        if not recovery['recovery_tabs']:
             if os.path.exists(self.recovery_path):
                 try:
                     os.remove(self.recovery_path)
@@ -6706,8 +6891,8 @@ class NotepadX:
         recovery = self.sanitize_recovery_payload(recovery)
         if recovery is None:
             return
-        unsaved_tabs = recovery.get('unsaved_tabs', [])
-        if not isinstance(unsaved_tabs, list) or not unsaved_tabs:
+        recovery_tabs = recovery.get('recovery_tabs', [])
+        if not isinstance(recovery_tabs, list) or not recovery_tabs:
             return
         if not messagebox.askyesno("Recover Tabs", "Notepad-X found unsaved tabs from a previous crash. Restore them?", parent=self.root):
             return
@@ -6715,18 +6900,54 @@ class NotepadX:
         if current_doc and not current_doc.get('file_path') and not current_doc['text'].edit_modified() and not current_doc['text'].get('1.0', 'end-1c').strip():
             self.notebook.forget(current_doc['frame'])
             self.documents.pop(str(current_doc['frame']), None)
-        selected_name = recovery.get('selected_untitled')
+        selected_recovery_key = recovery.get('selected_recovery_key')
         selected_tab = None
-        for recovered_tab in unsaved_tabs:
+        for recovered_tab in recovery_tabs:
             if not isinstance(recovered_tab, dict):
                 continue
             content = str(recovered_tab.get('content', ''))
-            tab_id = self.create_tab(content=content, select=False)
-            doc = self.documents[str(tab_id)]
-            doc['untitled_name'] = str(recovered_tab.get('untitled_name') or doc['untitled_name'])
-            doc['text'].edit_modified(bool(recovered_tab.get('modified', True)))
+            modified = bool(recovered_tab.get('modified', True))
+            file_path = recovered_tab.get('file_path')
+            doc = None
+            recovery_key = None
+            if file_path:
+                normalized_path = os.path.abspath(file_path)
+                recovery_key = f"file:{normalized_path}"
+                for existing_doc in self.documents.values():
+                    existing_path = existing_doc.get('file_path')
+                    if existing_path and os.path.abspath(existing_path) == normalized_path:
+                        doc = existing_doc
+                        break
+                if doc is None and os.path.exists(normalized_path):
+                    tab_id = self.create_tab(file_path=normalized_path, select=False)
+                    doc = self.documents[str(tab_id)]
+                    if not self.load_content_into_doc(doc, normalized_path):
+                        try:
+                            self.notebook.forget(doc['frame'])
+                        except tk.TclError:
+                            pass
+                        self.documents.pop(str(tab_id), None)
+                        doc = None
+                if doc is not None:
+                    self.apply_recovery_content_to_doc(doc, content, modified)
+                else:
+                    recovered_name = self.trim_text(
+                        recovered_tab.get('untitled_name') or f"Recovered {os.path.basename(normalized_path)}",
+                        120
+                    )
+                    tab_id = self.create_tab(content=content, select=False)
+                    doc = self.documents[str(tab_id)]
+                    doc['untitled_name'] = recovered_name or doc['untitled_name']
+                    self.apply_recovery_content_to_doc(doc, content, modified)
+                    recovery_key = f"untitled:{doc['untitled_name']}"
+            else:
+                tab_id = self.create_tab(content=content, select=False)
+                doc = self.documents[str(tab_id)]
+                doc['untitled_name'] = str(recovered_tab.get('untitled_name') or doc['untitled_name'])
+                self.apply_recovery_content_to_doc(doc, content, modified)
+                recovery_key = f"untitled:{doc['untitled_name']}"
             self.refresh_tab_title(doc['frame'])
-            if doc['untitled_name'] == selected_name:
+            if recovery_key == selected_recovery_key:
                 selected_tab = doc['frame']
         if selected_tab is None and self.documents:
             selected_tab = next(iter(self.documents.values()))['frame']
@@ -7487,6 +7708,17 @@ class NotepadX:
             font=('Segoe UI', 16, 'bold')
         ).pack(pady=(0, 16))
 
+        repo_link = tk.Label(
+            content,
+            text=self.repo_url,
+            bg=self.bg_color,
+            fg='#58a6ff',
+            font=('Segoe UI', 9, 'underline'),
+            cursor='hand2'
+        )
+        repo_link.pack(pady=(0, 14))
+        repo_link.bind('<Button-1>', lambda e: self.open_repo_link())
+
         tk.Label(
             content,
             text=self.tr('about.tagline', 'Built because Microsoft forgot what Notepad was supposed to be.'),
@@ -7517,6 +7749,12 @@ class NotepadX:
         dialog.focus_force()
         dialog.after(1, lambda current=dialog: self.center_window_after_show(current))
         dialog.after(50, lambda: dialog.attributes('-topmost', False) if dialog.winfo_exists() else None)
+
+    def open_repo_link(self):
+        try:
+            webbrowser.open(self.repo_url)
+        except Exception as exc:
+            self.log_exception("open repo link", exc)
 
     def maybe_start_about_pong(self, dialog, event):
         if not (event.state & 0x4):
