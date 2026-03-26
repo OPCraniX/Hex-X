@@ -637,6 +637,40 @@ class NotepadX:
             except tk.TclError:
                 pass
 
+    def create_about_display_image(self):
+        if os.path.exists(self.splash_path):
+            try:
+                from PIL import Image, ImageTk
+                splash_image = Image.open(self.splash_path)
+                splash_image.thumbnail((self.splash_max_width, self.splash_max_height), Image.LANCZOS)
+                return ImageTk.PhotoImage(splash_image)
+            except Exception:
+                pass
+            try:
+                splash_image = tk.PhotoImage(file=self.splash_path)
+                width = max(1, splash_image.width())
+                height = max(1, splash_image.height())
+                scale = max(
+                    1,
+                    (width + self.splash_max_width - 1) // self.splash_max_width,
+                    (height + self.splash_max_height - 1) // self.splash_max_height,
+                )
+                if scale > 1:
+                    splash_image = splash_image.subsample(scale, scale)
+                return splash_image
+            except tk.TclError:
+                pass
+
+        if os.path.exists(self.icon_path):
+            try:
+                from PIL import Image, ImageTk
+                icon_image = Image.open(self.icon_path)
+                return ImageTk.PhotoImage(icon_image)
+            except Exception:
+                pass
+
+        return None
+
     def get_user_support_dir(self):
         base_dir = os.environ.get('LOCALAPPDATA') or os.path.expanduser('~')
         if self.is_linux:
@@ -8616,32 +8650,12 @@ class NotepadX:
         content = tk.Frame(dialog, bg=self.bg_color)
         content.pack()
 
-        image_loaded = False
+        dialog.icon_image = self.create_about_display_image()
         icon_widget = None
-        if os.path.exists(self.splash_path):
-            try:
-                from PIL import Image, ImageTk
-                splash_image = Image.open(self.splash_path)
-                splash_image.thumbnail((self.splash_max_width, self.splash_max_height), Image.LANCZOS)
-                dialog.icon_image = ImageTk.PhotoImage(splash_image)
-                image_loaded = True
-                icon_widget = tk.Label(content, image=dialog.icon_image, bg=self.bg_color, cursor='hand2')
-                icon_widget.pack(pady=(0, 12))
-            except Exception:
-                image_loaded = False
-
-        if not image_loaded and os.path.exists(self.icon_path):
-            try:
-                from PIL import Image, ImageTk
-                icon_image = Image.open(self.icon_path)
-                dialog.icon_image = ImageTk.PhotoImage(icon_image)
-                image_loaded = True
-                icon_widget = tk.Label(content, image=dialog.icon_image, bg=self.bg_color, cursor='hand2')
-                icon_widget.pack(pady=(0, 12))
-            except Exception:
-                image_loaded = False
-
-        if not image_loaded:
+        if dialog.icon_image is not None:
+            icon_widget = tk.Label(content, image=dialog.icon_image, bg=self.bg_color, cursor='hand2')
+            icon_widget.pack(pady=(0, 12))
+        else:
             icon_widget = tk.Label(
                 content,
                 text="[Icon]",
