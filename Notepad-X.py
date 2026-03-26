@@ -17,6 +17,7 @@ import time
 import shutil
 import stat
 import socket
+import threading
 import webbrowser
 from datetime import datetime, timezone
 from ctypes import wintypes
@@ -277,6 +278,69 @@ REGION_DISPLAY_NAMES = {
     'cn': '中国',
 }
 
+
+def get_notepadx_app_dir():
+    if getattr(sys, 'frozen', False):
+        return os.path.dirname(os.path.abspath(sys.executable))
+    return os.path.dirname(os.path.abspath(__file__))
+
+
+def is_notepadx_support_file_path(file_path):
+    try:
+        candidate_name = os.path.basename(str(file_path)).lower()
+    except Exception:
+        return False
+    return (
+        candidate_name.endswith('.notepadx.notes.json')
+        or candidate_name.endswith('.notepadx.editors.json')
+        or candidate_name == 'notepad-x.recovery.json'
+        or candidate_name == 'notepad-x.crash.log'
+        or (candidate_name.startswith('notepad-x.') and candidate_name.endswith('.session.json'))
+        or (candidate_name.startswith('notepad-x.') and candidate_name.endswith('.editor.json'))
+    )
+
+
+def get_notepadx_single_instance_port(app_dir):
+    seed = (
+        f"NotepadX::{os.path.normcase(os.path.abspath(app_dir))}::"
+        f"{os.environ.get('USERNAME') or os.environ.get('USER') or 'user'}"
+    )
+    seed_hash = hashlib.sha256(seed.encode('utf-8')).hexdigest()
+    return 43000 + (int(seed_hash[:8], 16) % 10000)
+
+
+def send_files_to_running_notepadx(app_dir, startup_files):
+    normalized_files = []
+    for raw_path in startup_files or []:
+        if not raw_path:
+            continue
+        candidate_path = os.path.abspath(raw_path)
+        if not os.path.exists(candidate_path) or is_notepadx_support_file_path(candidate_path):
+            continue
+        normalized_files.append(candidate_path)
+
+    if not normalized_files:
+        return False
+
+    payload = json.dumps({
+        'command': 'open_files',
+        'files': normalized_files,
+    }).encode('utf-8')
+
+    client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    client.settimeout(0.6)
+    try:
+        client.connect(('127.0.0.1', get_notepadx_single_instance_port(app_dir)))
+        client.sendall(payload)
+        return True
+    except OSError:
+        return False
+    finally:
+        try:
+            client.close()
+        except OSError:
+            pass
+
 class NotepadX:
     def __init__(self, isolated_session=False, startup_files=None):
         self.root = tk.Tk()
@@ -387,6 +451,13 @@ class NotepadX:
         self.closed_session_files = set()
         self.note_sync_interval_ms = 100
         self.note_editor_heartbeat_interval_ms = 1500
+        self.single_instance_host = '127.0.0.1'
+        self.single_instance_port = get_notepadx_single_instance_port(self.app_dir)
+        self.single_instance_server = None
+        self.single_instance_listener_thread = None
+        self.single_instance_running = False
+        self.remote_open_files = []
+        self.remote_open_lock = threading.Lock()
         self.kernel32 = None
         self.psapi = None
 
@@ -447,6 +518,7 @@ class NotepadX:
         self.persist_editor_identity()
 
         self.setup_exception_handling()
+        self.start_single_instance_server()
 
     def init_ui(self):
         self.apply_window_icon(self.root)
@@ -468,6 +540,7 @@ class NotepadX:
         self.update_font()
         self.update_clock()
         self.update_memory_usage()
+        self.process_remote_open_requests()
         self.poll_shared_notes()
         self.center_window(self.root)
 
@@ -1294,7 +1367,7 @@ class NotepadX:
         dialog.protocol("WM_DELETE_WINDOW", cancel)
         dialog.update_idletasks()
         update_visibility()
-        self.center_window(dialog)
+        self.center_window(dialog, parent)
         dialog.lift()
         dialog.attributes('-topmost', True)
         dialog.grab_set()
@@ -1304,6 +1377,8 @@ class NotepadX:
             dialog.focus_force()
         try:
             dialog.wait_visibility()
+            self.center_window(dialog, parent)
+            dialog.after(1, lambda current=dialog: self.center_window_after_show(current, parent))
             dialog.after(50, lambda: dialog.attributes('-topmost', False) if dialog.winfo_exists() else None)
             parent.wait_window(dialog)
             return result['value']
@@ -1766,15 +1841,35 @@ class NotepadX:
                 return
 
     def center_window(self, window, parent=None):
-        window.update_idletasks()
-        width = window.winfo_width()
-        height = window.winfo_height()
+        try:
+            window.update_idletasks()
+        except tk.TclError:
+            return
+
+        width = max(window.winfo_reqwidth(), window.winfo_width())
+        height = max(window.winfo_reqheight(), window.winfo_height())
+        if width <= 1 or height <= 1:
+            try:
+                geometry = window.geometry().split('+', 1)[0]
+                width_text, height_text = geometry.split('x', 1)
+                width = max(width, int(width_text))
+                height = max(height, int(height_text))
+            except (ValueError, tk.TclError):
+                pass
 
         if parent is not None and parent.winfo_exists():
-            parent.update_idletasks()
-            x = parent.winfo_x() + max(0, (parent.winfo_width() - width) // 2)
-            y = parent.winfo_y() + max(0, (parent.winfo_height() - height) // 2)
-        else:
+            try:
+                parent.update_idletasks()
+                parent_x = parent.winfo_rootx()
+                parent_y = parent.winfo_rooty()
+                parent_width = max(parent.winfo_width(), parent.winfo_reqwidth())
+                parent_height = max(parent.winfo_height(), parent.winfo_reqheight())
+            except tk.TclError:
+                parent = None
+            else:
+                x = parent_x + max(0, (parent_width - width) // 2)
+                y = parent_y + max(0, (parent_height - height) // 2)
+        if parent is None:
             screen_width = window.winfo_screenwidth()
             screen_height = window.winfo_screenheight()
             x = max(0, (screen_width - width) // 2)
@@ -1787,6 +1882,103 @@ class NotepadX:
             return
         self.center_window(window, parent)
         window.lift()
+
+    def is_notepadx_support_file(self, file_path):
+        return is_notepadx_support_file_path(file_path)
+
+    def start_single_instance_server(self):
+        if self.isolated_session:
+            return
+        try:
+            server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            server.bind((self.single_instance_host, self.single_instance_port))
+            server.listen(5)
+            server.settimeout(0.5)
+        except OSError:
+            try:
+                server.close()
+            except Exception:
+                pass
+            self.single_instance_server = None
+            return
+
+        self.single_instance_server = server
+        self.single_instance_running = True
+
+        def listen():
+            while self.single_instance_running:
+                try:
+                    connection, _ = server.accept()
+                except socket.timeout:
+                    continue
+                except OSError:
+                    break
+
+                with connection:
+                    data = b''
+                    while True:
+                        try:
+                            chunk = connection.recv(65536)
+                        except OSError:
+                            break
+                        if not chunk:
+                            break
+                        data += chunk
+                    if not data:
+                        continue
+                    try:
+                        payload = json.loads(data.decode('utf-8'))
+                    except Exception:
+                        continue
+                    if payload.get('command') != 'open_files':
+                        continue
+                    incoming_files = []
+                    for raw_path in payload.get('files', []):
+                        if not raw_path:
+                            continue
+                        candidate_path = os.path.abspath(str(raw_path))
+                        if self.is_notepadx_support_file(candidate_path):
+                            continue
+                        incoming_files.append(candidate_path)
+                    if incoming_files:
+                        with self.remote_open_lock:
+                            self.remote_open_files.extend(incoming_files)
+
+        self.single_instance_listener_thread = threading.Thread(
+            target=listen,
+            name='NotepadXSingleInstanceListener',
+            daemon=True
+        )
+        self.single_instance_listener_thread.start()
+
+    def stop_single_instance_server(self):
+        self.single_instance_running = False
+        server = self.single_instance_server
+        self.single_instance_server = None
+        if server is not None:
+            try:
+                server.close()
+            except OSError:
+                pass
+
+    def process_remote_open_requests(self):
+        if not self.root.winfo_exists():
+            return
+        pending_files = []
+        with self.remote_open_lock:
+            if self.remote_open_files:
+                pending_files = self.remote_open_files[:]
+                self.remote_open_files.clear()
+        if pending_files:
+            self.open_startup_files(pending_files)
+            try:
+                self.root.deiconify()
+                self.root.lift()
+                self.root.focus_force()
+            except tk.TclError:
+                pass
+        self.root.after(150, self.process_remote_open_requests)
 
     # ─── Font Zoom ───────────────────────────────────────────────
     def change_font_size(self, delta):
@@ -3725,7 +3917,7 @@ class NotepadX:
             if not raw_path:
                 continue
             candidate_path = os.path.abspath(raw_path)
-            if os.path.exists(candidate_path):
+            if os.path.exists(candidate_path) and not self.is_notepadx_support_file(candidate_path):
                 normalized_files.append(candidate_path)
 
         opened_frames = []
@@ -7994,6 +8186,10 @@ class NotepadX:
         for label, _ in choices:
             listbox.insert(tk.END, label)
         listbox.pack(fill='both', expand=True)
+        if choices:
+            listbox.selection_set(0)
+            listbox.activate(0)
+            listbox.see(0)
 
         def open_compare(event=None):
             selection = listbox.curselection()
@@ -8006,7 +8202,8 @@ class NotepadX:
         tk.Button(dialog, text=self.tr('common.compare', 'Compare'), command=open_compare).pack(pady=(10, 0))
         listbox.bind('<Double-Button-1>', open_compare)
         listbox.focus_set()
-        self.center_window(dialog)
+        self.center_window(dialog, self.root)
+        dialog.after(1, lambda current=dialog: self.center_window_after_show(current, self.root))
 
     def refresh_compare_header(self):
         if not self.compare_active:
@@ -8569,14 +8766,7 @@ class NotepadX:
             if candidate_path == file_path:
                 continue
             candidate_name = entry.name.lower()
-            if (
-                candidate_name.endswith('.notepadx.notes.json')
-                or candidate_name.endswith('.notepadx.editors.json')
-                or candidate_name == 'notepad-x.recovery.json'
-                or candidate_name == 'notepad-x.crash.log'
-                or (candidate_name.startswith('notepad-x.') and candidate_name.endswith('.session.json'))
-                or (candidate_name.startswith('notepad-x.') and candidate_name.endswith('.editor.json'))
-            ):
+            if self.is_notepadx_support_file(candidate_name):
                 continue
             candidate_extension = os.path.splitext(entry.name)[1].lower()
             if candidate_extension in source_extensions:
@@ -9146,6 +9336,7 @@ class NotepadX:
                 return "break"
         for doc in list(self.documents.values()):
             self.unregister_doc_from_shared_notes(doc)
+        self.stop_single_instance_server()
         if self.recovery_job:
             try:
                 self.root.after_cancel(self.recovery_job)
@@ -9514,4 +9705,7 @@ if __name__ == "__main__":
     raw_args = sys.argv[1:]
     isolated_mode = '--isolated' in {arg.lower() for arg in raw_args}
     startup_files = [arg for arg in raw_args if arg.lower() != '--isolated']
+    app_dir = get_notepadx_app_dir()
+    if not isolated_mode and send_files_to_running_notepadx(app_dir, startup_files):
+        sys.exit(0)
     NotepadX(isolated_session=isolated_mode, startup_files=startup_files)
