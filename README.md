@@ -29,6 +29,7 @@ This benchmark is a point-in-time comparison between the packaged Notepad-X buil
 - Large-file protection with buffered virtual mode
 - `Save Copy As` for huge read-only files
 - `Save As Encrypted` for passphrase-protected encrypted copies
+- background large-file loading so the UI stays responsive while big text files open
 - Save dialogs with text, markdown, `.gitignore`, and code/config file type filters
 - Color-coded shared notes on selected text
 - Shared note sidecars with unread tracking and multi-response note threads
@@ -44,12 +45,14 @@ This benchmark is a point-in-time comparison between the packaged Notepad-X buil
 - Word Wrap, Sound toggle, Full Screen, zoom controls, font picker, printing
 - `View > Numbered Lines` toggle with saved preference
 - `View > Autocomplete` toggle with saved preference
-- `View > Edit with Notepad-X` toggle with saved preference
+- `Edit > Edit with Notepad-X` toggle with saved preference
+- `Edit > Sound` toggle with saved preference
 - `Edit > Language` menu that scans `cfg/language/*.yml` and lets you switch UI language files
 - Friendly native language names in the Language menu with locale-aware font fallback
 - `View > Currently Editing` opens a right-side live editor sidebar
+- `View` now also contains note cycling/filtering and document navigation commands
 - Built-in Help viewer and About dialog
-- About shows the current version and a clickable GitHub link
+- About shows `v0.9.6` and a clickable GitHub link
 
 ## Compare Mode
 
@@ -151,7 +154,9 @@ Notepad-X can create and open encrypted document copies.
 
 ## Large File Handling
 
-Very large files are protected with a buffered virtual mode so Notepad-X does not try to load the entire file into the Tk text widget at once.
+Large files now load more safely in the background so the Tkinter UI does not freeze while opening them.
+
+Editable large text files are allowed up to a practical limit, and only extremely large files fall back to buffered virtual mode.
 
 In large-file virtual mode:
 

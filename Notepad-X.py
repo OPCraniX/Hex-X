@@ -356,7 +356,7 @@ class NotepadX:
     def init_config(self):
         self.is_windows = os.name == 'nt'
         self.is_linux = sys.platform.startswith('linux')
-        self.app_version = "v0.9.5"
+        self.app_version = "v0.9.6"
         self.resource_dir = self.get_resource_dir()
         self.app_dir = self.get_app_dir()
         self.machine_profile_slug = self.get_machine_profile_slug()
@@ -6201,24 +6201,29 @@ class NotepadX:
             ).pack(fill='x', padx=10, pady=(0, 4))
             for response in responses:
                 response_color = self.get_note_color_hex(response.get('color'))
-                response_meta = []
+                response_line_parts = []
                 if response.get('author_label'):
-                    response_meta.append(response['author_label'])
+                    response_line_parts.append(response['author_label'])
                 elif response.get('author_id'):
-                    response_meta.append(response['author_id'])
+                    response_line_parts.append(response['author_id'])
                 response_location_parts = []
                 if response.get('author_host'):
                     response_location_parts.append(response['author_host'])
                 if response.get('author_ip'):
                     response_location_parts.append(response['author_ip'])
                 if response_location_parts:
-                    response_meta.append(" | ".join(response_location_parts))
+                    response_line_parts.append(" | ".join(response_location_parts))
+                response_meta_lines = []
+                if response_line_parts:
+                    response_meta_lines.append(" | ".join(response_line_parts))
                 if response.get('created_at'):
-                    response_meta.append(self.format_note_timestamp(response.get('created_at')))
-                if response_meta:
+                    response_meta_lines.append(
+                        f"{self.tr('note.popup.created', 'Created')}: {self.format_note_timestamp(response.get('created_at'))}"
+                    )
+                if response_meta_lines:
                     tk.Label(
                         frame,
-                        text=" | ".join(response_meta),
+                        text="\n".join(response_meta_lines),
                         bg='#1f2430',
                         fg=response_color,
                         font=('Segoe UI', 8, 'bold'),
@@ -8242,23 +8247,12 @@ class NotepadX:
         edit_menu.add_command(label=t('menu.edit.find_next', 'Find Next'), command=self.find_next, accelerator=t('accel.find_next', 'F3'))
         edit_menu.add_command(label=t('menu.edit.find_previous', 'Find Previous'), command=self.find_previous, accelerator=t('accel.find_previous', 'Shift+F3'))
         edit_menu.add_command(label=t('menu.edit.replace', 'Replace'), command=self.show_replace_panel, accelerator=t('accel.replace', 'Ctrl+R'))
-        edit_menu.add_command(label=t('menu.edit.cycle_notes', 'Cycle Notes'), command=self.goto_next_note, accelerator=t('accel.cycle_notes', 'F4'))
-        note_filter_menu = tk.Menu(edit_menu, tearoff=0, bg='#2d2d2d', fg=self.fg_color, activebackground='#3a3a3a')
-        edit_menu.add_cascade(label=t('menu.edit.filter_notes', 'Filter Notes'), menu=note_filter_menu)
-        note_filter_menu.add_radiobutton(label=t('note.filter.all', 'All'), variable=self.note_filter, value='all')
-        note_filter_menu.add_radiobutton(label=t('note.filter.unread', 'Unread'), variable=self.note_filter, value='unread')
-        note_filter_menu.add_radiobutton(label=t('note.filter.yellow', 'Yellow'), variable=self.note_filter, value='yellow')
-        note_filter_menu.add_radiobutton(label=t('note.filter.green', 'Green'), variable=self.note_filter, value='green')
-        note_filter_menu.add_radiobutton(label=t('note.filter.red', 'Red'), variable=self.note_filter, value='red')
-        note_filter_menu.add_radiobutton(label=t('note.filter.blue', 'Light Blue'), variable=self.note_filter, value='blue')
         edit_menu.add_separator()
-        edit_menu.add_command(label=t('menu.edit.goto_line', 'Go To Line'), command=self.goto_line_dialog, accelerator=t('accel.goto_line', 'Ctrl+G'))
-        edit_menu.add_command(label=t('menu.edit.top_of_document', 'Top of Document'), command=self.goto_document_start, accelerator=t('accel.top_of_document', 'Ctrl+PgUp'))
-        edit_menu.add_command(label=t('menu.edit.bottom_of_document', 'Bottom of Document'), command=self.goto_document_end, accelerator=t('accel.bottom_of_document', 'Ctrl+PgDn'))
-        edit_menu.add_checkbutton(label=t('menu.edit.sync_page_navigation', 'Sync PgUp/PgDn in Compare'), variable=self.sync_page_navigation_enabled, command=self.save_session)
         edit_menu.add_command(label=t('menu.edit.date', 'Date'), command=self.insert_date, accelerator=t('accel.date', 'Ctrl+D'))
         edit_menu.add_command(label=t('menu.edit.time_date', 'Time/Date'), command=self.insert_time_date, accelerator=t('accel.time_date', 'Ctrl+Shift+D'))
         edit_menu.add_command(label=t('menu.edit.font', 'Font'), command=self.show_font_dialog, accelerator=t('accel.font', 'Ctrl+Shift+F'))
+        edit_menu.add_checkbutton(label=t('menu.view.edit_with_notepadx', 'Edit with Notepad-X'), variable=self.edit_with_shell_enabled, command=self.toggle_edit_with_shell)
+        edit_menu.add_checkbutton(label=t('menu.view.sound', 'Sound'), variable=self.sound_enabled, command=self.toggle_sound)
         self.language_menu = tk.Menu(edit_menu, tearoff=0, bg='#2d2d2d', fg=self.fg_color, activebackground='#3a3a3a', postcommand=self.refresh_language_menu)
         edit_menu.add_cascade(label=t('menu.edit.language', 'Language'), menu=self.language_menu)
         self.refresh_language_menu()
@@ -8270,10 +8264,21 @@ class NotepadX:
         view_menu.add_checkbutton(label=t('menu.view.status_bar', 'Status Bar'), variable=self.status_bar_enabled, command=self.toggle_status_bar, accelerator=t('accel.status_bar', 'Ctrl+B'))
         view_menu.add_checkbutton(label=t('menu.view.numbered_lines', 'Numbered Lines'), variable=self.numbered_lines_enabled, command=self.toggle_numbered_lines)
         view_menu.add_checkbutton(label=t('menu.view.autocomplete', 'Autocomplete'), variable=self.autocomplete_enabled, command=self.toggle_autocomplete)
-        view_menu.add_checkbutton(label=t('menu.view.edit_with_notepadx', 'Edit with Notepad-X'), variable=self.edit_with_shell_enabled, command=self.toggle_edit_with_shell)
         view_menu.add_checkbutton(label=t('menu.view.word_wrap', 'Word Wrap'), variable=self.word_wrap_enabled, command=self.toggle_word_wrap)
-        view_menu.add_checkbutton(label=t('menu.view.sound', 'Sound'), variable=self.sound_enabled, command=self.toggle_sound)
         view_menu.add_command(label=t('menu.view.currently_editing', 'Currently Editing'), command=self.toggle_currently_editing_panel, accelerator=t('accel.currently_editing', 'Ctrl+Shift+C'))
+        view_menu.add_command(label=t('menu.edit.cycle_notes', 'Cycle Notes'), command=self.goto_next_note, accelerator=t('accel.cycle_notes', 'F4'))
+        note_filter_menu = tk.Menu(view_menu, tearoff=0, bg='#2d2d2d', fg=self.fg_color, activebackground='#3a3a3a')
+        view_menu.add_cascade(label=t('menu.edit.filter_notes', 'Filter Notes'), menu=note_filter_menu)
+        note_filter_menu.add_radiobutton(label=t('note.filter.all', 'All'), variable=self.note_filter, value='all')
+        note_filter_menu.add_radiobutton(label=t('note.filter.unread', 'Unread'), variable=self.note_filter, value='unread')
+        note_filter_menu.add_radiobutton(label=t('note.filter.yellow', 'Yellow'), variable=self.note_filter, value='yellow')
+        note_filter_menu.add_radiobutton(label=t('note.filter.green', 'Green'), variable=self.note_filter, value='green')
+        note_filter_menu.add_radiobutton(label=t('note.filter.red', 'Red'), variable=self.note_filter, value='red')
+        note_filter_menu.add_radiobutton(label=t('note.filter.blue', 'Light Blue'), variable=self.note_filter, value='blue')
+        view_menu.add_command(label=t('menu.edit.goto_line', 'Go To Line'), command=self.goto_line_dialog, accelerator=t('accel.goto_line', 'Ctrl+G'))
+        view_menu.add_command(label=t('menu.edit.top_of_document', 'Top of Document'), command=self.goto_document_start, accelerator=t('accel.top_of_document', 'Ctrl+PgUp'))
+        view_menu.add_command(label=t('menu.edit.bottom_of_document', 'Bottom of Document'), command=self.goto_document_end, accelerator=t('accel.bottom_of_document', 'Ctrl+PgDn'))
+        view_menu.add_checkbutton(label=t('menu.edit.sync_page_navigation', 'Sync PgUp/PgDn in Compare'), variable=self.sync_page_navigation_enabled, command=self.save_session)
         syntax_theme_menu = tk.Menu(view_menu, tearoff=0, bg='#2d2d2d', fg=self.fg_color, activebackground='#3a3a3a')
         view_menu.add_cascade(label=t('menu.view.syntax_theme', 'Syntax Theme'), menu=syntax_theme_menu)
         for theme_name, theme_key in (

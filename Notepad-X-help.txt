@@ -69,15 +69,12 @@ Edit Menu
 - Find: Opens the live find panel.
 - Find Next: Moves to the next match. If Find and Replace are closed, F3 jumps through unread notes instead.
 - Find Previous: Moves to the previous match while Find or Replace is open.
-- Cycle Notes: Moves through every note in the current tab from first to last, then wraps back to the beginning.
 - Replace: Opens the Find/Replace panel.
-- Filter Notes: Filters note cycling to All, Unread, Yellow, Green, or Red notes.
-- Go To Line: Jumps to a specific line number.
-- Top of Document: Jumps to line 1, column 1.
-- Bottom of Document: Jumps to the last line, column 1.
 - Date: Inserts the current date.
 - Time/Date: Inserts the current time and date.
 - Font: Opens the font picker for editor family and size.
+- Edit with Notepad-X: Enables or disables a Windows Explorer right-click entry for supported text/code file types.
+- Sound: Enables or disables note sounds. The checkmark shows whether it is enabled.
 - Language: Lists the available `cfg/language/*.yml` language files and lets you switch the visible UI text. `English (US)` is selected by default.
 
 Editing Helpers
@@ -91,10 +88,14 @@ View Menu
 - Switch Tab: Moves to the next tab.
 - Status Bar: Shows or hides the status bar. The checkmark shows whether it is enabled.
 - Numbered Lines: Shows or hides the line number gutter. The checkmark shows whether it is enabled.
-- Edit with Notepad-X: Enables or disables a Windows Explorer right-click entry for supported text/code file types.
 - Word Wrap: Turns wrapping on or off. The checkmark shows whether it is enabled.
-- Sound: Enables or disables note sounds. The checkmark shows whether it is enabled.
 - Currently Editing: Toggles a far-right sidebar that shows the editors currently tracked on the active saved file.
+- Cycle Notes: Moves through every note in the current tab from first to last, then wraps back to the beginning.
+- Filter Notes: Filters note cycling to All, Unread, Yellow, Green, or Red notes.
+- Go To Line: Jumps to a specific line number.
+- Top of Document: Jumps to line 1, column 1.
+- Bottom of Document: Jumps to the last line, column 1.
+- Sync PgUp/PgDn in Compare: Keeps page-up and page-down navigation synchronized across both compare panes when enabled.
 - Syntax Theme: Changes the highlight color palette. Available themes are Default, Soft, Vivid, Base4Tone, Green Monochrome, and Orange Monochrome.
 - Syntax Mode: Manually overrides syntax detection for the current tab. Available modes include Auto, Plain Text, Python, C, C++, Rust, Java, JavaScript, HTML, PHP, XML, and SQL.
 - Compare Tabs: Opens a side-by-side compare view using the current tab and another open tab.
@@ -195,7 +196,9 @@ Syntax Highlighting
 - Highlighting is reduced or disabled in large-file modes to keep performance usable.
 
 Large Files
-- Notepad-X uses safer handling for large files so the Tk text widget does not try to hold extremely large content all at once.
+- Notepad-X uses safer handling for large files so the Tk text widget does not freeze the UI while opening them.
+- Large text files can now load in the background and remain editable up to a practical size limit.
+- Very large files still fall back to buffered virtual mode when loading the full file would be too expensive.
 - Large files reduce expensive features such as undo depth and syntax work.
 - Binary-like files are treated more cautiously and can be opened in a safer preview-style mode instead of being treated as normal editable text.
 - Very large files can enter virtual buffered mode instead of loading the full file into the editor.
