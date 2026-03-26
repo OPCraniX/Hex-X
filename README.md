@@ -45,8 +45,10 @@ This benchmark is a point-in-time comparison between the packaged Notepad-X buil
 - `View > Numbered Lines` toggle with saved preference
 - `View > Autocomplete` toggle with saved preference
 - `View > Edit with Notepad-X` toggle with saved preference
-- `Edit > Language` menu that scans `cfg/*.yml` and lets you switch UI language files
+- `Edit > Language` menu that scans `cfg/language/*.yml` and lets you switch UI language files
 - Friendly native language names in the Language menu with locale-aware font fallback
+- `Edit > Compiler Locations` opens the compiler/runtime JSON config in `cfg/settings`
+- `View > Currently Editing` opens a right-side live editor-ID sidebar
 - Built-in Help viewer and About dialog
 - About shows the current version and a clickable GitHub link
 
@@ -60,6 +62,8 @@ Notepad-X can compare two open tabs side by side inside the main window.
 - both sides are editable for normal tabs
 - syntax highlighting is applied on the compare side too
 - the compared file shows its own bottom compare status readout
+- `Currently Editing` stays as a separate far-right sidebar even while compare mode is open
+- opening and closing the sidebar restores the compare split evenly
 - `Find Next`, `Find Previous`, `F3`, and `Shift+F3` follow whichever compare pane you last clicked
 - `Ctrl+Shift+X` closes compare mode
 - if you close the app while compare mode is open, the same compare pair is restored on next launch
@@ -96,6 +100,13 @@ Notepad-X includes a lightweight local autocomplete system for normal editable t
 - `Find Next` / `F3` move forward through matches
 - `Find Previous` / `Shift+F3` move backward through matches
 
+## Run Support
+
+- `File > Save and Run` saves the current file first, then launches it with the appropriate runtime for supported file types
+- `Ctrl+Shift+R` triggers Save and Run
+- `Edit > Compiler Locations` opens `cfg/settings/compiler_locations.json`
+- that JSON can be used to override runtime/launcher command prefixes for supported languages
+
 ## Code Notes
 
 You can select text, right-click, and attach a shared note to the selection.
@@ -116,9 +127,9 @@ Notes support:
 
 Notepad-X now includes a translation/config layer for visible UI text.
 
-- `cfg/en_US.yml` is the default English language file
+- `cfg/language/en_US.yml` is the default English language file
 - `Edit > Language` shows friendly locale names instead of raw codes
-- any additional `cfg/*.yml` file appears automatically in the Language menu
+- any additional `cfg/language/*.yml` file appears automatically in the Language menu
 - the selected language is saved in the session and restored on launch
 - current language coverage includes the main menus, displayed hotkeys, status bar text, note popup labels, and core dialog captions
 - Arabic language files such as `ar.yml`, `ar_SA.yml`, `ar_AE.yml`, `ar_EG.yml`, and `ar_MA.yml` automatically switch the UI text direction to right-to-left
@@ -182,6 +193,7 @@ Notepad-X also treats binary-like files more cautiously:
 - `Ctrl+Shift+S` Save all
 - `Ctrl+Shift+Q` Save Copy As
 - `Ctrl+Shift+E` Save As Encrypted
+- `Ctrl+Shift+R` Save and Run
 - `Ctrl+P` Print
 - `Ctrl+E` Export Notes
 - `Ctrl+Shift+X` Close compare / close Find or Replace / exit
@@ -210,9 +222,10 @@ Notepad-X keeps support files for sessions, editor identity, recovery, crash log
 
 These can include:
 
-- `cfg/en_US.yml`
+- `cfg/language/en_US.yml`
 - `cfg/Notepad-X.<host>-<user>.session.json`
 - `cfg/Notepad-X.<host>-<user>.editor.json`
+- `cfg/settings/compiler_locations.json`
 - `Notepad-X.recovery.json`
 - `Notepad-X.crash.log`
 - `*.notepadx.notes.json`

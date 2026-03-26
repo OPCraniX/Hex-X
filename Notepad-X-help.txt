@@ -56,6 +56,7 @@ File Menu
 - Save Copy As: Saves a copy of the current tab. In very large virtual or preview modes, this copies the source file stream to a new path without trying to edit the original. It uses its own Save Copy As dialog title and the same file type filters as Save As.
 - Save As Encrypted: Saves a passphrase-protected encrypted copy. It suggests a .npxe filename automatically and adds .npxe if you leave it off.
 - Print: Sends the current saved file to the Windows print action. If the tab has never been saved, Notepad-X prompts you to save it first.
+- Save and Run: Saves the current file and then launches it with the matching runtime for supported file types.
 - Export Notes: Exports the current tab's notes to JSON or Markdown.
 - Exit: Closes the app. If Find or Replace is open, Ctrl+Shift+X closes the panel first and exits only when no panel is open.
 
@@ -76,7 +77,8 @@ Edit Menu
 - Date: Inserts the current date.
 - Time/Date: Inserts the current time and date.
 - Font: Opens the font picker for editor family and size.
-- Language: Lists the available `cfg/*.yml` language files and lets you switch the visible UI text. `English (US)` is selected by default.
+- Compiler Locations: Opens `cfg/settings/compiler_locations.json` inside Notepad-X so you can edit runtime/compiler paths for Save and Run.
+- Language: Lists the available `cfg/language/*.yml` language files and lets you switch the visible UI text. `English (US)` is selected by default.
 
 Editing Helpers
 - Pressing Enter in a normal editable tab now carries the current line indentation forward automatically.
@@ -92,10 +94,12 @@ View Menu
 - Edit with Notepad-X: Enables or disables a Windows Explorer right-click entry for supported text/code file types.
 - Word Wrap: Turns wrapping on or off. The checkmark shows whether it is enabled.
 - Sound: Enables or disables note sounds. The checkmark shows whether it is enabled.
+- Currently Editing: Toggles a far-right sidebar that shows the full IDs of editors currently tracked on the active saved file.
 - Syntax Theme: Changes the highlight color palette. Available themes are Default, Soft, Vivid, Base4Tone, Green Monochrome, and Orange Monochrome.
 - Syntax Mode: Manually overrides syntax detection for the current tab. Available modes include Auto, Plain Text, Python, C, C++, Rust, Java, JavaScript, HTML, PHP, XML, and SQL.
 - Compare Tabs: Opens a side-by-side compare view using the current tab and another open tab.
 - Normal editable tabs can also be edited from the compare pane on the right.
+- When compare mode is open, the Currently Editing sidebar stays on the far right.
 - Close Compare Tabs: Closes the compare pane.
 
 Opening Files
@@ -124,6 +128,11 @@ Encrypted Files
   a random salt and nonce per file
 - Normal Save As and Save Copy As remain plain-text save flows.
 - Encrypted open/save support needs the Python cryptography package installed on that machine.
+
+Save and Run
+- Save and Run saves the current file and then launches it using a detected runtime for supported file types.
+- Ctrl+Shift+R runs Save and Run.
+- Compiler/runtime overrides can be edited in `cfg/settings/compiler_locations.json` through Edit > Compiler Locations.
 
 Find and Replace
 - Find highlights matches live while you type.
@@ -268,8 +277,8 @@ Audio Notifications
 
 Language Files
 - Notepad-X includes a translation/config layer for visible UI text.
-- `cfg/en_US.yml` is the default English language file.
-- The Language submenu under Edit scans `cfg/*.yml` and shows any added language file automatically.
+- `cfg/language/en_US.yml` is the default English language file.
+- The Language submenu under Edit scans `cfg/language/*.yml` and shows any added language file automatically.
 - The Language menu shows friendly native language names instead of raw locale codes when it knows the locale.
 - The selected language is saved in the session and restored when Notepad-X starts again.
 - Current language-file coverage includes the main menus, displayed hotkeys, status bar text, note popup labels, and core dialog captions.
@@ -294,9 +303,10 @@ Crash Logging
 Support Files
 - Notepad-X keeps several support files in its app directory.
 - These can include:
-  cfg/en_US.yml
+  cfg/language/en_US.yml
   cfg/Notepad-X.<host>-<user>.session.json
   cfg/Notepad-X.<host>-<user>.editor.json
+  cfg/settings/compiler_locations.json
   Notepad-X.recovery.json
   Notepad-X.crash.log
   per-file *.notepadx.notes.json sidecars
@@ -323,6 +333,7 @@ Keyboard Shortcuts
 - Ctrl+Shift+S: Save all
 - Ctrl+Shift+Q: Save Copy As
 - Ctrl+Shift+E: Save As Encrypted
+- Ctrl+Shift+R: Save and Run
 - Ctrl+E: Export Notes
 - Ctrl+P: Print
 - Ctrl+Shift+X: Close compare mode or Find/Replace if open, otherwise exit
@@ -342,6 +353,7 @@ Keyboard Shortcuts
 - Ctrl+Shift+D: Time/Date
 - Ctrl+Shift+F: Font
 - Ctrl+Tab: Switch Tab
+- Ctrl+Shift+C: Toggle Currently Editing
 - Ctrl+Q: Compare Tabs
 - Ctrl+B: Toggle Status Bar
 - Ctrl+PgUp: Top of Document

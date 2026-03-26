@@ -20,6 +20,7 @@ import socket
 import webbrowser
 from datetime import datetime, timezone
 from ctypes import wintypes
+from pathlib import Path
 from types import SimpleNamespace
 
 try:
@@ -74,6 +75,7 @@ DEFAULT_LOCALE_STRINGS = {
     "menu.file.save": "Save",
     "menu.file.save_all": "Save All",
     "menu.file.save_as": "Save As",
+    "menu.file.save_and_run": "Save and Run",
     "menu.file.save_as_encrypted": "Save As Encrypted",
     "menu.file.print": "Print",
     "menu.file.export_notes": "Export Notes",
@@ -99,6 +101,7 @@ DEFAULT_LOCALE_STRINGS = {
     "menu.edit.time_date": "Time/Date",
     "menu.edit.font": "Font",
     "menu.edit.language": "Language",
+    "menu.edit.compiler_locations": "Compiler Locations",
     "menu.view": "View",
     "menu.view.full_screen": "Full Screen",
     "menu.view.switch_tab": "Switch Tab",
@@ -110,6 +113,7 @@ DEFAULT_LOCALE_STRINGS = {
     "menu.view.sound": "Sound",
     "menu.view.syntax_theme": "Syntax Theme",
     "menu.view.syntax_mode": "Syntax Mode",
+    "menu.view.currently_editing": "Currently Editing",
     "menu.view.compare_tabs": "Compare Tabs",
     "menu.view.close_compare_tabs": "Close Compare Tabs",
     "menu.help": "Help",
@@ -136,6 +140,9 @@ DEFAULT_LOCALE_STRINGS = {
     "note.prompt.response": "Response:",
     "note.prompt.response_color": "Response Color",
     "note.prompt.name_required": "Enter a name first.",
+    "panel.currently_editing.title": "Currently Editing",
+    "panel.currently_editing.unsaved": "Save this tab to track currently editing IDs.",
+    "panel.currently_editing.none": "No active editing IDs for this file.",
     "status.initial": "Ln 1 of 1, Col 1 | 0 characters | UTF-8 | Normal",
     "status.memory_initial": " | Memory used: 0MB",
     "status.synced": "| Notes Synced",
@@ -185,6 +192,7 @@ DEFAULT_LOCALE_STRINGS = {
     "accel.save": "Ctrl+S",
     "accel.save_all": "Ctrl+Shift+S",
     "accel.save_as": "Ctrl+Shift+Q",
+    "accel.save_and_run": "Ctrl+Shift+R",
     "accel.save_as_encrypted": "Ctrl+Shift+E",
     "accel.print": "Ctrl+P",
     "accel.export_notes": "Ctrl+E",
@@ -209,8 +217,13 @@ DEFAULT_LOCALE_STRINGS = {
     "accel.full_screen": "F11",
     "accel.switch_tab": "Ctrl+Tab",
     "accel.status_bar": "Ctrl+B",
+    "accel.currently_editing": "Ctrl+Shift+C",
     "accel.compare_tabs": "Ctrl+Q",
-    "accel.close_compare_tabs": "Ctrl+Shift+X"
+    "accel.close_compare_tabs": "Ctrl+Shift+X",
+    "run.title": "Save and Run",
+    "run.unsupported": "Save and Run is not available for this file type yet.",
+    "run.runtime_missing": "Notepad-X could not find a runtime for {language} on this system.",
+    "run.open_browser_failed": "Notepad-X could not open this file in your browser."
 }
 
 RTL_LOCALE_CODES = {'ar', 'ar_sa', 'ar_ae', 'ar_eg', 'ar_ma'}
@@ -280,7 +293,7 @@ class NotepadX:
     def init_config(self):
         self.is_windows = os.name == 'nt'
         self.is_linux = sys.platform.startswith('linux')
-        self.app_version = "v0.9.3"
+        self.app_version = "v0.9.4"
         self.resource_dir = self.get_resource_dir()
         self.app_dir = self.get_app_dir()
         self.machine_profile_slug = self.get_machine_profile_slug()
@@ -334,12 +347,18 @@ class NotepadX:
         self.virtual_file_margin_lines = 800
         config_dir = self.get_config_dir(self.app_dir)
         os.makedirs(config_dir, exist_ok=True)
+        self.settings_dir = self.get_settings_dir(config_dir)
+        self.locale_dir = self.get_locale_dir(config_dir)
+        os.makedirs(self.settings_dir, exist_ok=True)
+        os.makedirs(self.locale_dir, exist_ok=True)
+        self.migrate_language_files(config_dir=config_dir, locale_dir=self.locale_dir)
         self.locale_code = 'en_us'
-        self.locale_path = self.get_locale_file_path(self.locale_code, config_dir=config_dir)
+        self.locale_path = self.get_locale_file_path(self.locale_code, locale_dir=self.locale_dir)
         self.locale_strings = self.load_locale_strings(self.locale_path)
         self.app_name = self.tr('app.name', 'Notepad-X')
         self.session_path = self.build_session_path(config_dir)
         self.editor_identity_path = self.build_editor_identity_path(config_dir)
+        self.compiler_locations_path = os.path.join(self.settings_dir, "compiler_locations.json")
         self.recovery_path = os.path.join(self.app_dir, "Notepad-X.recovery.json")
         self.crash_log_path = os.path.join(self.app_dir, "Notepad-X.crash.log")
         self.help_path = os.path.join(self.resource_dir, "Notepad-X-help.txt")
@@ -413,6 +432,7 @@ class NotepadX:
         self.sync_page_navigation_enabled = tk.BooleanVar(value=False)
         self.find_panel_visible = False
         self.replace_panel_visible = False
+        self.currently_editing_panel_visible = False
         self.fullscreen = False
         self.fullscreen_panel_restore = False
 
@@ -556,6 +576,37 @@ class NotepadX:
     def get_config_dir(self, base_dir):
         return os.path.join(base_dir, 'cfg')
 
+    def get_settings_dir(self, config_dir):
+        return os.path.join(config_dir, 'settings')
+
+    def get_locale_dir(self, config_dir):
+        return os.path.join(config_dir, 'language')
+
+    def migrate_language_files(self, config_dir=None, locale_dir=None):
+        config_dir = config_dir or self.get_config_dir(self.app_dir)
+        locale_dir = locale_dir or self.get_locale_dir(config_dir)
+        try:
+            os.makedirs(locale_dir, exist_ok=True)
+        except OSError:
+            return
+        try:
+            entries = os.listdir(config_dir)
+        except OSError:
+            return
+        for entry in entries:
+            if not entry.lower().endswith('.yml'):
+                continue
+            source_path = os.path.join(config_dir, entry)
+            if not os.path.isfile(source_path):
+                continue
+            target_path = os.path.join(locale_dir, entry)
+            if os.path.exists(target_path):
+                continue
+            try:
+                shutil.move(source_path, target_path)
+            except OSError:
+                continue
+
     def serialize_locale_strings(self, strings):
         lines = []
         for key in sorted(strings):
@@ -654,22 +705,28 @@ class NotepadX:
                 return value
         return value
 
-    def get_locale_file_path(self, locale_code, config_dir=None):
+    def get_locale_file_path(self, locale_code, locale_dir=None):
         safe_code = str(locale_code or 'en_us').strip().lower()
-        config_dir = config_dir or (os.path.dirname(self.locale_path) if getattr(self, 'locale_path', None) else self.get_config_dir(self.app_dir))
-        candidate = os.path.join(config_dir, f'{safe_code}.yml')
+        locale_dir = locale_dir or getattr(self, 'locale_dir', None) or (
+            os.path.dirname(self.locale_path) if getattr(self, 'locale_path', None)
+            else self.get_locale_dir(self.get_config_dir(self.app_dir))
+        )
+        candidate = os.path.join(locale_dir, f'{safe_code}.yml')
         try:
-            for entry in os.listdir(config_dir):
+            for entry in os.listdir(locale_dir):
                 if not entry.lower().endswith('.yml'):
                     continue
                 if os.path.splitext(entry)[0].strip().lower() == safe_code:
-                    return os.path.join(config_dir, entry)
+                    return os.path.join(locale_dir, entry)
         except OSError:
             pass
         return candidate
 
     def get_available_language_codes(self):
-        config_dir = os.path.dirname(self.locale_path) if getattr(self, 'locale_path', None) else self.get_config_dir(self.app_dir)
+        config_dir = getattr(self, 'locale_dir', None) or (
+            os.path.dirname(self.locale_path) if getattr(self, 'locale_path', None)
+            else self.get_locale_dir(self.get_config_dir(self.app_dir))
+        )
         codes = []
         try:
             for entry in os.listdir(config_dir):
@@ -793,6 +850,13 @@ class NotepadX:
             self.status_clock.config(anchor=self.ui_anchor_end())
         if hasattr(self, 'compare_status'):
             self.compare_status.config(anchor=self.ui_anchor_start())
+        if hasattr(self, 'currently_editing_title_label'):
+            self.currently_editing_title_label.config(
+                text=self.tr('panel.currently_editing.title', 'Currently Editing'),
+                anchor=self.ui_anchor_start(),
+                justify=self.ui_justify(),
+                wraplength=max(120, self.get_currently_editing_sidebar_width() - 20)
+            )
         if hasattr(self, 'compare_title'):
             self.refresh_compare_header()
         if hasattr(self, 'root'):
@@ -800,6 +864,8 @@ class NotepadX:
         if hasattr(self, 'text'):
             self.update_font()
             self.update_status()
+        if hasattr(self, 'currently_editing_content_label'):
+            self.refresh_currently_editing_panel()
         if persist and hasattr(self, 'save_session'):
             self.save_session()
 
@@ -852,8 +918,14 @@ class NotepadX:
         self.app_dir = fallback_dir
         config_dir = self.get_config_dir(self.app_dir)
         os.makedirs(config_dir, exist_ok=True)
+        self.settings_dir = self.get_settings_dir(config_dir)
+        self.locale_dir = self.get_locale_dir(config_dir)
+        os.makedirs(self.settings_dir, exist_ok=True)
+        os.makedirs(self.locale_dir, exist_ok=True)
+        self.migrate_language_files(config_dir=config_dir, locale_dir=self.locale_dir)
         self.session_path = self.build_session_path(config_dir)
         self.editor_identity_path = self.build_editor_identity_path(config_dir)
+        self.compiler_locations_path = os.path.join(self.settings_dir, "compiler_locations.json")
         self.recovery_path = os.path.join(self.app_dir, "Notepad-X.recovery.json")
         self.crash_log_path = os.path.join(self.app_dir, "Notepad-X.crash.log")
 
@@ -863,8 +935,14 @@ class NotepadX:
         self.app_dir = fallback_dir
         config_dir = self.get_config_dir(self.app_dir)
         os.makedirs(config_dir, exist_ok=True)
+        self.settings_dir = self.get_settings_dir(config_dir)
+        self.locale_dir = self.get_locale_dir(config_dir)
+        os.makedirs(self.settings_dir, exist_ok=True)
+        os.makedirs(self.locale_dir, exist_ok=True)
+        self.migrate_language_files(config_dir=config_dir, locale_dir=self.locale_dir)
         self.session_path = self.build_session_path(config_dir)
         self.editor_identity_path = self.build_editor_identity_path(config_dir)
+        self.compiler_locations_path = os.path.join(self.settings_dir, "compiler_locations.json")
         self.recovery_path = os.path.join(self.app_dir, "Notepad-X.recovery.json")
         self.crash_log_path = os.path.join(self.app_dir, "Notepad-X.crash.log")
 
@@ -1383,6 +1461,72 @@ class NotepadX:
             return False
         return True
 
+    def get_default_compiler_locations(self):
+        return {
+            "_help": "Each language can be left as an empty array to use Notepad-X defaults, or set to a custom command prefix array. Use {file} as a placeholder if you want to place the file path manually.",
+            "python": [],
+            "javascript": [],
+            "php": [],
+            "powershell": [],
+            "shell": [],
+            "html": []
+        }
+
+    def ensure_compiler_locations_file(self):
+        compiler_locations_path = getattr(self, 'compiler_locations_path', None)
+        if not compiler_locations_path:
+            config_dir = self.get_config_dir(self.app_dir)
+            self.settings_dir = self.get_settings_dir(config_dir)
+            os.makedirs(self.settings_dir, exist_ok=True)
+            self.compiler_locations_path = os.path.join(self.settings_dir, "compiler_locations.json")
+            compiler_locations_path = self.compiler_locations_path
+
+        settings_dir = os.path.dirname(compiler_locations_path)
+        os.makedirs(settings_dir, exist_ok=True)
+        if not os.path.exists(compiler_locations_path):
+            default_payload = self.get_default_compiler_locations()
+            content = json.dumps(default_payload, indent=2, ensure_ascii=False) + "\n"
+            self.write_file_atomically(compiler_locations_path, content)
+        return compiler_locations_path
+
+    def load_compiler_locations(self):
+        compiler_locations_path = self.ensure_compiler_locations_file()
+        payload = self.read_json_file(compiler_locations_path, "load compiler locations", {})
+        if isinstance(payload, dict):
+            return payload
+        return self.get_default_compiler_locations()
+
+    def normalize_compiler_command(self, raw_command, file_path):
+        if isinstance(raw_command, str):
+            parts = [raw_command.strip()] if raw_command.strip() else []
+        elif isinstance(raw_command, list):
+            parts = [str(part).strip() for part in raw_command if str(part).strip()]
+        else:
+            return None
+        if not parts:
+            return None
+        replaced = []
+        used_placeholder = False
+        for part in parts:
+            if '{file}' in part:
+                replaced.append(part.replace('{file}', file_path))
+                used_placeholder = True
+            else:
+                replaced.append(part)
+        if not used_placeholder:
+            replaced.append(file_path)
+        return replaced
+
+    def open_compiler_locations(self):
+        try:
+            compiler_locations_path = self.ensure_compiler_locations_file()
+        except OSError as exc:
+            self.log_exception("ensure compiler locations file", exc)
+            self.show_filesystem_error("Compiler Locations", getattr(self, 'compiler_locations_path', ''), exc)
+            return "break"
+        self.open_file_path(compiler_locations_path)
+        return "break"
+
     def show_filesystem_error(self, title, file_path, exc):
         location = os.path.abspath(file_path) if file_path else "that path"
         messagebox.showerror(title, f"Notepad-X could not access:\n{location}\n\n{exc}", parent=self.root)
@@ -1848,7 +1992,7 @@ class NotepadX:
             bg='#2d2d2d',
             fg='#d4d4d4',
             font=('Segoe UI', 9),
-            padx=8,
+            padx=0,
             pady=4
         )
         self.compare_status.place_forget()
@@ -1862,11 +2006,18 @@ class NotepadX:
             return
         try:
             self.status_frame.update_idletasks()
-            sash_x, _ = self.editor_paned.sash_coord(0)
-            frame_width = self.status_frame.winfo_width()
-            clock_width = self.status_clock.winfo_reqwidth() + 12
-            start_x = max(0, int(sash_x) + 8)
-            available_width = max(120, frame_width - start_x - clock_width)
+            if not self.compare_container.winfo_ismapped():
+                self.compare_status.place_forget()
+                return
+            status_root_x = self.status_frame.winfo_rootx()
+            compare_root_x = self.compare_container.winfo_rootx()
+            compare_root_right = compare_root_x + self.compare_container.winfo_width()
+            start_x = max(0, compare_root_x - status_root_x)
+            end_x = min(
+                compare_root_right - status_root_x,
+                self.status_clock.winfo_x()
+            )
+            available_width = max(120, end_x - start_x)
             self.compare_status.place(x=start_x, y=0, width=available_width, relheight=1.0)
             self.compare_status.lift()
         except tk.TclError:
@@ -1988,6 +2139,9 @@ class NotepadX:
         elif hasattr(self, 'compare_status'):
             self.compare_status.config(text="")
             self.compare_status.place_forget()
+
+        if self.currently_editing_panel_visible:
+            self.refresh_currently_editing_panel()
 
     def hide_toast(self):
         popup = getattr(self, 'toast_popup', None)
@@ -2235,6 +2389,128 @@ class NotepadX:
         else:
             self.bottom_frame.grid_remove()
 
+    def refresh_currently_editing_panel(self):
+        if not hasattr(self, 'currently_editing_content_label'):
+            return
+
+        current_doc = self.get_current_doc()
+        if not current_doc or not current_doc.get('file_path'):
+            lines = [self.tr('panel.currently_editing.unsaved', 'Save this tab to track currently editing IDs.')]
+        else:
+            editors = self.sanitize_shared_editors(current_doc.get('note_editors', []))
+            if not editors:
+                lines = [self.tr('panel.currently_editing.none', 'No active editing IDs for this file.')]
+            else:
+                lines = [entry.get('id', '') for entry in editors if entry.get('id')]
+                if not lines:
+                    lines = [self.tr('panel.currently_editing.none', 'No active editing IDs for this file.')]
+
+        try:
+            self.currently_editing_content_label.config(
+                text="\n".join(lines),
+                justify=self.ui_justify(),
+                anchor='nw'
+            )
+        except tk.TclError:
+            pass
+
+    def show_currently_editing_panel(self):
+        if self.find_panel_visible:
+            self.find_frame.grid_remove()
+            self.find_panel_visible = False
+            self.cancel_find_change_job()
+            self.clear_find_highlights()
+        if self.replace_panel_visible:
+            self.replace_frame.grid_remove()
+            self.replace_panel_visible = False
+            self.cancel_find_change_job()
+            self.clear_find_highlights()
+
+        self.refresh_currently_editing_panel()
+        self.currently_editing_panel_visible = True
+        self.currently_editing_sidebar.configure(width=self.get_currently_editing_sidebar_width())
+        self.currently_editing_sidebar.grid()
+        self.rebuild_editor_panes()
+        self.schedule_compare_layout_refresh()
+        self.root.after_idle(self.position_compare_status)
+        self.restore_editor_focus_after_panel_change()
+        return "break"
+
+    def close_currently_editing_panel(self, event=None):
+        self.currently_editing_panel_visible = False
+        self.currently_editing_sidebar.grid_remove()
+        self.rebuild_editor_panes()
+        self.schedule_compare_layout_refresh()
+        self.root.after_idle(self.position_compare_status)
+        self.restore_editor_focus_after_panel_change()
+        return "break"
+
+    def is_currently_editing_panel_open(self):
+        if not hasattr(self, 'currently_editing_sidebar'):
+            return False
+        try:
+            return self.currently_editing_panel_visible or self.currently_editing_sidebar.winfo_ismapped()
+        except tk.TclError:
+            return False
+
+    def restore_editor_focus_after_panel_change(self):
+        target = self.get_active_search_widget()
+        if target is None:
+            return
+
+        def apply_focus(widget=target):
+            try:
+                self.root.focus_force()
+            except tk.TclError:
+                return
+            try:
+                widget.focus_force()
+            except tk.TclError:
+                pass
+
+        apply_focus()
+        self.root.after(10, apply_focus)
+        self.root.after(50, apply_focus)
+
+    def toggle_currently_editing_panel(self, event=None):
+        if self.is_currently_editing_panel_open():
+            return self.close_currently_editing_panel(event)
+        return self.show_currently_editing_panel()
+
+    def bind_currently_editing_panel_shortcuts(self, widget):
+        return
+
+    def handle_global_ctrl_shift_shortcuts(self, event):
+        state = int(getattr(event, 'state', 0) or 0)
+        keysym = str(getattr(event, 'keysym', '') or '')
+        if not keysym:
+            return None
+        if not ((state & 0x4) and (state & 0x1)):
+            return None
+
+        key = keysym.lower()
+        if key not in {'c', 'x'}:
+            return None
+
+        now = time.monotonic()
+        last_key = getattr(self, '_last_ctrl_shift_shortcut_key', None)
+        last_time = getattr(self, '_last_ctrl_shift_shortcut_time', 0.0)
+        if last_key == key and (now - last_time) < 0.25:
+            return "break"
+
+        self._last_ctrl_shift_shortcut_key = key
+        self._last_ctrl_shift_shortcut_time = now
+
+        if key == 'c':
+            return self.toggle_currently_editing_panel(event)
+        if key == 'x':
+            return self.ctrl_shift_x(event)
+        return None
+
+    def refocus_after_currently_editing_click(self, event=None):
+        self.root.after_idle(self.focus_last_active_editor)
+        return "break"
+
     def show_find_panel(self):
         current_doc = self.get_current_doc()
         if current_doc and current_doc.get('virtual_mode'):
@@ -2343,6 +2619,11 @@ class NotepadX:
             return
         try:
             widget.focus_set()
+        except tk.TclError:
+            return
+        try:
+            if self.safe_focus_get() != widget:
+                widget.focus_force()
         except tk.TclError:
             pass
 
@@ -3119,10 +3400,11 @@ class NotepadX:
         self.root.bind('<Control-Shift-Q>', lambda e: self.save_copy_as())
         self.root.bind('<Control-Shift-e>', lambda e: self.save_encrypted_copy())
         self.root.bind('<Control-Shift-E>', lambda e: self.save_encrypted_copy())
-        self.root.bind('<Control-Shift-X>', self.ctrl_shift_x)
-        self.root.bind('<Control-Shift-x>', self.ctrl_shift_x)
-        self.root.bind_all('<Control-Shift-X>', self.ctrl_shift_x)
+        self.root.bind('<Control-Shift-r>', self.save_and_run)
+        self.root.bind('<Control-Shift-R>', self.save_and_run)
+        self.root.bind_all('<KeyPress>', self.handle_global_ctrl_shift_shortcuts, add='+')
         self.root.bind_all('<Control-Shift-x>', self.ctrl_shift_x)
+        self.root.bind_all('<Control-Shift-X>', self.ctrl_shift_x)
 
         # Edit
         self.root.bind('<Control-z>', self.undo)
@@ -3708,6 +3990,7 @@ class NotepadX:
         frame.grid(row=0, column=0, sticky='nsew')
         frame.grid_rowconfigure(0, weight=1)
         frame.grid_columnconfigure(0, weight=1)
+        frame.grid_columnconfigure(1, weight=0)
 
         style = ttk.Style()
         style.theme_use('default')
@@ -3737,6 +4020,7 @@ class NotepadX:
             showhandle=False
         )
         self.editor_paned.grid(row=0, column=0, sticky='nsew')
+        self.editor_paned.bind('<Configure>', lambda e: self.on_editor_paned_configure(), add='+')
 
         self.primary_editor_container = tk.Frame(self.editor_paned, bg=self.bg_color)
         self.primary_editor_container.grid_rowconfigure(0, weight=1)
@@ -3824,8 +4108,6 @@ class NotepadX:
         self.compare_text.bind('<Control-Z>', self.undo)
         self.compare_text.bind('<Control-Shift-z>', self.redo)
         self.compare_text.bind('<Control-Shift-Z>', self.redo)
-        self.compare_text.bind('<Control-Shift-x>', self.ctrl_shift_x)
-        self.compare_text.bind('<Control-Shift-X>', self.ctrl_shift_x)
         self.compare_text.bind('<FocusIn>', self.remember_compare_focus, add='+')
         self.compare_text.bind('<Enter>', self.remember_hovered_editor, add='+')
         self.compare_text.bind('<Motion>', self.remember_hovered_editor, add='+')
@@ -3834,8 +4116,10 @@ class NotepadX:
         self.compare_text.bind('<Button-3>', self.show_compare_context_menu)
         self.compare_text.bind('<F3>', self.find_next)
         self.compare_text.bind('<Shift-F3>', self.find_previous)
-        self.compare_text.bind('<Control-Shift-X>', self.ctrl_shift_x)
+        self.compare_text.bind('<Control-Shift-r>', self.save_and_run)
+        self.compare_text.bind('<Control-Shift-R>', self.save_and_run)
         self.compare_text.bind('<Control-Shift-x>', self.ctrl_shift_x)
+        self.compare_text.bind('<Control-Shift-X>', self.ctrl_shift_x)
         self.compare_text.bind('<<Modified>>', self.on_compare_modified)
 
         self.compare_view = {
@@ -3864,8 +4148,62 @@ class NotepadX:
         self.raise_find_tags(self.compare_text)
         self.create_text_context_menu(self.compare_container, doc_override=self.compare_view, action_tab_id='__compare__')
 
+        self.currently_editing_sidebar = tk.Frame(frame, bg=self.panel_bg)
+        self.currently_editing_sidebar.grid_rowconfigure(1, weight=1)
+        self.currently_editing_sidebar.grid_columnconfigure(0, weight=1)
+        self.currently_editing_sidebar.configure(width=self.get_currently_editing_sidebar_width())
+        self.currently_editing_sidebar.configure(takefocus=0)
+
+        self.currently_editing_title_label = tk.Label(
+            self.currently_editing_sidebar,
+            text=self.tr('panel.currently_editing.title', 'Currently Editing'),
+            bg=self.panel_bg,
+            fg=self.fg_color,
+            anchor=self.ui_anchor_start(),
+            padx=10,
+            pady=8,
+            font=('Segoe UI', 10, 'bold'),
+            takefocus=0
+        )
+        self.currently_editing_title_label.grid(row=0, column=0, sticky='ew')
+        self.bind_currently_editing_panel_shortcuts(self.currently_editing_title_label)
+
+        self.currently_editing_content_label = tk.Label(
+            self.currently_editing_sidebar,
+            width=33,
+            text='',
+            bg=self.text_bg,
+            fg=self.text_fg,
+            font=('Consolas', 10),
+            padx=8,
+            pady=6,
+            borderwidth=0,
+            highlightthickness=0,
+            relief='flat',
+            takefocus=0,
+            cursor='arrow',
+            justify='left',
+            anchor='nw'
+        )
+        self.currently_editing_content_label.grid(row=1, column=0, sticky='nsew', padx=8, pady=(0, 8))
+        self.bind_currently_editing_panel_shortcuts(self.currently_editing_sidebar)
+        self.bind_currently_editing_panel_shortcuts(self.currently_editing_content_label)
+        self.currently_editing_sidebar.bind('<Button-1>', self.refocus_after_currently_editing_click, add='+')
+        self.currently_editing_title_label.bind('<Button-1>', self.refocus_after_currently_editing_click, add='+')
+        self.currently_editing_content_label.bind('<Button-1>', self.refocus_after_currently_editing_click, add='+')
+        self.currently_editing_title_label.configure(
+            justify=self.ui_justify(),
+            wraplength=max(120, self.get_currently_editing_sidebar_width() - 20)
+        )
+        self.currently_editing_sidebar.grid(row=0, column=1, sticky='ns')
+        self.currently_editing_sidebar.grid_remove()
+
         self.text = None
         self.create_tab()
+
+    def on_editor_paned_configure(self):
+        if self.compare_active:
+            self.set_compare_sash_position()
 
     def create_tab(self, file_path=None, content="", select=True):
         tab_frame = tk.Frame(self.notebook, bg=self.bg_color)
@@ -3918,6 +4256,8 @@ class NotepadX:
         text.bind('<Control-Z>', self.undo)
         text.bind('<Control-Shift-z>', self.redo)
         text.bind('<Control-Shift-Z>', self.redo)
+        text.bind('<Control-Shift-r>', self.save_and_run)
+        text.bind('<Control-Shift-R>', self.save_and_run)
         text.bind('<Control-Shift-x>', self.ctrl_shift_x)
         text.bind('<Control-Shift-X>', self.ctrl_shift_x)
         text.bind('<FocusIn>', lambda e, frame=tab_frame: self.remember_doc_focus(frame), add='+')
@@ -4909,6 +5249,11 @@ class NotepadX:
         doc = self.documents.get(str(tab_id))
         if not doc:
             return
+        state = int(getattr(event, 'state', 0) or 0)
+        keysym = str(getattr(event, 'keysym', '') or '')
+
+        if (state & 0x4) and (state & 0x1) and keysym.lower() == 'x':
+            return self.ctrl_shift_x(event)
 
         if self.is_shift_selection_navigation(event):
             self.hide_autocomplete_popup()
@@ -4916,7 +5261,7 @@ class NotepadX:
 
         if (
             event.keysym in {'Return', 'KP_Enter'}
-            and not (int(getattr(event, 'state', 0) or 0) & 0x4)
+            and not (state & 0x4)
             and not (self.autocomplete_popup_visible() and self.autocomplete_doc_id == str(tab_id))
         ):
             if not doc.get('virtual_mode') and not doc.get('preview_mode'):
@@ -4951,12 +5296,18 @@ class NotepadX:
     def handle_compare_keypress(self, event):
         compare_doc = self.compare_view
         source_doc = self.documents.get(self.compare_source_tab) if self.compare_source_tab else None
+        state = int(getattr(event, 'state', 0) or 0)
+        keysym = str(getattr(event, 'keysym', '') or '')
+
+        if (state & 0x4) and (state & 0x1) and keysym.lower() == 'x':
+            return self.ctrl_shift_x(event)
+
         if self.is_shift_selection_navigation(event):
             self.hide_autocomplete_popup()
             return
         if (
             event.keysym in {'Return', 'KP_Enter'}
-            and not (int(getattr(event, 'state', 0) or 0) & 0x4)
+            and not (state & 0x4)
             and not (self.autocomplete_popup_visible() and self.autocomplete_doc_id == (str(compare_doc['frame']) if compare_doc else None))
         ):
             if source_doc and not source_doc.get('virtual_mode') and not source_doc.get('preview_mode'):
@@ -7448,6 +7799,7 @@ class NotepadX:
         file_menu.add_command(label=t('menu.file.save', 'Save'), command=self.save, accelerator=t('accel.save', 'Ctrl+S'))
         file_menu.add_command(label=t('menu.file.save_all', 'Save All'), command=self.save_all, accelerator=t('accel.save_all', 'Ctrl+Shift+S'))
         file_menu.add_command(label=t('menu.file.save_as', 'Save As'), command=self.save_copy_as, accelerator=t('accel.save_as', 'Ctrl+Shift+Q'))
+        file_menu.add_command(label=t('menu.file.save_and_run', 'Save and Run'), command=self.save_and_run, accelerator=t('accel.save_and_run', 'Ctrl+Shift+R'))
         file_menu.add_command(label=t('menu.file.save_as_encrypted', 'Save As Encrypted'), command=self.save_encrypted_copy, accelerator=t('accel.save_as_encrypted', 'Ctrl+Shift+E'))
         file_menu.add_command(label=t('menu.file.print', 'Print'), command=self.print_file, accelerator=t('accel.print', 'Ctrl+P'))
         file_menu.add_command(label=t('menu.file.export_notes', 'Export Notes'), command=self.export_notes_report, accelerator=t('accel.export_notes', 'Ctrl+E'))
@@ -7488,6 +7840,7 @@ class NotepadX:
         edit_menu.add_command(label=t('menu.edit.font', 'Font'), command=self.show_font_dialog, accelerator=t('accel.font', 'Ctrl+Shift+F'))
         self.language_menu = tk.Menu(edit_menu, tearoff=0, bg='#2d2d2d', fg=self.fg_color, activebackground='#3a3a3a', postcommand=self.refresh_language_menu)
         edit_menu.add_cascade(label=t('menu.edit.language', 'Language'), menu=self.language_menu)
+        edit_menu.add_command(label=t('menu.edit.compiler_locations', 'Compiler Locations'), command=self.open_compiler_locations)
         self.refresh_language_menu()
         view_menu = tk.Menu(self.menu, tearoff=0, bg='#2d2d2d', fg=self.fg_color,
                             activebackground='#3a3a3a')
@@ -7500,6 +7853,7 @@ class NotepadX:
         view_menu.add_checkbutton(label=t('menu.view.edit_with_notepadx', 'Edit with Notepad-X'), variable=self.edit_with_shell_enabled, command=self.toggle_edit_with_shell)
         view_menu.add_checkbutton(label=t('menu.view.word_wrap', 'Word Wrap'), variable=self.word_wrap_enabled, command=self.toggle_word_wrap)
         view_menu.add_checkbutton(label=t('menu.view.sound', 'Sound'), variable=self.sound_enabled, command=self.toggle_sound)
+        view_menu.add_command(label=t('menu.view.currently_editing', 'Currently Editing'), command=self.toggle_currently_editing_panel, accelerator=t('accel.currently_editing', 'Ctrl+Shift+C'))
         syntax_theme_menu = tk.Menu(view_menu, tearoff=0, bg='#2d2d2d', fg=self.fg_color, activebackground='#3a3a3a')
         view_menu.add_cascade(label=t('menu.view.syntax_theme', 'Syntax Theme'), menu=syntax_theme_menu)
         for theme_name, theme_key in (
@@ -7727,15 +8081,52 @@ class NotepadX:
         except tk.TclError:
             pass
 
+    def get_currently_editing_sidebar_width(self):
+        try:
+            font_spec = self.currently_editing_content_label.cget('font')
+            font = tkfont.Font(font=font_spec)
+        except Exception:
+            font = tkfont.Font(family='Consolas', size=10)
+        # One full 32-char MD5 plus a trailing space, with tight sidebar padding.
+        return max(160, font.measure(('0' * 32) + ' ') + 12)
+
+    def ensure_currently_editing_sidebar_position(self):
+        return
+
+    def rebuild_editor_panes(self):
+        try:
+            self.editor_paned.forget(self.compare_container)
+        except tk.TclError:
+            pass
+        try:
+            if self.compare_active:
+                self.editor_paned.add(self.compare_container, stretch='always')
+        except tk.TclError:
+            pass
+
+    def set_currently_editing_sash_position(self):
+        return
+
+    def schedule_compare_layout_refresh(self):
+        if not self.compare_active:
+            return
+        self.root.after_idle(self.set_compare_sash_position)
+        self.root.after(10, self.set_compare_sash_position)
+        self.root.after(50, self.set_compare_sash_position)
+        self.root.after(100, self.set_compare_sash_position)
+        self.root.after_idle(self.position_compare_status)
+        self.root.after(10, self.position_compare_status)
+        self.root.after(50, self.position_compare_status)
+
     def start_inline_compare(self, source_doc):
         if not source_doc:
             return "break"
         self.compare_source_tab = str(source_doc['frame'])
-        if str(self.compare_container) not in self.editor_paned.panes():
-            self.editor_paned.add(self.compare_container, stretch='always')
         self.compare_active = True
+        self.rebuild_editor_panes()
         self.refresh_compare_panel()
         self.root.after_idle(self.set_compare_sash_position)
+        self.root.after_idle(self.set_currently_editing_sash_position)
         self.update_status()
         self.save_session()
         return "break"
@@ -7772,6 +8163,8 @@ class NotepadX:
             self.editor_paned.forget(self.compare_container)
         except tk.TclError:
             pass
+        self.rebuild_editor_panes()
+        self.root.after_idle(self.set_currently_editing_sash_position)
         if hasattr(self, 'compare_status'):
             self.compare_status.place_forget()
         self.update_status()
@@ -8336,6 +8729,163 @@ class NotepadX:
         if include_encrypted:
             return [("Notepad-X Encrypted", "*.npxe"), *filetypes]
         return filetypes
+
+    def get_save_and_run_language(self, doc, file_path):
+        extension = os.path.splitext(file_path or '')[1].lower()
+        syntax_mode = self.get_syntax_mode(doc) if doc else 'plain'
+
+        if extension in {'.py', '.pyw'} or syntax_mode == 'python':
+            return 'python'
+        if extension in {'.js', '.mjs', '.cjs'} or syntax_mode == 'javascript':
+            return 'javascript'
+        if extension in {'.php', '.php3', '.phtml'} or syntax_mode == 'php':
+            return 'php'
+        if extension in {'.bat', '.cmd'}:
+            return 'batch'
+        if extension in {'.ps1'}:
+            return 'powershell'
+        if extension in {'.sh', '.bsh'}:
+            return 'shell'
+        if extension in {'.html', '.htm'} or syntax_mode == 'html':
+            return 'html'
+        return None
+
+    def get_save_and_run_language_name(self, language):
+        display_names = {
+            'python': 'Python',
+            'javascript': 'JavaScript',
+            'php': 'PHP',
+            'batch': 'Batch',
+            'powershell': 'PowerShell',
+            'shell': 'Shell',
+            'html': 'HTML',
+        }
+        return display_names.get(language, str(language or '').title() or 'Unknown')
+
+    def choose_available_command(self, candidate_commands):
+        for command_args in candidate_commands:
+            if not command_args:
+                continue
+            executable = command_args[0]
+            if os.path.isabs(executable) and os.path.exists(executable):
+                return command_args
+            if shutil.which(executable):
+                return command_args
+        return None
+
+    def get_save_and_run_command(self, language, file_path):
+        custom_compiler_locations = self.load_compiler_locations()
+        custom_command = self.normalize_compiler_command(custom_compiler_locations.get(language), file_path)
+        if custom_command:
+            return custom_command
+        if language == 'python':
+            if self.is_windows:
+                return self.choose_available_command((['py', '-3', file_path], ['python', file_path], ['python3', file_path]))
+            return self.choose_available_command((['python3', file_path], ['python', file_path]))
+        if language == 'javascript':
+            return self.choose_available_command((['node', file_path],))
+        if language == 'php':
+            return self.choose_available_command((['php', file_path],))
+        if language == 'powershell':
+            if self.is_windows:
+                return self.choose_available_command((
+                    ['pwsh', '-NoExit', '-File', file_path],
+                    ['powershell', '-NoExit', '-ExecutionPolicy', 'Bypass', '-File', file_path],
+                ))
+            return self.choose_available_command((['pwsh', '-NoExit', '-File', file_path],))
+        if language == 'shell':
+            if self.is_windows:
+                return self.choose_available_command((['bash', file_path], ['sh', file_path]))
+            return self.choose_available_command((['bash', file_path], ['sh', file_path]))
+        return None
+
+    def launch_terminal_command(self, command_args, cwd):
+        if self.is_windows:
+            command_line = subprocess.list2cmdline(command_args)
+            creationflags = getattr(subprocess, 'CREATE_NEW_CONSOLE', 0)
+            subprocess.Popen(['cmd.exe', '/k', command_line], cwd=cwd, creationflags=creationflags)
+            return
+        subprocess.Popen(command_args, cwd=cwd)
+
+    def save_and_run(self, event=None):
+        doc = self.get_current_doc()
+        if not doc:
+            return "break"
+        if doc.get('preview_mode') or doc.get('virtual_mode'):
+            messagebox.showinfo(
+                self.tr('run.title', 'Save and Run'),
+                "Save and Run is not available for buffered large-file tabs.",
+                parent=self.root
+            )
+            return "break"
+        if not self.save():
+            return "break"
+
+        doc = self.get_current_doc()
+        file_path = os.path.abspath(doc.get('file_path') or '')
+        if not file_path:
+            return "break"
+        if not self.path_looks_safe_for_shell(file_path):
+            messagebox.showerror(
+                self.tr('run.title', 'Save and Run'),
+                "That file path could not be sent to a runtime safely.",
+                parent=self.root
+            )
+            return "break"
+
+        language = self.get_save_and_run_language(doc, file_path)
+        if not language:
+            messagebox.showinfo(
+                self.tr('run.title', 'Save and Run'),
+                self.tr('run.unsupported', 'Save and Run is not available for this file type yet.'),
+                parent=self.root
+            )
+            return "break"
+
+        if language == 'html':
+            try:
+                webbrowser.open_new_tab(Path(file_path).resolve().as_uri())
+            except Exception as exc:
+                self.log_exception("save and run html", exc)
+                messagebox.showerror(
+                    self.tr('run.title', 'Save and Run'),
+                    self.tr('run.open_browser_failed', 'Notepad-X could not open this file in your browser.'),
+                    parent=self.root
+                )
+            return "break"
+
+        if language == 'batch':
+            creationflags = getattr(subprocess, 'CREATE_NEW_CONSOLE', 0)
+            try:
+                subprocess.Popen(
+                    ['cmd.exe', '/k', f'call {subprocess.list2cmdline([file_path])}'],
+                    cwd=os.path.dirname(file_path) or None,
+                    creationflags=creationflags
+                )
+            except OSError as exc:
+                self.log_exception("save and run batch", exc)
+                messagebox.showerror(self.tr('run.title', 'Save and Run'), str(exc), parent=self.root)
+            return "break"
+
+        command_args = self.get_save_and_run_command(language, file_path)
+        if not command_args:
+            messagebox.showerror(
+                self.tr('run.title', 'Save and Run'),
+                self.tr(
+                    'run.runtime_missing',
+                    'Notepad-X could not find a runtime for {language} on this system.',
+                    language=self.get_save_and_run_language_name(language)
+                ),
+                parent=self.root
+            )
+            return "break"
+
+        try:
+            self.launch_terminal_command(command_args, os.path.dirname(file_path) or None)
+        except OSError as exc:
+            self.log_exception("save and run", exc)
+            messagebox.showerror(self.tr('run.title', 'Save and Run'), str(exc), parent=self.root)
+        return "break"
 
     def save(self, event=None):
         doc = self.get_current_doc()
