@@ -356,7 +356,7 @@ class NotepadX:
     def init_config(self):
         self.is_windows = os.name == 'nt'
         self.is_linux = sys.platform.startswith('linux')
-        self.app_version = "v0.9.4"
+        self.app_version = "v0.9.5"
         self.resource_dir = self.get_resource_dir()
         self.app_dir = self.get_app_dir()
         self.machine_profile_slug = self.get_machine_profile_slug()
@@ -403,6 +403,7 @@ class NotepadX:
         self.memory_used_mb = 0
         self.syntax_highlighting_available = ColorDelegator is not None and Percolator is not None
         self.large_file_threshold_bytes = 5 * 1024 * 1024
+        self.max_editable_large_file_bytes = 64 * 1024 * 1024
         self.file_load_chunk_size = 256 * 1024
         self.huge_file_preview_threshold_bytes = 100 * 1024 * 1024
         self.huge_file_preview_bytes = 2 * 1024 * 1024
@@ -458,6 +459,8 @@ class NotepadX:
         self.single_instance_running = False
         self.remote_open_files = []
         self.remote_open_lock = threading.Lock()
+        self.background_file_results = []
+        self.background_file_lock = threading.Lock()
         self.kernel32 = None
         self.psapi = None
 
@@ -540,6 +543,7 @@ class NotepadX:
         self.update_font()
         self.update_clock()
         self.update_memory_usage()
+        self.process_background_file_results()
         self.process_remote_open_requests()
         self.poll_shared_notes()
         self.center_window(self.root)
@@ -1472,6 +1476,195 @@ class NotepadX:
                 self.root.update_idletasks()
         doc['total_file_lines'] = max(1, int(text.index('end-1c').split('.')[0]))
         doc['window_end_line'] = doc['total_file_lines']
+
+    def queue_background_file_result(self, result):
+        with self.background_file_lock:
+            self.background_file_results.append(result)
+
+    def process_background_file_results(self):
+        if not self.root.winfo_exists():
+            return
+        results = []
+        with self.background_file_lock:
+            if self.background_file_results:
+                results = self.background_file_results[:]
+                self.background_file_results.clear()
+        for result in results:
+            try:
+                self.handle_background_file_result(result)
+            except Exception as exc:
+                self.log_exception("handle background file result", exc)
+        self.root.after(60, self.process_background_file_results)
+
+    def build_line_index_background(self, file_path):
+        line_starts = [0]
+        file_size = 0
+        with open(file_path, 'rb') as f:
+            while True:
+                chunk = f.read(self.file_load_chunk_size)
+                if not chunk:
+                    break
+                base_offset = file_size
+                file_size += len(chunk)
+                line_starts.extend(base_offset + index + 1 for index, byte in enumerate(chunk) if byte == 10)
+        return line_starts, file_size
+
+    def start_background_text_load(self, doc, file_path):
+        doc['background_loading'] = True
+        doc['background_load_kind'] = 'text'
+        doc['background_load_file_path'] = file_path
+        text = doc['text']
+        text.configure(state='normal')
+        text.delete('1.0', tk.END)
+        text.insert('1.0', "Loading large file...\n")
+        text.edit_modified(False)
+        frame_id = str(doc['frame'])
+
+        def worker():
+            try:
+                with open(file_path, 'r', encoding='utf-8', errors='replace') as f:
+                    content = f.read()
+                self.queue_background_file_result({
+                    'kind': 'text',
+                    'tab_id': frame_id,
+                    'file_path': file_path,
+                    'content': content,
+                })
+            except Exception as exc:
+                self.queue_background_file_result({
+                    'kind': 'error',
+                    'tab_id': frame_id,
+                    'file_path': file_path,
+                    'error': exc,
+                })
+
+        threading.Thread(target=worker, name='NotepadXLargeFileLoad', daemon=True).start()
+
+    def start_background_virtual_index(self, doc, file_path):
+        doc['background_loading'] = True
+        doc['background_load_kind'] = 'virtual'
+        doc['background_load_file_path'] = file_path
+        text = doc['text']
+        text.configure(state='normal')
+        text.delete('1.0', tk.END)
+        text.insert('1.0', "Indexing large file...\n")
+        text.edit_modified(False)
+        frame_id = str(doc['frame'])
+
+        def worker():
+            try:
+                line_starts, file_size = self.build_line_index_background(file_path)
+                self.queue_background_file_result({
+                    'kind': 'virtual',
+                    'tab_id': frame_id,
+                    'file_path': file_path,
+                    'line_starts': line_starts,
+                    'file_size_bytes': file_size,
+                })
+            except Exception as exc:
+                self.queue_background_file_result({
+                    'kind': 'error',
+                    'tab_id': frame_id,
+                    'file_path': file_path,
+                    'error': exc,
+                })
+
+        threading.Thread(target=worker, name='NotepadXLargeFileIndex', daemon=True).start()
+
+    def begin_background_text_insert(self, doc, content):
+        doc['pending_insert_content'] = content
+        doc['pending_insert_offset'] = 0
+        doc['text'].configure(state='normal')
+        doc['text'].delete('1.0', tk.END)
+        self.continue_background_text_insert(doc)
+
+    def continue_background_text_insert(self, doc):
+        text = doc.get('text')
+        content = doc.get('pending_insert_content')
+        if not text or not isinstance(content, str):
+            return
+        offset = int(doc.get('pending_insert_offset', 0) or 0)
+        batch_size = self.file_load_chunk_size * 2
+        next_offset = min(len(content), offset + batch_size)
+        if next_offset > offset:
+            text.insert(tk.END, content[offset:next_offset])
+            doc['pending_insert_offset'] = next_offset
+        if next_offset < len(content):
+            self.root.after(1, lambda current=doc: self.continue_background_text_insert(current))
+            return
+        doc.pop('pending_insert_content', None)
+        doc.pop('pending_insert_offset', None)
+        doc['total_file_lines'] = max(1, int(text.index('end-1c').split('.')[0]))
+        doc['window_start_line'] = 1
+        doc['window_end_line'] = doc['total_file_lines']
+        text.edit_modified(False)
+        text.mark_set(tk.INSERT, '1.0')
+        text.tag_remove('sel', '1.0', tk.END)
+        text.see('1.0')
+        doc['last_insert_index'] = '1.0'
+        doc['last_yview'] = 0.0
+        doc['last_xview'] = 0.0
+        doc['background_loading'] = False
+        doc['background_load_kind'] = None
+        doc['background_load_file_path'] = None
+        self.update_doc_file_signature(doc)
+        self.configure_syntax_highlighting(doc['frame'])
+        self.restore_doc_notes(doc)
+        self.register_doc_for_shared_notes(doc)
+        self.refresh_tab_title(doc['frame'])
+        if self.compare_active and self.compare_source_tab == str(doc['frame']):
+            self.refresh_compare_panel()
+        if str(doc['frame']) == self.notebook.select():
+            self.update_status()
+
+    def handle_background_file_error(self, doc, exc):
+        doc['background_loading'] = False
+        doc['background_load_kind'] = None
+        doc['background_load_file_path'] = None
+        doc.pop('pending_insert_content', None)
+        doc.pop('pending_insert_offset', None)
+        file_path = doc.get('file_path')
+        messagebox.showerror("Open Failed", f"Notepad-X could not open:\n{file_path}\n\n{exc}", parent=self.root)
+        if doc.get('background_open_new_tab'):
+            try:
+                self.notebook.forget(doc['frame'])
+            except tk.TclError:
+                pass
+            self.documents.pop(str(doc['frame']), None)
+        else:
+            doc['file_path'] = None
+            doc['text'].delete('1.0', tk.END)
+        doc['background_open_new_tab'] = False
+
+    def handle_background_file_result(self, result):
+        tab_id = str(result.get('tab_id') or '')
+        doc = self.documents.get(tab_id)
+        if not doc:
+            return
+        file_path = os.path.abspath(str(result.get('file_path') or ''))
+        if not file_path or os.path.abspath(str(doc.get('file_path') or '')) != file_path:
+            return
+        if result.get('kind') == 'error':
+            self.handle_background_file_error(doc, result.get('error'))
+            return
+        if result.get('kind') == 'virtual':
+            doc['line_starts'] = result.get('line_starts') or [0]
+            doc['file_size_bytes'] = int(result.get('file_size_bytes') or 0)
+            doc['total_file_lines'] = max(1, len(doc['line_starts']))
+            doc['background_loading'] = False
+            doc['background_load_kind'] = None
+            doc['background_load_file_path'] = None
+            doc['window_start_line'] = 1
+            doc['window_end_line'] = 1
+            self.load_virtual_window(doc, 1)
+            self.refresh_tab_title(doc['frame'])
+            if str(doc['frame']) == self.notebook.select():
+                self.update_status()
+            doc['background_open_new_tab'] = False
+            return
+        if result.get('kind') == 'text':
+            self.begin_background_text_insert(doc, result.get('content') or '')
+            doc['background_open_new_tab'] = False
 
     def write_encrypted_text_file(self, file_path, text_content, passphrase=None, header=None, key=None, original_name=None):
         if not self.encryption_available():
@@ -4493,6 +4686,12 @@ class NotepadX:
             'encrypted_file': False,
             'encryption_header': None,
             'encryption_key': None,
+            'background_loading': False,
+            'background_load_kind': None,
+            'background_load_file_path': None,
+            'background_open_new_tab': False,
+            'pending_insert_content': None,
+            'pending_insert_offset': 0,
         }
         self.apply_syntax_tag_colors(text)
         self.configure_syntax_highlighting(tab_frame)
@@ -7338,6 +7537,11 @@ class NotepadX:
         doc['encryption_header'] = None
         doc['encryption_key'] = None
         doc['file_size_bytes'] = file_size
+        doc['background_loading'] = False
+        doc['background_load_kind'] = None
+        doc['background_load_file_path'] = None
+        doc.pop('pending_insert_content', None)
+        doc['pending_insert_offset'] = 0
 
         text = doc['text']
         text.configure(state='normal')
@@ -7359,7 +7563,10 @@ class NotepadX:
             else:
                 self.set_large_file_mode(doc, file_size >= self.large_file_threshold_bytes)
                 doc['preview_mode'] = self.is_probably_binary_file(file_path)
-                doc['virtual_mode'] = file_size >= self.huge_file_preview_threshold_bytes and not doc['preview_mode']
+                doc['virtual_mode'] = (
+                    file_size > self.max_editable_large_file_bytes and
+                    not doc['preview_mode']
+                )
 
             if doc['preview_mode']:
                 with open(file_path, 'rb') as f:
@@ -7371,12 +7578,18 @@ class NotepadX:
                 doc['window_start_line'] = 1
                 doc['window_end_line'] = doc['total_file_lines']
             elif doc['virtual_mode']:
-                text.insert(tk.END, "Indexing large file...\n")
-                self.root.update_idletasks()
-                doc['line_starts'], doc['file_size_bytes'] = self.build_line_index(file_path)
-                doc['total_file_lines'] = max(1, len(doc['line_starts']))
-                self.load_virtual_window(doc, 1)
+                self.start_background_virtual_index(doc, file_path)
+                self.refresh_tab_title(doc['frame'])
+                if str(doc['frame']) == self.notebook.select():
+                    self.update_status()
+                return True
             else:
+                if not doc['encrypted_file'] and file_size >= self.large_file_threshold_bytes:
+                    self.start_background_text_load(doc, file_path)
+                    self.refresh_tab_title(doc['frame'])
+                    if str(doc['frame']) == self.notebook.select():
+                        self.update_status()
+                    return True
                 if not doc['encrypted_file']:
                     self.insert_text_content(doc, '')
                     text.delete('1.0', tk.END)
@@ -8803,13 +9016,16 @@ class NotepadX:
         current_doc = self.get_current_doc()
         if current_doc and not current_doc['file_path'] and not current_doc['text'].edit_modified():
             current_doc['file_path'] = file_path
+            current_doc['background_open_new_tab'] = False
             if not self.load_content_into_doc(current_doc, file_path):
                 current_doc['file_path'] = None
                 return False
+            current_doc['background_open_new_tab'] = False
             self.set_active_document(current_doc['frame'])
         else:
             tab_id = self.create_tab(file_path=file_path, select=True)
             new_doc = self.documents[str(tab_id)]
+            new_doc['background_open_new_tab'] = True
             if not self.load_content_into_doc(new_doc, file_path):
                 try:
                     self.notebook.forget(new_doc['frame'])
@@ -8817,6 +9033,8 @@ class NotepadX:
                     pass
                 self.documents.pop(str(tab_id), None)
                 return False
+            if not new_doc.get('background_loading'):
+                new_doc['background_open_new_tab'] = False
             self.set_active_document(tab_id)
 
         self.add_recent_file(file_path)
