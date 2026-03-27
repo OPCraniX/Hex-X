@@ -1,0 +1,23 @@
+{
+  "name": "Default",
+  "surface": {
+    "text_bg": "#0d1117",
+    "text_fg": "#c9d1d9",
+    "cursor": "#58a6ff",
+    "selection": "#264f78",
+    "gutter_bg": "#0d1117",
+    "gutter_current_bg": "#161b22",
+    "gutter_fg": "#8b949e",
+    "gutter_current_fg": "#c9d1d9",
+    "gutter_divider": "#30363d"
+  },
+  "syntax": {
+    "keyword": "#ff7b72",
+    "type": "#79c0ff",
+    "string": "#a5d6ff",
+    "comment": "#6a9955",
+    "number": "#f2cc60",
+    "preprocessor": "#d2a8ff",
+    "tag": "#7ee787"
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "name": "Base4Tone",
+  "surface": {
+    "text_bg": "#231f20",
+    "text_fg": "#e6d6c4",
+    "cursor": "#f6c177",
+    "selection": "#3b2f32",
+    "gutter_bg": "#1d191a",
+    "gutter_current_bg": "#2a2325",
+    "gutter_fg": "#7c6f72",
+    "gutter_current_fg": "#eadfd2",
+    "gutter_divider": "#3a3234"
+  },
+  "syntax": {
+    "keyword": "#cf8a8a",
+    "type": "#7ab0c8",
+    "string": "#d6b28a",
+    "comment": "#8b7d78",
+    "number": "#f1c27d",
+    "preprocessor": "#b7a1d3",
+    "tag": "#8fc7b0"
+  }
+}

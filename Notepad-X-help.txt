@@ -10,7 +10,7 @@ Main Window
 - The editor area shows the active tab.
 - A GitHub-style line number gutter appears on the left when numbered lines are enabled.
 - The bottom status bar shows editor position and document state on the left, and the live clock on the far right.
-- The About window shows the current version and a clickable GitHub project link.
+- The About window shows the current version (`v0.9.7`) and a clickable GitHub project link.
 
 Status Bar
 - Position is shown as Ln X of Y, Col Z.
@@ -96,7 +96,9 @@ View Menu
 - Top of Document: Jumps to line 1, column 1.
 - Bottom of Document: Jumps to the last line, column 1.
 - Sync PgUp/PgDn in Compare: Keeps page-up and page-down navigation synchronized across both compare panes when enabled.
-- Syntax Theme: Changes the highlight color palette. Available themes are Default, Soft, Vivid, Base4Tone, Green Monochrome, and Orange Monochrome.
+- Syntax Theme: Changes the highlight color palette.
+- Create Theme: Opens a color-picker dialog that lets you name a new theme, save it into `cfg/themes`, and add it to the Syntax Theme list immediately.
+- Built-in editable theme files include Default, Soft, Vivid, Base4Tone, Green Monochrome, and Orange Monochrome.
 - Syntax Mode: Manually overrides syntax detection for the current tab. Available modes include Auto, Plain Text, Python, C, C++, Rust, Java, JavaScript, HTML, PHP, XML, and SQL.
 - Compare Tabs: Opens a side-by-side compare view using the current tab and another open tab.
 - Normal editable tabs can also be edited from the compare pane on the right.
@@ -192,6 +194,8 @@ Syntax Highlighting
   Assembly
 - Unsaved tabs can use content-based detection for several languages, so pasted code can highlight before the file has an extension.
 - Syntax Theme changes the current color palette.
+- Theme files are loaded from `cfg/themes/*.json`.
+- `Create Theme` can build a new theme file with color pickers and make it available without restarting.
 - Syntax Mode lets you manually force the current tab into a specific language mode or Plain Text.
 - Highlighting is reduced or disabled in large-file modes to keep performance usable.
 

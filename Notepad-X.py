@@ -1,6 +1,6 @@
 import tkinter as tk
 import tkinter.font as tkfont
-from tkinter import filedialog, messagebox, ttk, simpledialog
+from tkinter import filedialog, messagebox, ttk, simpledialog, colorchooser
 import os
 import sys
 import ctypes
@@ -112,6 +112,7 @@ DEFAULT_LOCALE_STRINGS = {
     "menu.view.word_wrap": "Word Wrap",
     "menu.view.sound": "Sound",
     "menu.view.syntax_theme": "Syntax Theme",
+    "menu.view.create_theme": "Create Theme",
     "menu.view.syntax_mode": "Syntax Mode",
     "menu.view.currently_editing": "Currently Editing",
     "menu.view.compare_tabs": "Compare Tabs",
@@ -173,6 +174,31 @@ DEFAULT_LOCALE_STRINGS = {
     "syntax.theme.base4tone": "Base4Tone",
     "syntax.theme.green_monochrome": "Green Monochrome",
     "syntax.theme.orange_monochrome": "Orange Monochrome",
+    "theme.create.title": "Create Theme",
+    "theme.create.name": "Theme Name:",
+    "theme.create.save": "Save Theme",
+    "theme.create.pick_color": "Choose...",
+    "theme.create.name_required": "Enter a theme name first.",
+    "theme.create.saved": "Theme saved.",
+    "theme.create.invalid_color": "Choose all theme colors before saving.",
+    "theme.create.exists_title": "Overwrite Theme",
+    "theme.create.exists_message": "A theme file with that name already exists.\n\nOverwrite it?",
+    "theme.field.text_bg": "Editor Background",
+    "theme.field.text_fg": "Editor Text",
+    "theme.field.cursor": "Cursor",
+    "theme.field.selection": "Selection",
+    "theme.field.gutter_bg": "Gutter Background",
+    "theme.field.gutter_current_bg": "Current Line Gutter",
+    "theme.field.gutter_fg": "Gutter Text",
+    "theme.field.gutter_current_fg": "Current Gutter Text",
+    "theme.field.gutter_divider": "Gutter Divider",
+    "theme.field.keyword": "Keyword",
+    "theme.field.type": "Type",
+    "theme.field.string": "String",
+    "theme.field.comment": "Comment",
+    "theme.field.number": "Number",
+    "theme.field.preprocessor": "Preprocessor",
+    "theme.field.tag": "Tag",
     "syntax.mode.auto": "Auto",
     "syntax.mode.plain": "Plain Text",
     "syntax.mode.python": "Python",
@@ -356,7 +382,7 @@ class NotepadX:
     def init_config(self):
         self.is_windows = os.name == 'nt'
         self.is_linux = sys.platform.startswith('linux')
-        self.app_version = "v0.9.6"
+        self.app_version = "v0.9.7"
         self.resource_dir = self.get_resource_dir()
         self.app_dir = self.get_app_dir()
         self.machine_profile_slug = self.get_machine_profile_slug()
@@ -413,7 +439,11 @@ class NotepadX:
         os.makedirs(config_dir, exist_ok=True)
         self.locale_dir = self.get_locale_dir(config_dir)
         os.makedirs(self.locale_dir, exist_ok=True)
+        self.theme_dir = self.get_theme_dir(config_dir)
+        os.makedirs(self.theme_dir, exist_ok=True)
         self.migrate_language_files(config_dir=config_dir, locale_dir=self.locale_dir)
+        self.ensure_theme_files(self.theme_dir)
+        self.theme_definitions = self.load_theme_definitions(self.theme_dir)
         self.locale_code = 'en_us'
         self.locale_path = self.get_locale_file_path(self.locale_code, locale_dir=self.locale_dir)
         self.locale_strings = self.load_locale_strings(self.locale_path)
@@ -686,6 +716,9 @@ class NotepadX:
     def get_locale_dir(self, config_dir):
         return os.path.join(config_dir, 'language')
 
+    def get_theme_dir(self, config_dir):
+        return os.path.join(config_dir, 'themes')
+
     def migrate_language_files(self, config_dir=None, locale_dir=None):
         config_dir = config_dir or self.get_config_dir(self.app_dir)
         locale_dir = locale_dir or self.get_locale_dir(config_dir)
@@ -710,6 +743,452 @@ class NotepadX:
                 shutil.move(source_path, target_path)
             except OSError:
                 continue
+
+    def get_builtin_theme_definitions(self):
+        return {
+            'Default': {
+                'surface': {
+                    'text_bg': self.text_bg,
+                    'text_fg': self.text_fg,
+                    'cursor': self.cursor_color,
+                    'selection': self.select_bg,
+                    'gutter_bg': '#0d1117',
+                    'gutter_current_bg': '#161b22',
+                    'gutter_fg': '#8b949e',
+                    'gutter_current_fg': '#c9d1d9',
+                    'gutter_divider': '#30363d',
+                },
+                'syntax': {
+                    'keyword': '#ff7b72',
+                    'type': '#79c0ff',
+                    'string': '#a5d6ff',
+                    'comment': '#6a9955',
+                    'number': '#f2cc60',
+                    'preprocessor': '#d2a8ff',
+                    'tag': '#7ee787',
+                },
+            },
+            'Soft': {
+                'surface': {
+                    'text_bg': '#11131a',
+                    'text_fg': '#cad3f5',
+                    'cursor': '#89b4fa',
+                    'selection': '#313244',
+                    'gutter_bg': '#11131a',
+                    'gutter_current_bg': '#181b24',
+                    'gutter_fg': '#7f849c',
+                    'gutter_current_fg': '#cad3f5',
+                    'gutter_divider': '#313244',
+                },
+                'syntax': {
+                    'keyword': '#f38ba8',
+                    'type': '#89b4fa',
+                    'string': '#94e2d5',
+                    'comment': '#a6adc8',
+                    'number': '#f9e2af',
+                    'preprocessor': '#cba6f7',
+                    'tag': '#a6e3a1',
+                },
+            },
+            'Vivid': {
+                'surface': {
+                    'text_bg': '#101217',
+                    'text_fg': '#f8f9fa',
+                    'cursor': '#4cc9f0',
+                    'selection': '#3a0f2d',
+                    'gutter_bg': '#101217',
+                    'gutter_current_bg': '#1b1f2a',
+                    'gutter_fg': '#9aa0a6',
+                    'gutter_current_fg': '#f8f9fa',
+                    'gutter_divider': '#343a40',
+                },
+                'syntax': {
+                    'keyword': '#ff4d6d',
+                    'type': '#4cc9f0',
+                    'string': '#72efdd',
+                    'comment': '#80ed99',
+                    'number': '#ffd166',
+                    'preprocessor': '#b388ff',
+                    'tag': '#06d6a0',
+                },
+            },
+            'Base4Tone': {
+                'surface': {
+                    'text_bg': '#231f20',
+                    'text_fg': '#e6d6c4',
+                    'cursor': '#f6c177',
+                    'selection': '#3b2f32',
+                    'gutter_bg': '#1d191a',
+                    'gutter_current_bg': '#2a2325',
+                    'gutter_fg': '#7c6f72',
+                    'gutter_current_fg': '#eadfd2',
+                    'gutter_divider': '#3a3234',
+                },
+                'syntax': {
+                    'keyword': '#cf8a8a',
+                    'type': '#7ab0c8',
+                    'string': '#d6b28a',
+                    'comment': '#8b7d78',
+                    'number': '#f1c27d',
+                    'preprocessor': '#b7a1d3',
+                    'tag': '#8fc7b0',
+                },
+            },
+            'Green Monochrome': {
+                'surface': {
+                    'text_bg': '#081108',
+                    'text_fg': '#86f08a',
+                    'cursor': '#b8ffb8',
+                    'selection': '#173617',
+                    'gutter_bg': '#050b05',
+                    'gutter_current_bg': '#102510',
+                    'gutter_fg': '#3d8f47',
+                    'gutter_current_fg': '#b8ffb8',
+                    'gutter_divider': '#24552b',
+                },
+                'syntax': {
+                    'keyword': '#9af59f',
+                    'type': '#74db7c',
+                    'string': '#c8ffb2',
+                    'comment': '#4a9252',
+                    'number': '#b7ff91',
+                    'preprocessor': '#8ae28f',
+                    'tag': '#79c87f',
+                },
+            },
+            'Orange Monochrome': {
+                'surface': {
+                    'text_bg': '#140c04',
+                    'text_fg': '#ffb45a',
+                    'cursor': '#ffd08a',
+                    'selection': '#3a2108',
+                    'gutter_bg': '#100802',
+                    'gutter_current_bg': '#2a1806',
+                    'gutter_fg': '#b56d26',
+                    'gutter_current_fg': '#ffd08a',
+                    'gutter_divider': '#5b3511',
+                },
+                'syntax': {
+                    'keyword': '#ffc56d',
+                    'type': '#ffaf4d',
+                    'string': '#ffd89b',
+                    'comment': '#b67a3a',
+                    'number': '#ffe18c',
+                    'preprocessor': '#ffbf74',
+                    'tag': '#ffa33f',
+                },
+            },
+        }
+
+    def slugify_theme_name(self, theme_name):
+        slug = re.sub(r'[^a-z0-9]+', '_', str(theme_name).strip().lower()).strip('_')
+        return slug or 'theme'
+
+    def sanitize_theme_palette_section(self, payload, required_keys):
+        if not isinstance(payload, dict):
+            return None
+        sanitized = {}
+        for key in required_keys:
+            value = payload.get(key)
+            if not isinstance(value, str) or not value.strip():
+                return None
+            sanitized[key] = value.strip()
+        return sanitized
+
+    def sanitize_theme_definition(self, theme_name, payload):
+        if not isinstance(payload, dict):
+            return None
+        safe_name = str(payload.get('name') or theme_name).strip()
+        if not safe_name:
+            safe_name = str(theme_name).strip()
+        if not safe_name:
+            return None
+        surface = self.sanitize_theme_palette_section(
+            payload.get('surface'),
+            (
+                'text_bg',
+                'text_fg',
+                'cursor',
+                'selection',
+                'gutter_bg',
+                'gutter_current_bg',
+                'gutter_fg',
+                'gutter_current_fg',
+                'gutter_divider',
+            ),
+        )
+        syntax = self.sanitize_theme_palette_section(
+            payload.get('syntax'),
+            (
+                'keyword',
+                'type',
+                'string',
+                'comment',
+                'number',
+                'preprocessor',
+                'tag',
+            ),
+        )
+        if surface is None or syntax is None:
+            return None
+        return {
+            'name': safe_name,
+            'surface': surface,
+            'syntax': syntax,
+        }
+
+    def ensure_theme_files(self, theme_dir):
+        builtins = self.get_builtin_theme_definitions()
+        for theme_name, theme_payload in builtins.items():
+            file_name = f"{self.slugify_theme_name(theme_name)}.json"
+            file_path = os.path.join(theme_dir, file_name)
+            if os.path.exists(file_path):
+                continue
+            payload = {
+                'name': theme_name,
+                'surface': dict(theme_payload['surface']),
+                'syntax': dict(theme_payload['syntax']),
+            }
+            try:
+                with open(file_path, 'w', encoding='utf-8') as theme_file:
+                    json.dump(payload, theme_file, indent=2, ensure_ascii=False)
+                    theme_file.write('\n')
+            except OSError:
+                continue
+
+    def load_theme_definitions(self, theme_dir):
+        builtins = self.get_builtin_theme_definitions()
+        ordered_builtin_names = list(builtins.keys())
+        loaded_themes = {}
+        try:
+            entries = sorted(
+                [entry for entry in os.listdir(theme_dir) if entry.lower().endswith('.json')],
+                key=lambda entry: entry.lower(),
+            )
+        except OSError:
+            entries = []
+        for entry in entries:
+            file_path = os.path.join(theme_dir, entry)
+            if not os.path.isfile(file_path):
+                continue
+            try:
+                with open(file_path, 'r', encoding='utf-8') as theme_file:
+                    payload = json.load(theme_file)
+            except (OSError, json.JSONDecodeError):
+                continue
+            fallback_name = os.path.splitext(entry)[0].replace('_', ' ').strip().title()
+            sanitized = self.sanitize_theme_definition(fallback_name, payload)
+            if sanitized is None:
+                continue
+            loaded_themes[sanitized['name']] = sanitized
+
+        ordered_themes = {}
+        for theme_name in ordered_builtin_names:
+            builtin_payload = builtins[theme_name]
+            sanitized = loaded_themes.get(theme_name)
+            if sanitized is None:
+                sanitized = self.sanitize_theme_definition(theme_name, {'name': theme_name, **builtin_payload})
+            ordered_themes[theme_name] = sanitized
+
+        for theme_name in sorted(loaded_themes.keys(), key=lambda value: value.lower()):
+            if theme_name not in ordered_themes:
+                ordered_themes[theme_name] = loaded_themes[theme_name]
+
+        return ordered_themes
+
+    def get_available_syntax_theme_names(self):
+        if not getattr(self, 'theme_definitions', None):
+            return ['Default']
+        return list(self.theme_definitions.keys())
+
+    def get_syntax_theme_label(self, theme_name):
+        theme_key_map = {
+            'Default': 'syntax.theme.default',
+            'Soft': 'syntax.theme.soft',
+            'Vivid': 'syntax.theme.vivid',
+            'Base4Tone': 'syntax.theme.base4tone',
+            'Green Monochrome': 'syntax.theme.green_monochrome',
+            'Orange Monochrome': 'syntax.theme.orange_monochrome',
+        }
+        locale_key = theme_key_map.get(theme_name)
+        if locale_key:
+            return self.tr(locale_key, theme_name)
+        return theme_name
+
+    def get_theme_creation_fields(self):
+        return [
+            ('surface', 'text_bg', 'theme.field.text_bg', 'Editor Background'),
+            ('surface', 'text_fg', 'theme.field.text_fg', 'Editor Text'),
+            ('surface', 'cursor', 'theme.field.cursor', 'Cursor'),
+            ('surface', 'selection', 'theme.field.selection', 'Selection'),
+            ('surface', 'gutter_bg', 'theme.field.gutter_bg', 'Gutter Background'),
+            ('surface', 'gutter_current_bg', 'theme.field.gutter_current_bg', 'Current Line Gutter'),
+            ('surface', 'gutter_fg', 'theme.field.gutter_fg', 'Gutter Text'),
+            ('surface', 'gutter_current_fg', 'theme.field.gutter_current_fg', 'Current Gutter Text'),
+            ('surface', 'gutter_divider', 'theme.field.gutter_divider', 'Gutter Divider'),
+            ('syntax', 'keyword', 'theme.field.keyword', 'Keyword'),
+            ('syntax', 'type', 'theme.field.type', 'Type'),
+            ('syntax', 'string', 'theme.field.string', 'String'),
+            ('syntax', 'comment', 'theme.field.comment', 'Comment'),
+            ('syntax', 'number', 'theme.field.number', 'Number'),
+            ('syntax', 'preprocessor', 'theme.field.preprocessor', 'Preprocessor'),
+            ('syntax', 'tag', 'theme.field.tag', 'Tag'),
+        ]
+
+    def get_theme_file_path(self, theme_name):
+        return os.path.join(self.theme_dir, f"{self.slugify_theme_name(theme_name)}.json")
+
+    def build_theme_payload(self, theme_name, color_values):
+        payload = {
+            'name': theme_name,
+            'surface': {},
+            'syntax': {},
+        }
+        for section, field_name, _label_key, _label_default in self.get_theme_creation_fields():
+            payload[section][field_name] = color_values[field_name]
+        return payload
+
+    def save_theme_payload(self, theme_name, payload):
+        file_path = self.get_theme_file_path(theme_name)
+        try:
+            with open(file_path, 'w', encoding='utf-8') as theme_file:
+                json.dump(payload, theme_file, indent=2, ensure_ascii=False)
+                theme_file.write('\n')
+        except OSError as exc:
+            self.show_filesystem_error("Save Theme Failed", file_path, exc)
+            return False
+        self.theme_definitions = self.load_theme_definitions(self.theme_dir)
+        self.create_menu()
+        self.set_syntax_theme(theme_name)
+        return True
+
+    def show_create_theme_dialog(self):
+        t = self.tr
+        dialog = tk.Toplevel(self.root)
+        dialog.title(t('theme.create.title', 'Create Theme'))
+        dialog.transient(self.root)
+        dialog.resizable(False, False)
+        dialog.configure(bg=self.bg_color)
+        self.apply_window_icon(dialog)
+
+        current_theme = (getattr(self, 'theme_definitions', None) or {}).get(self.syntax_theme.get())
+        if current_theme is None:
+            current_theme = self.sanitize_theme_definition(
+                'Default',
+                {'name': 'Default', **self.get_builtin_theme_definitions()['Default']}
+            )
+
+        outer = tk.Frame(dialog, bg=self.bg_color, padx=16, pady=14)
+        outer.pack(fill='both', expand=True)
+
+        tk.Label(
+            outer,
+            text=t('theme.create.name', 'Theme Name:'),
+            bg=self.bg_color,
+            fg=self.fg_color,
+            anchor='w'
+        ).grid(row=0, column=0, columnspan=3, sticky='w')
+
+        name_var = tk.StringVar(value="")
+        name_entry = tk.Entry(
+            outer,
+            textvariable=name_var,
+            bg=self.text_bg,
+            fg=self.text_fg,
+            insertbackground=self.cursor_color,
+            relief='solid',
+            width=32
+        )
+        name_entry.grid(row=1, column=0, columnspan=3, sticky='ew', pady=(4, 12))
+
+        color_values = {}
+        preview_labels = {}
+
+        def set_preview(field_name, value):
+            preview = preview_labels[field_name]
+            preview.configure(bg=value, text=value)
+
+        def choose_color(field_name):
+            chosen = colorchooser.askcolor(
+                color=color_values[field_name],
+                title=t('theme.create.pick_color', 'Choose...'),
+                parent=dialog
+            )[1]
+            if chosen:
+                color_values[field_name] = chosen
+                set_preview(field_name, chosen)
+
+        for row_index, (section, field_name, label_key, label_default) in enumerate(self.get_theme_creation_fields(), start=2):
+            initial_value = current_theme[section][field_name]
+            color_values[field_name] = initial_value
+            tk.Label(
+                outer,
+                text=t(label_key, label_default),
+                bg=self.bg_color,
+                fg=self.fg_color,
+                anchor='w'
+            ).grid(row=row_index, column=0, sticky='w', padx=(0, 10), pady=3)
+
+            preview = tk.Label(
+                outer,
+                text=initial_value,
+                bg=initial_value,
+                fg='#ffffff' if field_name not in {'text_bg', 'selection', 'gutter_bg', 'gutter_current_bg'} else '#000000',
+                width=12,
+                relief='solid'
+            )
+            preview.grid(row=row_index, column=1, sticky='ew', padx=(0, 10), pady=3)
+            preview_labels[field_name] = preview
+
+            tk.Button(
+                outer,
+                text=t('theme.create.pick_color', 'Choose...'),
+                command=lambda current=field_name: choose_color(current)
+            ).grid(row=row_index, column=2, sticky='ew', pady=3)
+
+        outer.grid_columnconfigure(1, weight=1)
+
+        button_row = tk.Frame(outer, bg=self.bg_color)
+        button_row.grid(row=len(self.get_theme_creation_fields()) + 2, column=0, columnspan=3, pady=(14, 0))
+
+        def save_theme():
+            theme_name = name_var.get().strip()
+            if not theme_name:
+                messagebox.showerror(
+                    t('theme.create.title', 'Create Theme'),
+                    t('theme.create.name_required', 'Enter a theme name first.'),
+                    parent=dialog
+                )
+                name_entry.focus_set()
+                return
+            for field_name, value in color_values.items():
+                if not isinstance(value, str) or not value.strip():
+                    messagebox.showerror(
+                        t('theme.create.title', 'Create Theme'),
+                        t('theme.create.invalid_color', 'Choose all theme colors before saving.'),
+                        parent=dialog
+                    )
+                    return
+            payload = self.build_theme_payload(theme_name, color_values)
+            file_path = self.get_theme_file_path(theme_name)
+            if os.path.exists(file_path):
+                overwrite = messagebox.askyesno(
+                    t('theme.create.exists_title', 'Overwrite Theme'),
+                    t('theme.create.exists_message', 'A theme file with that name already exists.\n\nOverwrite it?'),
+                    parent=dialog
+                )
+                if not overwrite:
+                    return
+            if self.save_theme_payload(theme_name, payload):
+                dialog.destroy()
+
+        tk.Button(button_row, text=t('theme.create.save', 'Save Theme'), command=save_theme).pack(side='left', padx=(0, 8))
+        tk.Button(button_row, text=t('common.close', 'Close'), command=dialog.destroy).pack(side='left')
+
+        dialog.bind('<Return>', lambda _event: save_theme())
+        self.center_window(dialog, self.root)
+        dialog.after(1, lambda current=dialog: self.center_window_after_show(current, self.root))
+        name_entry.focus_set()
 
     def serialize_locale_strings(self, strings):
         lines = []
@@ -1045,7 +1524,7 @@ class NotepadX:
         self.crash_log_path = os.path.join(self.app_dir, "Notepad-X.crash.log")
 
     def utc_timestamp(self):
-        return datetime.utcnow().isoformat(timespec='seconds')
+        return datetime.now(timezone.utc).isoformat(timespec='seconds')
 
     def trim_text(self, value, max_length):
         if value is None:
@@ -1846,7 +2325,7 @@ class NotepadX:
             compare_base_file = None
 
         syntax_theme = str(session.get('syntax_theme', 'Default'))
-        if syntax_theme not in {'Default', 'Soft', 'Vivid', 'Base4Tone', 'Green Monochrome', 'Orange Monochrome'}:
+        if syntax_theme not in self.get_available_syntax_theme_names():
             syntax_theme = 'Default'
 
         try:
@@ -4977,134 +5456,22 @@ class NotepadX:
             self.clear_custom_syntax_tags(doc)
 
     def get_syntax_surface_palette(self):
-        palettes = {
-            'Default': {
-                'text_bg': self.text_bg,
-                'text_fg': self.text_fg,
-                'cursor': self.cursor_color,
-                'selection': self.select_bg,
-                'gutter_bg': '#0d1117',
-                'gutter_current_bg': '#161b22',
-                'gutter_fg': '#8b949e',
-                'gutter_current_fg': '#c9d1d9',
-                'gutter_divider': '#30363d',
-            },
-            'Soft': {
-                'text_bg': '#11131a',
-                'text_fg': '#cad3f5',
-                'cursor': '#89b4fa',
-                'selection': '#313244',
-                'gutter_bg': '#11131a',
-                'gutter_current_bg': '#181b24',
-                'gutter_fg': '#7f849c',
-                'gutter_current_fg': '#cad3f5',
-                'gutter_divider': '#313244',
-            },
-            'Vivid': {
-                'text_bg': '#101217',
-                'text_fg': '#f8f9fa',
-                'cursor': '#4cc9f0',
-                'selection': '#3a0f2d',
-                'gutter_bg': '#101217',
-                'gutter_current_bg': '#1b1f2a',
-                'gutter_fg': '#9aa0a6',
-                'gutter_current_fg': '#f8f9fa',
-                'gutter_divider': '#343a40',
-            },
-            'Base4Tone': {
-                'text_bg': '#231f20',
-                'text_fg': '#e6d6c4',
-                'cursor': '#f6c177',
-                'selection': '#3b2f32',
-                'gutter_bg': '#1d191a',
-                'gutter_current_bg': '#2a2325',
-                'gutter_fg': '#7c6f72',
-                'gutter_current_fg': '#eadfd2',
-                'gutter_divider': '#3a3234',
-            },
-            'Green Monochrome': {
-                'text_bg': '#081108',
-                'text_fg': '#86f08a',
-                'cursor': '#b8ffb8',
-                'selection': '#173617',
-                'gutter_bg': '#050b05',
-                'gutter_current_bg': '#102510',
-                'gutter_fg': '#3d8f47',
-                'gutter_current_fg': '#b8ffb8',
-                'gutter_divider': '#24552b',
-            },
-            'Orange Monochrome': {
-                'text_bg': '#140c04',
-                'text_fg': '#ffb45a',
-                'cursor': '#ffd08a',
-                'selection': '#3a2108',
-                'gutter_bg': '#100802',
-                'gutter_current_bg': '#2a1806',
-                'gutter_fg': '#b56d26',
-                'gutter_current_fg': '#ffd08a',
-                'gutter_divider': '#5b3511',
-            },
-        }
-        return palettes.get(self.syntax_theme.get(), palettes['Default'])
+        selected = (getattr(self, 'theme_definitions', None) or {}).get(self.syntax_theme.get())
+        if selected is None:
+            selected = self.sanitize_theme_definition(
+                'Default',
+                {'name': 'Default', **self.get_builtin_theme_definitions()['Default']}
+            )
+        return dict(selected['surface'])
 
     def get_syntax_palette(self):
-        palettes = {
-            'Default': {
-                'keyword': '#ff7b72',
-                'type': '#79c0ff',
-                'string': '#a5d6ff',
-                'comment': '#6a9955',
-                'number': '#f2cc60',
-                'preprocessor': '#d2a8ff',
-                'tag': '#7ee787',
-            },
-            'Soft': {
-                'keyword': '#f38ba8',
-                'type': '#89b4fa',
-                'string': '#94e2d5',
-                'comment': '#a6adc8',
-                'number': '#f9e2af',
-                'preprocessor': '#cba6f7',
-                'tag': '#a6e3a1',
-            },
-            'Vivid': {
-                'keyword': '#ff4d6d',
-                'type': '#4cc9f0',
-                'string': '#72efdd',
-                'comment': '#80ed99',
-                'number': '#ffd166',
-                'preprocessor': '#b388ff',
-                'tag': '#06d6a0',
-            },
-            'Base4Tone': {
-                'keyword': '#cf8a8a',
-                'type': '#7ab0c8',
-                'string': '#d6b28a',
-                'comment': '#8b7d78',
-                'number': '#f1c27d',
-                'preprocessor': '#b7a1d3',
-                'tag': '#8fc7b0',
-            },
-            'Green Monochrome': {
-                'keyword': '#9af59f',
-                'type': '#74db7c',
-                'string': '#c8ffb2',
-                'comment': '#4a9252',
-                'number': '#b7ff91',
-                'preprocessor': '#8ae28f',
-                'tag': '#79c87f',
-            },
-            'Orange Monochrome': {
-                'keyword': '#ffc56d',
-                'type': '#ffaf4d',
-                'string': '#ffd89b',
-                'comment': '#b67a3a',
-                'number': '#ffe18c',
-                'preprocessor': '#ffbf74',
-                'tag': '#ffa33f',
-            },
-        }
-        return palettes.get(self.syntax_theme.get(), palettes['Default'])
+        selected = (getattr(self, 'theme_definitions', None) or {}).get(self.syntax_theme.get())
+        if selected is None:
+            selected = self.sanitize_theme_definition(
+                'Default',
+                {'name': 'Default', **self.get_builtin_theme_definitions()['Default']}
+            )
+        return dict(selected['syntax'])
 
     def apply_syntax_tag_colors(self, text_widget):
         surface = self.get_syntax_surface_palette()
@@ -5125,6 +5492,8 @@ class NotepadX:
         text_widget.tag_config('syntax_tag', foreground=palette['tag'])
 
     def set_syntax_theme(self, theme_name):
+        if theme_name not in self.get_available_syntax_theme_names():
+            theme_name = 'Default'
         self.syntax_theme.set(theme_name)
         palette = self.get_syntax_palette()
         for doc in self.documents.values():
@@ -6961,10 +7330,12 @@ class NotepadX:
         return True
 
     def prune_inactive_shared_editors(self, editors):
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         active_editors = []
         for entry in self.sanitize_shared_editors(editors):
             last_seen = self.parse_iso_datetime(entry.get('last_seen'))
+            if last_seen is not None and last_seen.tzinfo is None:
+                last_seen = last_seen.replace(tzinfo=timezone.utc)
             last_seen_recent = bool(last_seen and abs((now - last_seen).total_seconds()) <= self.shared_editor_stale_seconds)
             if self.is_editor_process_alive(entry.get('pid')) or last_seen_recent:
                 active_editors.append(entry)
@@ -7931,7 +8302,10 @@ class NotepadX:
             self.current_font_size = max(self.min_font_size, min(self.max_font_size, int(saved_font_size)))
         except (TypeError, ValueError):
             self.current_font_size = self.base_font_size
-        self.syntax_theme.set(str(session.get('syntax_theme', 'Default')))
+        saved_theme = str(session.get('syntax_theme', 'Default'))
+        if saved_theme not in self.get_available_syntax_theme_names():
+            saved_theme = 'Default'
+        self.syntax_theme.set(saved_theme)
         for doc in self.documents.values():
             self.apply_syntax_tag_colors(doc['text'])
             self.update_line_number_gutter(doc)
@@ -8315,15 +8689,15 @@ class NotepadX:
         view_menu.add_checkbutton(label=t('menu.edit.sync_page_navigation', 'Sync PgUp/PgDn in Compare'), variable=self.sync_page_navigation_enabled, command=self.save_session)
         syntax_theme_menu = tk.Menu(view_menu, tearoff=0, bg='#2d2d2d', fg=self.fg_color, activebackground='#3a3a3a')
         view_menu.add_cascade(label=t('menu.view.syntax_theme', 'Syntax Theme'), menu=syntax_theme_menu)
-        for theme_name, theme_key in (
-            ('Default', 'syntax.theme.default'),
-            ('Soft', 'syntax.theme.soft'),
-            ('Vivid', 'syntax.theme.vivid'),
-            ('Base4Tone', 'syntax.theme.base4tone'),
-            ('Green Monochrome', 'syntax.theme.green_monochrome'),
-            ('Orange Monochrome', 'syntax.theme.orange_monochrome'),
-        ):
-            syntax_theme_menu.add_radiobutton(label=t(theme_key, theme_name), variable=self.syntax_theme, value=theme_name, command=lambda name=theme_name: self.set_syntax_theme(name))
+        syntax_theme_menu.add_command(label=t('menu.view.create_theme', 'Create Theme'), command=self.show_create_theme_dialog)
+        syntax_theme_menu.add_separator()
+        for theme_name in self.get_available_syntax_theme_names():
+            syntax_theme_menu.add_radiobutton(
+                label=self.get_syntax_theme_label(theme_name),
+                variable=self.syntax_theme,
+                value=theme_name,
+                command=lambda name=theme_name: self.set_syntax_theme(name)
+            )
         syntax_mode_menu = tk.Menu(view_menu, tearoff=0, bg='#2d2d2d', fg=self.fg_color, activebackground='#3a3a3a')
         view_menu.add_cascade(label=t('menu.view.syntax_mode', 'Syntax Mode'), menu=syntax_mode_menu)
         for mode_label, mode_value in (

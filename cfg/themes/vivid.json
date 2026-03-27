@@ -1,0 +1,23 @@
+{
+  "name": "Vivid",
+  "surface": {
+    "text_bg": "#101217",
+    "text_fg": "#f8f9fa",
+    "cursor": "#4cc9f0",
+    "selection": "#3a0f2d",
+    "gutter_bg": "#101217",
+    "gutter_current_bg": "#1b1f2a",
+    "gutter_fg": "#9aa0a6",
+    "gutter_current_fg": "#f8f9fa",
+    "gutter_divider": "#343a40"
+  },
+  "syntax": {
+    "keyword": "#ff4d6d",
+    "type": "#4cc9f0",
+    "string": "#72efdd",
+    "comment": "#80ed99",
+    "number": "#ffd166",
+    "preprocessor": "#b388ff",
+    "tag": "#06d6a0"
+  }
+}

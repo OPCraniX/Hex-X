@@ -14,4 +14,5 @@ Notepad-X.crash.log
 Notepad-X.*.session.json
 Notepad-X.*.editor.json
 *.json
+!cfg/themes/*.json
 *.tmp

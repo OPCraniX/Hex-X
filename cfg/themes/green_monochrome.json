@@ -1,0 +1,23 @@
+{
+  "name": "Green Monochrome",
+  "surface": {
+    "text_bg": "#081108",
+    "text_fg": "#86f08a",
+    "cursor": "#b8ffb8",
+    "selection": "#173617",
+    "gutter_bg": "#050b05",
+    "gutter_current_bg": "#102510",
+    "gutter_fg": "#3d8f47",
+    "gutter_current_fg": "#b8ffb8",
+    "gutter_divider": "#24552b"
+  },
+  "syntax": {
+    "keyword": "#9af59f",
+    "type": "#74db7c",
+    "string": "#c8ffb2",
+    "comment": "#4a9252",
+    "number": "#b7ff91",
+    "preprocessor": "#8ae28f",
+    "tag": "#79c87f"
+  }
+}

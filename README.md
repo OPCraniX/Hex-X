@@ -24,7 +24,9 @@ This benchmark is a point-in-time comparison between the packaged Notepad-X buil
 - Live Find and Find/Replace
 - Optional `Search across all tabs`
 - Syntax highlighting for many source and config formats
-- Six syntax theme presets: `Default`, `Soft`, `Vivid`, `Base4Tone`, `Green Monochrome`, and `Orange Monochrome`
+- Editable syntax themes loaded from `cfg/themes/*.json`
+- Built-in theme files included for `Default`, `Soft`, `Vivid`, `Base4Tone`, `Green Monochrome`, and `Orange Monochrome`
+- `View > Syntax Theme > Create Theme` can create a new theme file and add it to the menu immediately without restart
 - Manual syntax override per tab
 - Large-file protection with buffered virtual mode
 - `Save Copy As` for huge read-only files
@@ -52,7 +54,7 @@ This benchmark is a point-in-time comparison between the packaged Notepad-X buil
 - `View > Currently Editing` opens a right-side live editor sidebar
 - `View` now also contains note cycling/filtering and document navigation commands
 - Built-in Help viewer and About dialog
-- About shows `v0.9.6` and a clickable GitHub link
+- About shows `v0.9.7` and a clickable GitHub link
 
 ## Compare Mode
 
@@ -137,6 +139,13 @@ Notepad-X now includes a translation/config layer for visible UI text.
 - current language coverage includes the main menus, displayed hotkeys, status bar text, note popup labels, and core dialog captions
 - Arabic language files such as `ar.yml`, `ar_SA.yml`, `ar_AE.yml`, `ar_EG.yml`, and `ar_MA.yml` automatically switch the UI text direction to right-to-left
 - locale changes can also switch the editor font to a better installed script-friendly fallback automatically
+
+## Theme Files
+
+- Theme files live in `cfg/themes/*.json`
+- Notepad-X auto-detects any valid new theme file in that folder on startup
+- `View > Syntax Theme > Create Theme` opens a color-picker dialog for building a new theme
+- New themes are saved into `cfg/themes` and appear in the menu immediately
 
 ## Encrypted Files
 

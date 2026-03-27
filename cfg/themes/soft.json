@@ -1,0 +1,23 @@
+{
+  "name": "Soft",
+  "surface": {
+    "text_bg": "#11131a",
+    "text_fg": "#cad3f5",
+    "cursor": "#89b4fa",
+    "selection": "#313244",
+    "gutter_bg": "#11131a",
+    "gutter_current_bg": "#181b24",
+    "gutter_fg": "#7f849c",
+    "gutter_current_fg": "#cad3f5",
+    "gutter_divider": "#313244"
+  },
+  "syntax": {
+    "keyword": "#f38ba8",
+    "type": "#89b4fa",
+    "string": "#94e2d5",
+    "comment": "#a6adc8",
+    "number": "#f9e2af",
+    "preprocessor": "#cba6f7",
+    "tag": "#a6e3a1"
+  }
+}

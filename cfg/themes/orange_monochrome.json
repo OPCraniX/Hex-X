@@ -1,0 +1,23 @@
+{
+  "name": "Orange Monochrome",
+  "surface": {
+    "text_bg": "#140c04",
+    "text_fg": "#ffb45a",
+    "cursor": "#ffd08a",
+    "selection": "#3a2108",
+    "gutter_bg": "#100802",
+    "gutter_current_bg": "#2a1806",
+    "gutter_fg": "#b56d26",
+    "gutter_current_fg": "#ffd08a",
+    "gutter_divider": "#5b3511"
+  },
+  "syntax": {
+    "keyword": "#ffc56d",
+    "type": "#ffaf4d",
+    "string": "#ffd89b",
+    "comment": "#b67a3a",
+    "number": "#ffe18c",
+    "preprocessor": "#ffbf74",
+    "tag": "#ffa33f"
+  }
+}
