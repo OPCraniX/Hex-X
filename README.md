@@ -8,7 +8,7 @@ It keeps a simple desktop-editor feel, but adds project opening, persistent sess
 
 ![EXE benchmark comparison](gfx/exe_benchmark.png)
 
-This benchmark is a point-in-time comparison between the packaged Notepad-X build and Microsoft Notepad. The chart shows launch timing, CPU activity, and memory usage for that specific run, so the exact results will vary depending on hardware, OS state, background load, and what each editor has to initialize at startup.
+This benchmark is a point-in-time comparison between the packaged Notepad-X build and Microsoft Notepad. In this run, Notepad-X launches a little faster, uses a much stronger CPU burst during startup, and settles at a far lower memory footprint both at launch and after startup. The exact numbers will still vary depending on hardware, OS state, background load, and what each editor has to initialize.
 
 ## Features
 
