@@ -6160,6 +6160,8 @@ class NotepadX:
             self.hide_autocomplete_popup()
         elif event_type not in {'35'}:
             self.update_autocomplete_popup(doc)
+        if event_type in {'3', 'KeyRelease'} and not doc.get('virtual_mode') and not doc.get('preview_mode'):
+            self.schedule_text_theme_effect(doc)
         self.update_bracket_match_highlight(doc)
         self.update_line_number_gutter(doc)
         self.update_status()
@@ -6400,6 +6402,8 @@ class NotepadX:
             self.hide_autocomplete_popup()
         elif event_type not in {'35'}:
             self.update_autocomplete_popup(compare_doc)
+        if event_type in {'3', 'KeyRelease'}:
+            self.schedule_text_theme_effect(compare_doc)
         self.update_bracket_match_highlight(compare_doc)
         self.update_line_number_gutter(compare_doc)
         self.update_status()
