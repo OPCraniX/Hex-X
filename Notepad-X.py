@@ -5712,6 +5712,7 @@ class NotepadX:
         except tk.TclError:
             text_widget.help_lolcat_scope = text_widget
         self.apply_rainbow_theme_to_widget(text_widget)
+        self.schedule_help_lolcat_monitor(text_widget)
         return "break"
 
     def is_pointer_inside_widget(self, widget):
@@ -5734,13 +5735,54 @@ class NotepadX:
                 break
         return False
 
+    def cancel_help_lolcat_monitor(self, text_widget):
+        if not isinstance(text_widget, tk.Text):
+            return
+        monitor_job = getattr(text_widget, 'help_lolcat_job', None)
+        if not monitor_job:
+            return
+        try:
+            self.root.after_cancel(monitor_job)
+        except tk.TclError:
+            pass
+        text_widget.help_lolcat_job = None
+
+    def schedule_help_lolcat_monitor(self, text_widget, delay_ms=120):
+        if not isinstance(text_widget, tk.Text):
+            return
+        self.cancel_help_lolcat_monitor(text_widget)
+        try:
+            text_widget.help_lolcat_job = self.root.after(
+                delay_ms,
+                lambda current=text_widget: self.monitor_help_lolcat(current)
+            )
+        except tk.TclError:
+            text_widget.help_lolcat_job = None
+
+    def monitor_help_lolcat(self, text_widget):
+        if not isinstance(text_widget, tk.Text):
+            return
+        text_widget.help_lolcat_job = None
+        try:
+            if not text_widget.winfo_exists():
+                return
+        except tk.TclError:
+            return
+        scope_widget = getattr(text_widget, 'help_lolcat_scope', None) or text_widget
+        if self.is_pointer_inside_widget(scope_widget):
+            self.schedule_help_lolcat_monitor(text_widget)
+            return
+        self.clear_rainbow_theme_tags(text_widget)
+
     def deactivate_help_lolcat(self, event=None):
         text_widget = event if isinstance(event, tk.Text) else getattr(event, 'widget', None)
         if not isinstance(text_widget, tk.Text):
             return
         scope_widget = getattr(text_widget, 'help_lolcat_scope', None) or text_widget
         if self.is_pointer_inside_widget(scope_widget):
+            self.schedule_help_lolcat_monitor(text_widget)
             return None
+        self.cancel_help_lolcat_monitor(text_widget)
         self.clear_rainbow_theme_tags(text_widget)
         return None
 
