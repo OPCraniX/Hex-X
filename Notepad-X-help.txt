@@ -1,7 +1,7 @@
 Notepad-X Help
 
 Overview
-Notepad-X is a tabbed desktop text editor for plain text, source code, shared review notes, and safer handling of very large files. It adds project opening, syntax highlighting, note sync, crash-safe recovery, and a built-in help viewer.
+Notepad-X is a tabbed desktop text editor focused on everyday writing, shared notes, side-by-side comparison, and safer handling of large files. It adds persistent sessions, live search, visual themes, compare mode, encrypted saves, crash-safe recovery, and a built-in help viewer.
 
 Main Window
 - The title bar shows Notepad-X and the active document name.
@@ -35,7 +35,7 @@ Tabs
 - If you open a file that is already open, Notepad-X switches to that tab instead of opening a duplicate.
 - Dragging tabs with the mouse lets you reorder them.
 - Tabs remember their caret position and scroll position when you switch away and come back.
-- File-backed tabs are restored on startup from the session file.
+- File-backed tabs are restored on startup from the saved session.
 - If the only open tab is the default Untitled 1 tab, Close Tab is blocked so the editor never closes down to zero tabs while still running.
 
 Line Numbers
@@ -47,17 +47,16 @@ Line Numbers
 
 File Menu
 - Open: Opens a single file. If the current tab is a blank unmodified untitled tab, Notepad-X can reuse it instead of opening another tab.
-- Open Project: Opens the chosen source file and then other related source-code files from the same folder. After loading, Notepad-X switches back to the originally chosen file.
+- Open Project: Opens the chosen file and then other related files from the same folder. After loading, Notepad-X switches back to the originally chosen file.
 - Recent: Shows recently opened files and lets you reopen them. Clear list removes the stored recent-file history.
 - New Tab: Opens a fresh untitled tab.
 - Close Tab: Closes the current tab and prompts to save if needed.
 - Save: Saves the current tab.
 - Save all: Saves every normal editable tab. Modified untitled tabs prompt for a file name. Large virtual/read-only tabs are skipped.
-- Save As: Opens the standard save dialog with file type filters for text, markdown, .gitignore, and supported source/config formats.
-- Save Copy As: Saves a copy of the current tab. In very large virtual or preview modes, this copies the source file stream to a new path without trying to edit the original. It uses its own Save Copy As dialog title and the same file type filters as Save As.
+- Save As: Opens the standard save dialog with common text and document file type filters.
+- Save Copy As: Saves a copy of the current tab. In very large virtual or preview modes, this copies the source file stream to a new path without trying to edit the original.
 - Save As Encrypted: Saves a passphrase-protected encrypted copy. It suggests a .npxe filename automatically and adds .npxe if you leave it off.
 - Print: Sends the current saved file to the Windows print action. If the tab has never been saved, Notepad-X prompts you to save it first.
-- Save and Run: Saves the current file and then launches it with the matching runtime for supported file types.
 - Export Notes: Exports the current tab's notes to JSON or Markdown.
 - Exit: Closes the app. If Find or Replace is open, Ctrl+Shift+X closes the panel first and exits only when no panel is open.
 
@@ -73,12 +72,12 @@ Edit Menu
 - Date: Inserts the current date.
 - Time/Date: Inserts the current time and date.
 - Font: Opens the font picker for editor family and size.
-- Edit with Notepad-X: Enables or disables a Windows Explorer right-click entry for supported text/code file types.
+- Edit with Notepad-X: Enables or disables a Windows Explorer right-click entry for supported text files.
 - Sound: Enables or disables note sounds. The checkmark shows whether it is enabled.
-- Language: Lists the available `cfg/language/*.yml` language files and lets you switch the visible UI text. `English (US)` is selected by default.
+- Language: Lets you switch the visible UI text language.
 
 Editing Helpers
-- Pressing Enter in a normal editable tab now carries the current line indentation forward automatically.
+- Pressing Enter in a normal editable tab carries the current line indentation forward automatically.
 - If the text before the caret ends in `(`, `[`, `{`, or `:`, Notepad-X adds one extra indent level on the new line.
 - Bracket matching highlights the nearest matching `()`, `[]`, or `{}` pair around the caret.
 - These helpers work in the main editor and in the editable compare pane.
@@ -96,10 +95,8 @@ View Menu
 - Top of Document: Jumps to line 1, column 1.
 - Bottom of Document: Jumps to the last line, column 1.
 - Sync PgUp/PgDn in Compare: Keeps page-up and page-down navigation synchronized across both compare panes when enabled.
-- Syntax Theme: Changes the highlight color palette.
-- Create Theme: Opens a color-picker dialog that lets you name a new theme, save it into `cfg/themes`, and add it to the Syntax Theme list immediately.
-- Built-in editable theme files include Default, Soft, Vivid, Base4Tone, Green Monochrome, and Orange Monochrome.
-- Syntax Mode: Manually overrides syntax detection for the current tab. Available modes include Auto, Plain Text, Python, C, C++, Rust, Java, JavaScript, HTML, PHP, XML, and SQL.
+- Syntax Theme: Changes the editor color theme.
+- Create Theme: Opens a color-picker dialog that lets you name a new theme and add it to the theme list immediately.
 - Compare Tabs: Opens a side-by-side compare view using the current tab and another open tab.
 - Normal editable tabs can also be edited from the compare pane on the right.
 - When compare mode is open, the Currently Editing sidebar stays on the far right.
@@ -110,33 +107,20 @@ Opening Files
 - Files are loaded as text with replacement for unreadable characters when needed.
 - Opening a file moves the caret to line 1, column 1, clears any old selection, and scrolls to the top.
 - Opening a file adds it to the recent-files list.
-- Open Project filters out Notepad-X support files such as session files, editor identity files, and note sidecars so they do not open as project tabs.
 
 Saving and Save Safety
 - Normal saves use an atomic temp-file replacement pattern. Notepad-X writes a temporary file first and then replaces the original file.
 - This reduces the chance of partial writes if a save is interrupted.
-- Notepad-X flushes save files before replacing the original so the replacement file is fully written first.
 - Save all keeps you on your original tab when it finishes.
 - If a file changed on disk after it was opened, Notepad-X warns before overwriting the newer disk version.
 - Very large virtual-mode files are intentionally read-only and cannot be directly saved from that mode.
 - Save Copy As is the supported way to create a second copy of a very large read-only tab.
-- Session files, recovery files, editor identity files, note sidecars, and JSON note exports also use atomic writes.
 
 Encrypted Files
 - Notepad-X can save encrypted copies using Save As Encrypted.
 - Encrypted files use the .npxe extension.
 - On open, Notepad-X detects its encrypted file format automatically and prompts for a passphrase.
-- Encrypted files use:
-  scrypt for passphrase-based key derivation
-  AES-256-GCM for authenticated encryption
-  a random salt and nonce per file
 - Normal Save As and Save Copy As remain plain-text save flows.
-- Encrypted open/save support needs the Python cryptography package installed on that machine.
-
-Save and Run
-- Save and Run saves the current file and then launches it using a detected runtime for supported file types.
-- Ctrl+Shift+R runs Save and Run.
-- Notepad-X relies on the system's default installed runtimes and normal OS/browser behavior for supported file types.
 
 Find and Replace
 - Find highlights matches live while you type.
@@ -155,55 +139,11 @@ Find and Replace
 - Ctrl+Shift+X closes the Find or Replace panel if one is open.
 - If Help Contents or About Notepad-X is open, Ctrl+Shift+X closes that window before it falls through to compare, Find/Replace, or exit behavior.
 
-Syntax Highlighting
-- Python uses IDLE-based highlighting when the required IDLE components are available in the Python install.
-- Notepad-X also includes built-in highlighting for many file types, including:
-  ActionScript
-  ASP / ASPX
-  AutoIt
-  Bash
-  Batch
-  Caml
-  C
-  C++
-  C#
-  CSS
-  Diff / Patch
-  Fortran
-  Ini-style files
-  Inno Setup
-  Java
-  JavaScript
-  Lisp
-  Makefile / Mak
-  Matlab
-  NFO
-  NSIS
-  Pascal
-  Perl
-  PHP
-  Python
-  Resource files
-  Rust
-  Smalltalk
-  SQL
-  TeX
-  VB / VBScript
-  XML-family files
-  HTML
-  Assembly
-- Unsaved tabs can use content-based detection for several languages, so pasted code can highlight before the file has an extension.
-- Syntax Theme changes the current color palette.
-- Theme files are loaded from `cfg/themes/*.json`.
-- `Create Theme` can build a new theme file with color pickers and make it available without restarting.
-- Syntax Mode lets you manually force the current tab into a specific language mode or Plain Text.
-- Highlighting is reduced or disabled in large-file modes to keep performance usable.
-
 Large Files
-- Notepad-X uses safer handling for large files so the Tk text widget does not freeze the UI while opening them.
-- Large text files can now load in the background and remain editable up to a practical size limit.
+- Notepad-X uses safer handling for large files so the editor does not freeze the UI while opening them.
+- Large text files can load in the background and remain editable up to a practical size limit.
 - Very large files still fall back to buffered virtual mode when loading the full file would be too expensive.
-- Large files reduce expensive features such as undo depth and syntax work.
+- Large files reduce expensive features to keep performance usable.
 - Binary-like files are treated more cautiously and can be opened in a safer preview-style mode instead of being treated as normal editable text.
 - Very large files can enter virtual buffered mode instead of loading the full file into the editor.
 - Virtual mode indexes the file and loads only a moving line window around your current location.
@@ -215,7 +155,7 @@ Large Files
   scrolling and selection are limited to the currently loaded buffer window
 - Preview mode may be used for very large files where only a partial view is appropriate.
 
-Code Notes
+Shared Notes
 - Select text, right-click, and choose Add note.
 - Add note is disabled if no text is selected.
 - New notes ask for:
@@ -223,49 +163,15 @@ Code Notes
   note text
   note color
 - Notes can be yellow, green, red, or light blue.
-- Clicking highlighted code opens the note popup.
-- The popup title is Code note.
-- Popups can show:
-  the note author
-  the author computer name
-  the author LAN IP
-  the creation timestamp in local machine time
-  the original note text
+- Clicking highlighted text opens the note popup.
+- The popup shows note details, responses, and timestamps.
 - Right-clicking an existing note can show:
   Respond
   Remove note
-- Respond asks for:
-  responder name
-  response text
-  response color
 - A note can have more than one response.
 - The latest response color is used for the current highlight color.
 - Remove note deletes the note highlight and note data.
-- Notes are stored per file and synced through a sidecar JSON file next to the document.
-
-Shared Notes and Collaboration
-- Each file-backed document can have a sidecar file named:
-  <filename>.notepadx.notes.json
-- The sidecar stores:
-  note text
-  note IDs
-  note color
-  author information
-  responses
-  read state
-  timestamps
-- Shared editor heartbeat/state is also stored in:
-  <filename>.notepadx.editors.json
-- Notepad-X validates and sanitizes note payloads when reading the sidecar so malformed entries are ignored instead of blindly trusted.
-- Shared editor tracking includes stale-editor cleanup so dead editor entries eventually age out instead of lingering forever.
-- The sync system polls for sidecar changes and reloads notes when another editor updates them.
-- The status bar shows Notes Synced, unread count, and how many editors are currently tracked on that file.
-- In compare mode, the compared file also shows its own status readout aligned on the right side of the bottom bar.
-- The Currently Editing sidebar shows each editor as:
-  computer name and LAN IP
-  full MD5/editor ID
-- Notes you authored do not count as unread for you.
-- Clicking a note or jumping to it marks it read for your current editor identity.
+- Notes are synced beside the document so multiple editors can share them.
 
 Unread Notes and Navigation
 - F3 jumps to the oldest unread note when Find and Replace are closed.
@@ -274,56 +180,34 @@ Unread Notes and Navigation
 - The Filter Notes menu affects which notes are included when cycling with F4.
 - Opening a note by clicking it also clears its unread state for your editor identity.
 
-Note Anchoring and Export
-- Notes store anchor text and line information so Notepad-X can try to keep them attached even if nearby lines shift.
-- When a note's original start and end positions no longer match exactly, Notepad-X can search for the original selected text and re-anchor to the closest match.
+Note Export
 - Export Notes writes the current tab's notes to:
   JSON for machine-readable export
   Markdown for a readable report
-- Exported note data includes the original note plus any saved responses.
 
 Audio Notifications
-- note.mp3 plays when a new unread note arrives for the active file.
-- delete_note.mp3 plays when a note is removed.
-- The Sound checkmark in the View menu enables or disables sound playback.
-- Audio files are resolved from the audio folder first, with appdir/audio as a fallback location.
+- A sound can play when a new unread note arrives for the active file.
+- A second sound can play when a note is removed.
+- The Sound checkmark enables or disables sound playback.
 
-Language Files
-- Notepad-X includes a translation/config layer for visible UI text.
-- `cfg/language/en_US.yml` is the default English language file.
-- The Language submenu under Edit scans `cfg/language/*.yml` and shows any added language file automatically.
-- The Language menu shows friendly native language names instead of raw locale codes when it knows the locale.
+Languages
+- Notepad-X includes a translation layer for visible UI text.
+- The Language submenu under Edit shows available languages automatically.
+- The Language menu shows friendly native language names instead of raw codes when it knows the locale.
 - The selected language is saved in the session and restored when Notepad-X starts again.
-- Current language-file coverage includes the main menus, displayed hotkeys, status bar text, note popup labels, and core dialog captions.
-- Arabic language files such as `ar.yml`, `ar_SA.yml`, `ar_AE.yml`, `ar_EG.yml`, and `ar_MA.yml` automatically switch the UI text direction to right-to-left.
+- Current language coverage includes the main menus, displayed hotkeys, status bar text, note popup labels, and core dialog captions.
+- Arabic language support automatically switches the UI text direction to right-to-left.
 - Locale changes can also switch the editor font to a better installed script-friendly fallback automatically.
 
 Session Restore and Recovery
-- File-backed tabs are written to the session file and restored on startup.
+- File-backed tabs are written to the session and restored on startup.
 - The last active tab is restored when possible.
 - If compare mode was open when the app closed, the same compared file pair is restored on startup when both files still exist.
-- Sound, status bar, numbered lines, and syntax theme settings are also restored from the session file.
+- Sound, status bar, numbered lines, and theme settings are also restored.
 - Unsaved untitled tabs are not part of normal session restore, but they can be recovered after a crash through the recovery system.
 - Modified file-backed tabs can also be restored after a crash without overwriting the on-disk file automatically.
 - If Notepad-X finds recovery data from a previous crash, it asks whether you want to restore the saved recovery state.
 - Recovery restores content back into tabs and never overwrites real user files directly.
-
-Crash Logging
-- Important failure paths write to a crash log in the app folder.
-- Unhandled exceptions are also written to the crash log when possible.
-- The crash log helps diagnose startup issues, note-sidecar errors, and other failures that would otherwise disappear silently.
-
-Support Files
-- Notepad-X keeps several support files in its app directory.
-- These can include:
-  cfg/language/en_US.yml
-  cfg/Notepad-X.<host>-<user>.session.json
-  cfg/Notepad-X.<host>-<user>.editor.json
-  Notepad-X.recovery.json
-  Notepad-X.crash.log
-  per-file *.notepadx.notes.json sidecars
-  per-file *.notepadx.editors.json sidecars
-- Notepad-X validates these files before trusting their contents and ignores malformed entries when possible.
 
 Zoom
 - Ctrl+Mouse Wheel zooms in and out.
@@ -334,7 +218,6 @@ Zoom
 Printing
 - Print uses the Windows file print action on the saved file path.
 - If the current tab has never been saved, Notepad-X prompts you to save it first.
-- File paths are validated before Notepad-X hands them off to Windows print integration.
 
 Keyboard Shortcuts
 - Ctrl+W: Open
@@ -345,7 +228,6 @@ Keyboard Shortcuts
 - Ctrl+Shift+S: Save all
 - Ctrl+Shift+Q: Save Copy As
 - Ctrl+Shift+E: Save As Encrypted
-- Ctrl+Shift+R: Save and Run
 - Ctrl+E: Export Notes
 - Ctrl+P: Print
 - Ctrl+Shift+X: Close compare mode or Find/Replace if open, otherwise exit
