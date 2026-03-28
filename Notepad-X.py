@@ -5724,17 +5724,13 @@ class NotepadX:
                 return False
             pointer_x = widget.winfo_pointerx()
             pointer_y = widget.winfo_pointery()
-            target_widget = widget.winfo_containing(pointer_x, pointer_y)
+            left = widget.winfo_rootx()
+            top = widget.winfo_rooty()
+            right = left + max(1, widget.winfo_width())
+            bottom = top + max(1, widget.winfo_height())
         except tk.TclError:
             return False
-        while target_widget is not None:
-            if target_widget == widget:
-                return True
-            try:
-                target_widget = target_widget.master
-            except AttributeError:
-                break
-        return False
+        return left <= pointer_x < right and top <= pointer_y < bottom
 
     def cancel_help_lolcat_monitor(self, text_widget):
         if not isinstance(text_widget, tk.Text):
