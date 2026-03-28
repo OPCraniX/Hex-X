@@ -54,7 +54,7 @@ This benchmark is a point-in-time comparison between the packaged Notepad-X buil
 - `View > Currently Editing` opens a right-side live editor sidebar
 - `View` now also contains note cycling/filtering and document navigation commands
 - Built-in Help viewer and About dialog
-- About shows `v0.9.7` and a clickable GitHub link
+- About shows `v0.9.8` and a clickable GitHub link
 
 ## Compare Mode
 
