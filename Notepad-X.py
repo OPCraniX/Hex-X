@@ -5707,6 +5707,10 @@ class NotepadX:
         text_widget = getattr(event, 'widget', None)
         if not isinstance(text_widget, tk.Text):
             return
+        try:
+            text_widget.help_lolcat_scope = text_widget.winfo_toplevel()
+        except tk.TclError:
+            text_widget.help_lolcat_scope = text_widget
         text_widget.help_lolcat_active = True
         self.cancel_help_lolcat_monitor(text_widget)
         self.apply_rainbow_theme_to_widget(text_widget)
@@ -5751,12 +5755,12 @@ class NotepadX:
         try:
             text_widget.help_lolcat_job = self.root.after(
                 delay_ms,
-                lambda current=text_widget: self.monitor_help_lolcat(current)
+                lambda current=text_widget: self.finish_help_lolcat_deactivation(current)
             )
         except tk.TclError:
             text_widget.help_lolcat_job = None
 
-    def monitor_help_lolcat(self, text_widget):
+    def finish_help_lolcat_deactivation(self, text_widget):
         if not isinstance(text_widget, tk.Text):
             return
         text_widget.help_lolcat_job = None
@@ -5770,8 +5774,6 @@ class NotepadX:
             return
         scope_widget = getattr(text_widget, 'help_lolcat_scope', None) or text_widget
         if self.is_pointer_inside_widget(scope_widget):
-            self.apply_rainbow_theme_to_widget(text_widget)
-            self.schedule_help_lolcat_monitor(text_widget)
             return
         text_widget.help_lolcat_active = False
         self.clear_rainbow_theme_tags(text_widget)
@@ -5780,9 +5782,7 @@ class NotepadX:
         text_widget = event if isinstance(event, tk.Text) else getattr(event, 'widget', None)
         if not isinstance(text_widget, tk.Text):
             return
-        text_widget.help_lolcat_active = False
-        self.cancel_help_lolcat_monitor(text_widget)
-        self.clear_rainbow_theme_tags(text_widget)
+        self.schedule_help_lolcat_monitor(text_widget, delay_ms=80)
         return None
 
     def cancel_text_theme_effect_job(self, doc):
