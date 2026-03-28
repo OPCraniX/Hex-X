@@ -5711,6 +5711,7 @@ class NotepadX:
             text_widget.help_lolcat_scope = text_widget.winfo_toplevel()
         except tk.TclError:
             text_widget.help_lolcat_scope = text_widget
+        text_widget.help_lolcat_active = True
         self.apply_rainbow_theme_to_widget(text_widget)
         self.schedule_help_lolcat_monitor(text_widget)
         return "break"
@@ -5768,10 +5769,15 @@ class NotepadX:
                 return
         except tk.TclError:
             return
+        if not getattr(text_widget, 'help_lolcat_active', False):
+            self.clear_rainbow_theme_tags(text_widget)
+            return
         scope_widget = getattr(text_widget, 'help_lolcat_scope', None) or text_widget
         if self.is_pointer_inside_widget(scope_widget):
+            self.apply_rainbow_theme_to_widget(text_widget)
             self.schedule_help_lolcat_monitor(text_widget)
             return
+        text_widget.help_lolcat_active = False
         self.clear_rainbow_theme_tags(text_widget)
 
     def deactivate_help_lolcat(self, event=None):
@@ -5782,6 +5788,7 @@ class NotepadX:
         if self.is_pointer_inside_widget(scope_widget):
             self.schedule_help_lolcat_monitor(text_widget)
             return None
+        text_widget.help_lolcat_active = False
         self.cancel_help_lolcat_monitor(text_widget)
         self.clear_rainbow_theme_tags(text_widget)
         return None
