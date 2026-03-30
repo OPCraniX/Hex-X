@@ -9693,6 +9693,24 @@ class NotepadX:
             return None
         return f"{owner}/{repo_name}"
 
+    def build_grab_git_clone_error_message(self, repo_identifier, error_detail):
+        detail_text = str(error_detail or '').strip()
+        lowered = detail_text.lower()
+        if 'repository not found' in lowered or 'not found' in lowered:
+            return self.tr(
+                'grab_git.not_found',
+                'GitHub could not find "{repo_identifier}".\n\nCheck the username/project and try again.'
+            ).format(repo_identifier=repo_identifier)
+        if 'could not read username' in lowered or 'authentication failed' in lowered:
+            return self.tr(
+                'grab_git.private_repo',
+                'That GitHub project could not be downloaded.\n\nIt may be private or require authentication.'
+            )
+        return self.tr(
+            'grab_git.clone_failed',
+            'Notepad-X could not download that GitHub project.\n\n{error_detail}'
+        ).format(error_detail=detail_text or 'Unknown git clone failure.')
+
     def prompt_grab_git_repository(self, parent=None):
         parent = parent or self.root
         dialog = tk.Toplevel(parent)
@@ -9728,7 +9746,10 @@ class NotepadX:
             if not normalized:
                 messagebox.showwarning(
                     self.tr('grab_git.title', 'Grab Git'),
-                    self.tr('grab_git.invalid', 'Enter the project as username/project.'),
+                    self.tr(
+                        'grab_git.invalid',
+                        'Enter the project as username/project.\n\nExample:\nopenai/openai-python'
+                    ),
                     parent=dialog
                 )
                 return "break"
@@ -9994,7 +10015,7 @@ class NotepadX:
                 error_detail = str(result.get('error') or result.get('stderr') or result.get('stdout') or 'Unknown git clone failure.')
                 messagebox.showerror(
                     self.tr('grab_git.title', 'Grab Git'),
-                    self.tr('grab_git.clone_failed', 'Notepad-X could not download that GitHub project.\n\n{error_detail}').format(error_detail=error_detail.strip()),
+                    self.build_grab_git_clone_error_message(repo_identifier, error_detail),
                     parent=self.root
                 )
                 return
