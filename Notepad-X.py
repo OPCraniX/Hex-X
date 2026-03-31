@@ -3039,6 +3039,34 @@ class NotepadX:
             mode_suffix=mode_suffix
         )
 
+    def build_compare_status_text(self, doc, text_widget):
+        row, col = text_widget.index(tk.INSERT).split('.')
+        row = int(row)
+        col = int(col) + 1
+        total_lines = int(text_widget.index('end-1c').split('.')[0])
+
+        if doc and doc.get('virtual_mode'):
+            row = doc['window_start_line'] + row - 1
+            total_lines = doc['total_file_lines']
+
+        mode_suffix = ""
+        if doc and doc.get('virtual_mode'):
+            mode_suffix = f" | {self.tr('status.mode.virtual', 'Virtual')}"
+        elif doc and doc.get('preview_mode'):
+            mode_suffix = f" | {self.tr('status.mode.preview', 'Preview')}"
+
+        return self.tr(
+            'status.compare',
+            '{line_label} {row} {of_label} {total_lines}, {col_label} {col}{mode_suffix}',
+            line_label=self.tr('status.line', 'Ln'),
+            row=row,
+            of_label=self.tr('status.of', 'of'),
+            total_lines=total_lines,
+            col_label=self.tr('status.col', 'Col'),
+            col=col,
+            mode_suffix=mode_suffix
+        )
+
     def update_status(self):
         if not self.text or not hasattr(self, 'status'):
             return
@@ -3068,7 +3096,7 @@ class NotepadX:
                 if compare_widget is None or compare_doc is None:
                     raise tk.TclError
                 self.compare_status.config(
-                    text=self.build_editor_status_text(compare_doc, compare_widget)
+                    text=self.build_compare_status_text(compare_doc, compare_widget)
                 )
                 self.position_compare_status()
             except tk.TclError:
