@@ -1,163 +1,294 @@
-{
-  "app.name": "Notepad-X",
-  "app.about_title": "About Notepad-X",
-  "app.help_title": "Notepad-X Help",
-  "app.compare_title": "Compare With Tab",
-  "about.heading": "Notepad-X",
-  "about.tagline": "Built because Microsoft forgot what Notepad was supposed to be.",
-  "common.close": "Close",
-  "common.compare": "Compare",
-  "common.clear_list": "Clear list",
-  "common.empty": "(Empty)",
-  "common.ok": "OK",
-  "context.cut": "Cut",
-  "context.copy": "Copy",
-  "context.paste": "Paste",
-  "context.select_all": "Select All",
-  "context.add_note": "Add note",
-  "context.respond": "Respond",
-  "context.remove_note": "Remove note",
-  "menu.file": "File",
-  "menu.file.open": "Open",
-  "menu.file.open_project": "Open Project",
-  "menu.file.recent": "Recent",
-  "menu.file.new_tab": "New Tab",
-  "menu.file.close_tab": "Close Tab",
-  "menu.file.save": "Save",
-  "menu.file.save_all": "Save All",
-  "menu.file.save_as": "Save As",
-  "menu.file.save_as_encrypted": "Save As Encrypted",
-  "menu.file.print": "Print",
-  "menu.file.export_notes": "Export Notes",
-  "menu.file.exit": "Exit",
-  "menu.edit": "Edit",
-  "menu.edit.undo": "Undo",
-  "menu.edit.redo": "Redo",
-  "menu.edit.cut": "Cut",
-  "menu.edit.copy": "Copy",
-  "menu.edit.paste": "Paste",
-  "menu.edit.select_all": "Select All",
-  "menu.edit.find": "Find",
-  "menu.edit.find_next": "Find Next",
-  "menu.edit.find_previous": "Find Previous",
-  "menu.edit.replace": "Replace",
-  "menu.edit.cycle_notes": "Cycle Notes",
-  "menu.edit.filter_notes": "Filter Notes",
-  "menu.edit.goto_line": "Go To Line",
-  "menu.edit.top_of_document": "Top of Document",
-  "menu.edit.bottom_of_document": "Bottom of Document",
-  "menu.edit.sync_page_navigation": "Sync PgUp/PgDn in Compare",
-  "menu.edit.date": "Date",
-  "menu.edit.time_date": "Time/Date",
-  "menu.edit.font": "Font",
-  "menu.edit.language": "Language",
-  "menu.view": "View",
-  "menu.view.full_screen": "Full Screen",
-  "menu.view.switch_tab": "Switch Tab",
-  "menu.view.status_bar": "Status Bar",
-  "menu.view.numbered_lines": "Numbered Lines",
-  "menu.view.autocomplete": "Autocomplete",
-  "menu.view.edit_with_notepadx": "Edit with Notepad-X",
-  "menu.view.word_wrap": "Word Wrap",
-  "menu.view.sound": "Sound",
-  "menu.view.syntax_theme": "Syntax Theme",
-  "menu.view.syntax_mode": "Syntax Mode",
-  "menu.view.compare_tabs": "Compare Tabs",
-  "menu.view.close_compare_tabs": "Close Compare Tabs",
-  "menu.help": "Help",
-  "menu.help.contents": "Help Contents",
-  "menu.help.about": "About Notepad-X",
-  "note.filter.all": "All",
-  "note.filter.unread": "Unread",
-  "note.filter.yellow": "Yellow",
-  "note.filter.green": "Green",
-  "note.filter.red": "Red",
-  "note.filter.blue": "Light Blue",
-  "note.popup.title": "Code note",
-  "note.popup.author": "Author",
-  "note.popup.author_id": "Author ID",
-  "note.popup.created": "Created",
-  "note.popup.responses": "Responses",
-  "note.prompt.add_title": "Add Note",
-  "note.prompt.author": "Author:",
-  "note.prompt.note": "Note:",
-  "note.prompt.select_text_first": "Select some text first.",
-  "note.prompt.author_required": "Enter an author name first.",
-  "note.prompt.respond_title": "Respond",
-  "note.prompt.name": "Name:",
-  "note.prompt.response": "Response:",
-  "note.prompt.response_color": "Response Color",
-  "note.prompt.name_required": "Enter a name first.",
-  "status.initial": "Ln 1 of 1, Col 1 | 0 characters | UTF-8 | Normal",
-  "status.memory_initial": " | Memory used: 0MB",
-  "status.synced": "| Notes Synced",
-  "status.line": "Ln",
-  "status.col": "Col",
-  "status.of": "of",
-  "status.characters": "characters",
-  "status.bytes": "bytes",
-  "status.encoding": "UTF-8",
-  "status.mode.normal": "Normal",
-  "status.mode.virtual": "Virtual",
-  "status.mode.preview": "Preview",
-  "status.main": "{line_label} {row} {of_label} {total_lines}, {col_label} {col} | {char_info} | {encoding} | {zoom_text}{mode_suffix}",
-  "status.char_count": "{total_chars} {characters_label}",
-  "status.selected_char_count": "{selected_count} {of_label} {total_chars} {characters_label}",
-  "status.byte_count": "{total_bytes} {bytes_label}",
-  "status.memory": " | Memory used: {memory_mb}MB",
-  "status.editor_id": " | ID: {editor_id}",
-  "status.unread_tail": " | {unread_count} unread (F3 to view) | ({active_editors} editing)",
-  "compare.need_two_tabs": "Open at least two tabs to compare.",
-  "compare.choose_prompt": "Choose a tab to compare with the current one:",
-  "compare.header": "Comparing with: {title}",
-  "help.open_failed": "Unable to open the Notepad-X help file.",
-  "help.not_found": "Notepad-X help file not found.",
-  "syntax.theme.default": "Default",
-  "syntax.theme.soft": "Soft",
-  "syntax.theme.vivid": "Vivid",
-  "syntax.mode.auto": "Auto",
-  "syntax.mode.plain": "Plain Text",
-  "syntax.mode.python": "Python",
-  "syntax.mode.c": "C",
-  "syntax.mode.cpp": "C++",
-  "syntax.mode.rust": "Rust",
-  "syntax.mode.java": "Java",
-  "syntax.mode.javascript": "JavaScript",
-  "syntax.mode.html": "HTML",
-  "syntax.mode.php": "PHP",
-  "syntax.mode.xml": "XML",
-  "syntax.mode.sql": "SQL",
-  "accel.open": "Ctrl+W",
-  "accel.open_project": "Ctrl+Shift+W",
-  "accel.new_tab": "Ctrl+T",
-  "accel.close_tab": "Ctrl+Shift+T",
-  "accel.save": "Ctrl+S",
-  "accel.save_all": "Ctrl+Shift+S",
-  "accel.save_as": "Ctrl+Shift+Q",
-  "accel.save_as_encrypted": "Ctrl+Shift+E",
-  "accel.print": "Ctrl+P",
-  "accel.export_notes": "Ctrl+E",
-  "accel.exit": "Ctrl+Shift+X",
-  "accel.undo": "Ctrl+Z",
-  "accel.redo": "Ctrl+Shift+Z",
-  "accel.cut": "Ctrl+X",
-  "accel.copy": "Ctrl+C",
-  "accel.paste": "Ctrl+V",
-  "accel.select_all": "Ctrl+A",
-  "accel.find": "Ctrl+F",
-  "accel.find_next": "F3",
-  "accel.find_previous": "Shift+F3",
-  "accel.replace": "Ctrl+R",
-  "accel.cycle_notes": "F4",
-  "accel.goto_line": "Ctrl+G",
-  "accel.top_of_document": "Ctrl+PgUp",
-  "accel.bottom_of_document": "Ctrl+PgDn",
-  "accel.date": "Ctrl+D",
-  "accel.time_date": "Ctrl+Shift+D",
-  "accel.font": "Ctrl+Shift+F",
-  "accel.full_screen": "F11",
-  "accel.switch_tab": "Ctrl+Tab",
-  "accel.status_bar": "Ctrl+B",
-  "accel.compare_tabs": "Ctrl+Q",
-  "accel.close_compare_tabs": "Ctrl+Shift+X"
-}
+about.heading: "Notepad-X"
+about.tagline: "Built because Microsoft forgot what Notepad was supposed to be."
+accel.bottom_of_document: "Ctrl+PgDn"
+accel.close_compare_tabs: "Ctrl+Shift+X"
+accel.close_tab: "Ctrl+Shift+T"
+accel.compare_tabs: "Ctrl+Q"
+accel.copy: "Ctrl+C"
+accel.currently_editing: "Ctrl+Shift+C"
+accel.cut: "Ctrl+X"
+accel.cycle_notes: "F4"
+accel.date: "Ctrl+D"
+accel.exit: "Ctrl+Shift+X"
+accel.export_notes: "Ctrl+E"
+accel.find: "Ctrl+F"
+accel.find_next: "F3"
+accel.find_previous: "Shift+F3"
+accel.font: "Ctrl+Shift+F"
+accel.full_screen: "F11"
+accel.goto_line: "Ctrl+G"
+accel.grab_git: "Ctrl+Shift+G"
+accel.new_tab: "Ctrl+T"
+accel.open: "Ctrl+W"
+accel.open_project: "Ctrl+Shift+W"
+accel.paste: "Ctrl+V"
+accel.print: "Ctrl+P"
+accel.redo: "Ctrl+Shift+Z"
+accel.replace: "Ctrl+R"
+accel.save: "Ctrl+S"
+accel.save_all: "Ctrl+Shift+S"
+accel.save_and_run: "Ctrl+Shift+R"
+accel.save_as: "Ctrl+Shift+Q"
+accel.save_as_encrypted: "Ctrl+Shift+E"
+accel.select_all: "Ctrl+A"
+accel.status_bar: "Ctrl+B"
+accel.switch_tab: "Ctrl+Tab"
+accel.time_date: "Ctrl+Shift+D"
+accel.top_of_document: "Ctrl+PgUp"
+accel.undo: "Ctrl+Z"
+app.about_title: "About Notepad-X"
+app.compare_title: "Compare With Tab"
+app.crash_message: "An unexpected error occurred.\nA crash log was written to:\n{crash_log_path}"
+app.crash_title: "Notepad-X Crash"
+app.help_title: "Notepad-X Help"
+app.name: "Notepad-X"
+clipboard.line_copied: "Copied line {line_number} to clipboard"
+common.cancel: "Cancel"
+common.clear_list: "Clear list"
+common.close: "Close"
+common.color: "Color:"
+common.compare: "Compare"
+common.empty: "(Empty)"
+common.go: "Go"
+common.ok: "OK"
+common.save: "Save"
+compare.choose_prompt: "Choose a tab to compare with the current one:"
+compare.header: "Comparing with: {title}"
+compare.need_two_tabs: "Open at least two tabs to compare."
+context.add_note: "Add note"
+context.copy: "Copy"
+context.cut: "Cut"
+context.paste: "Paste"
+context.remove_note: "Remove note"
+context.respond: "Respond"
+context.select_all: "Select All"
+encryption.confirm_passphrase: "Confirm passphrase:"
+encryption.encrypt_file: "Encrypt file"
+encryption.open_prompt: "Passphrase for:\n{file_name}"
+encryption.open_title: "Open Encrypted File"
+encryption.passphrase: "Passphrase:"
+encryption.passphrase_mismatch: "Passphrases do not match."
+encryption.passphrase_required: "Enter a passphrase first."
+encryption.save_title: "Save Encrypted Copy As"
+encryption.show_passphrase: "Show passphrase"
+encryption.unavailable_message: "Encrypted save/open needs the 'cryptography' Python package.\n\nInstall it on this machine to use Notepad-X encrypted files."
+encryption.unavailable_title: "Encryption Unavailable"
+encryption.unlock_failed: "That passphrase did not unlock the encrypted file."
+export.notes.none: "There are no notes to export in this tab."
+export.notes.saved: "Notes exported to:\n{output_path}"
+file.changed_message: "This file changed on disk after it was opened.\n\nOverwrite the newer disk version with your current editor contents?"
+file.changed_title: "File Changed on Disk"
+file.missing_message: "That file could not be found."
+file.missing_title: "File Missing"
+file.open_failed_message: "Notepad-X could not open:\n{file_path}\n\n{error_detail}"
+file.open_failed_title: "Open Failed"
+file.reload_message: "Do you want Notepad-X to reload the file from disk instead?"
+file.reload_title: "Reload File"
+filesystem.access_error: "Notepad-X could not access:\n{location}\n\n{error_detail}"
+find.panel.find: "Find:"
+find.panel.find_next: "Find Next"
+find.panel.search_all_tabs: "Search across all tabs"
+font.family: "Font:"
+font.invalid_size_message: "Choose a valid font size."
+font.invalid_size_title: "Invalid Size"
+font.preview: "AaBbYyZz 0123456789"
+font.size: "Size:"
+font.title: "Font"
+goto_line.invalid_number: "Enter a valid number."
+goto_line.invalid_range: "Line number out of range."
+goto_line.invalid_title: "Invalid"
+goto_line.prompt: "Line Number:"
+goto_line.title: "Go To Line"
+grab_git.choose_folder: "Choose where to save the GitHub project"
+grab_git.clone_failed: "Notepad-X could not download that GitHub project.\n\n{error_detail}"
+grab_git.downloading: "Downloading Project"
+grab_git.downloading_prompt: "Downloading:\n{repo_identifier}\n\nPlease wait..."
+grab_git.exists: "That destination folder already exists.\nChoose another location or remove the existing folder first."
+grab_git.git_missing: "Git could not be found on this system."
+grab_git.invalid: "Enter the project as username/project.\n\nExample:\nopenai/openai-python"
+grab_git.no_files: "The project downloaded successfully, but no matching files were found to open."
+grab_git.not_found: "GitHub could not find \"{repo_identifier}\".\n\nCheck the username/project and try again."
+grab_git.open_prompt: "Downloaded project root:\n{root_dir}\n\nSelect one or more files to open."
+grab_git.open_selected: "Open Selected"
+grab_git.open_title: "Open Downloaded Project Files"
+grab_git.private_repo: "That GitHub project could not be downloaded.\n\nIt may be private or require authentication."
+grab_git.prompt: "Enter the GitHub project as:\nusername/project"
+grab_git.select_files: "Select one or more files to open."
+grab_git.title: "Grab Git"
+help.not_found: "Notepad-X help file not found."
+help.open_failed: "Unable to open the Notepad-X help file."
+large_file.encryption_disabled: "Encryption is not available for buffered large-file or preview tabs."
+large_file.find_unavailable: "Find is not available in buffered large-file mode yet."
+large_file.replace_unavailable: "Replace is not available in buffered large-file mode."
+large_file.save_as_disabled: "Save As is disabled for buffered large-file tabs."
+large_file.save_disabled: "This tab is opened in buffered large-file mode. Editing and saving are disabled for the full file view."
+large_file.save_run_unavailable: "Save and Run is not available for buffered large-file tabs."
+large_file.title: "Large File Mode"
+menu.edit: "Edit"
+menu.edit.bottom_of_document: "Bottom of Document"
+menu.edit.copy: "Copy"
+menu.edit.cut: "Cut"
+menu.edit.cycle_notes: "Cycle Notes"
+menu.edit.date: "Date"
+menu.edit.filter_notes: "Filter Notes"
+menu.edit.find: "Find"
+menu.edit.find_next: "Find Next"
+menu.edit.find_previous: "Find Previous"
+menu.edit.font: "Font"
+menu.edit.goto_line: "Go To Line"
+menu.edit.language: "Language"
+menu.edit.paste: "Paste"
+menu.edit.redo: "Redo"
+menu.edit.replace: "Replace"
+menu.edit.select_all: "Select All"
+menu.edit.sync_page_navigation: "Sync PgUp/PgDn in Compare"
+menu.edit.time_date: "Time/Date"
+menu.edit.top_of_document: "Top of Document"
+menu.edit.undo: "Undo"
+menu.file: "File"
+menu.file.close_tab: "Close Tab"
+menu.file.exit: "Exit"
+menu.file.export_notes: "Export Notes"
+menu.file.grab_git: "Grab Git"
+menu.file.new_tab: "New Tab"
+menu.file.open: "Open"
+menu.file.open_project: "Open Project"
+menu.file.print: "Print"
+menu.file.recent: "Recent"
+menu.file.save: "Save"
+menu.file.save_all: "Save All"
+menu.file.save_and_run: "Save and Run"
+menu.file.save_as: "Save As"
+menu.file.save_as_encrypted: "Save As Encrypted"
+menu.help: "Help"
+menu.help.about: "About Notepad-X"
+menu.help.contents: "Help Contents"
+menu.view: "View"
+menu.view.autocomplete: "Autocomplete"
+menu.view.close_compare_tabs: "Close Compare Tabs"
+menu.view.compare_tabs: "Compare Tabs"
+menu.view.create_theme: "Create Theme"
+menu.view.currently_editing: "Currently Editing"
+menu.view.edit_with_notepadx: "Edit with Notepad-X"
+menu.view.full_screen: "Full Screen"
+menu.view.numbered_lines: "Numbered Lines"
+menu.view.sound: "Sound"
+menu.view.status_bar: "Status Bar"
+menu.view.switch_tab: "Switch Tab"
+menu.view.syntax_mode: "Syntax Mode"
+menu.view.syntax_theme: "Syntax Theme"
+menu.view.word_wrap: "Word Wrap"
+note.color.prompt: "Color:"
+note.color.title: "Note Color"
+note.filter.all: "All"
+note.filter.blue: "Light Blue"
+note.filter.green: "Green"
+note.filter.red: "Red"
+note.filter.unread: "Unread"
+note.filter.yellow: "Yellow"
+note.popup.author: "Author"
+note.popup.author_id: "Author ID"
+note.popup.created: "Created"
+note.popup.responses: "Responses"
+note.popup.title: "Code note"
+note.prompt.add_title: "Add Note"
+note.prompt.author: "Author:"
+note.prompt.author_required: "Enter an author name first."
+note.prompt.name: "Name:"
+note.prompt.name_required: "Enter a name first."
+note.prompt.note: "Note:"
+note.prompt.respond_title: "Respond"
+note.prompt.response: "Response:"
+note.prompt.response_color: "Response Color"
+note.prompt.select_text_first: "Select some text first."
+panel.currently_editing.none: "No active IDs found."
+panel.currently_editing.title: "Currently Editing"
+panel.currently_editing.unsaved: "No active IDs found."
+print.failed_title: "Print Failed"
+print.unavailable: "Print is not available on this platform."
+print.unsafe_path: "That file path could not be sent to the print command safely."
+recover.tabs_message: "Notepad-X found unsaved tabs from a previous crash. Restore them?"
+recover.tabs_title: "Recover Tabs"
+replace_all.completed: "Replaced {count} occurrence(s)."
+replace_all.title: "Replace All"
+replace.panel.replace_all: "Replace All"
+replace.panel.replace_with: "Replace with:"
+run.large_file_unavailable: "Save and Run is not available for buffered large-file tabs."
+run.open_browser_failed: "Notepad-X could not open this file in your browser."
+run.runtime_missing: "Notepad-X could not find a runtime for {language} on this system."
+run.title: "Save and Run"
+run.unsafe_path: "That file path could not be sent to a runtime safely."
+run.unsupported: "Save and Run is not available for this file type yet."
+save.as_title: "Save As"
+save.close_prompt: "Save changes to {file_name} before closing?"
+save.copy_saved: "Copy saved to:\n{output_path}"
+save.copy_title: "Save Copy As"
+save.encrypted_copy_saved: "Encrypted copy saved to:\n{output_path}"
+save.encrypted_copy_title: "Save Encrypted Copy"
+save.failed_title: "Save Failed"
+save.title: "Save"
+status.byte_count: "{total_bytes} {bytes_label}"
+status.bytes: "bytes"
+status.char_count: "{total_chars} {characters_label}"
+status.characters: "characters"
+status.col: "Col"
+status.editor_id: " | ID: {editor_id}"
+status.encoding: "UTF-8"
+status.initial: "Ln 1 of 1, Col 1 | 0 characters | UTF-8 | Normal"
+status.line: "Ln"
+status.main: "{line_label} {row} {of_label} {total_lines}, {col_label} {col} | {char_info} | {encoding} | {zoom_text}{mode_suffix}"
+status.memory: " | Memory used: {memory_mb}MB"
+status.memory_initial: " | Memory used: 0MB"
+status.mode.normal: "Normal"
+status.mode.preview: "Preview"
+status.mode.virtual: "Virtual"
+status.of: "of"
+status.resource_initial: " | CPU: 0.0% Memory: 0MB"
+status.resource_usage: " | CPU: {cpu_percent}% Memory: {memory_mb}MB"
+status.selected_char_count: "{selected_count} {of_label} {total_chars} {characters_label}"
+status.synced: "| Notes Synced"
+status.unread_tail: " | {unread_count} unread (F3 to view) | ({active_editors} editing)"
+syntax.mode.auto: "Auto"
+syntax.mode.c: "C"
+syntax.mode.cpp: "C++"
+syntax.mode.html: "HTML"
+syntax.mode.java: "Java"
+syntax.mode.javascript: "JavaScript"
+syntax.mode.php: "PHP"
+syntax.mode.plain: "Plain Text"
+syntax.mode.python: "Python"
+syntax.mode.rust: "Rust"
+syntax.mode.sql: "SQL"
+syntax.mode.xml: "XML"
+syntax.theme.base4tone: "Base4Tone"
+syntax.theme.default: "Default"
+syntax.theme.green_monochrome: "Green Monochrome"
+syntax.theme.lolcat: "Lolcat"
+syntax.theme.orange_monochrome: "Orange Monochrome"
+syntax.theme.soft: "Soft"
+syntax.theme.vivid: "Vivid"
+theme.create.exists_message: "A theme file with that name already exists.\n\nOverwrite it?"
+theme.create.exists_title: "Overwrite Theme"
+theme.create.invalid_color: "Choose all theme colors before saving."
+theme.create.name: "Theme Name:"
+theme.create.name_required: "Enter a theme name first."
+theme.create.pick_color: "Choose..."
+theme.create.save: "Save Theme"
+theme.create.saved: "Theme saved."
+theme.create.title: "Create Theme"
+theme.field.comment: "Comment"
+theme.field.cursor: "Cursor"
+theme.field.gutter_bg: "Gutter Background"
+theme.field.gutter_current_bg: "Current Line Gutter"
+theme.field.gutter_current_fg: "Current Gutter Text"
+theme.field.gutter_divider: "Gutter Divider"
+theme.field.gutter_fg: "Gutter Text"
+theme.field.keyword: "Keyword"
+theme.field.number: "Number"
+theme.field.preprocessor: "Preprocessor"
+theme.field.selection: "Selection"
+theme.field.string: "String"
+theme.field.tag: "Tag"
+theme.field.text_bg: "Editor Background"
+theme.field.text_fg: "Editor Text"
+theme.field.type: "Type"

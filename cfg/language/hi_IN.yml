@@ -1,178 +1,294 @@
-{
-  "app.name": "Notepad-X",
-  "app.about_title": "Notepad-X के बारे में",
-  "app.help_title": "Notepad-X सहायता",
-  "app.compare_title": "टैब के साथ तुलना करें",
-  "about.heading": "Notepad-X",
-  "about.tagline": "क्योंकि Microsoft भूल गया कि Notepad कैसा होना चाहिए।",
-  "common.close": "बंद करें",
-  "common.compare": "तुलना करें",
-  "common.clear_list": "सूची साफ़ करें",
-  "common.empty": "(खाली)",
-  "common.ok": "ठीक है",
-
-  "context.cut": "कट करें",
-  "context.copy": "कॉपी करें",
-  "context.paste": "पेस्ट करें",
-  "context.select_all": "सभी चुनें",
-  "context.add_note": "नोट जोड़ें",
-  "context.respond": "उत्तर दें",
-  "context.remove_note": "नोट हटाएं",
-
-  "menu.file": "फ़ाइल",
-  "menu.file.open": "खोलें",
-  "menu.file.open_project": "प्रोजेक्ट खोलें",
-  "menu.file.recent": "हाल के",
-  "menu.file.new_tab": "नया टैब",
-  "menu.file.close_tab": "टैब बंद करें",
-  "menu.file.save": "सहेजें",
-  "menu.file.save_all": "सभी सहेजें",
-  "menu.file.save_as": "इस रूप में सहेजें",
-  "menu.file.save_as_encrypted": "एन्क्रिप्ट करके सहेजें",
-  "menu.file.print": "प्रिंट",
-  "menu.file.export_notes": "नोट्स निर्यात करें",
-  "menu.file.exit": "बाहर निकलें",
-
-  "menu.edit": "संपादन",
-  "menu.edit.undo": "पूर्ववत करें",
-  "menu.edit.redo": "फिर से करें",
-  "menu.edit.cut": "कट करें",
-  "menu.edit.copy": "कॉपी करें",
-  "menu.edit.paste": "पेस्ट करें",
-  "menu.edit.select_all": "सभी चुनें",
-  "menu.edit.find": "खोजें",
-  "menu.edit.find_next": "अगला खोजें",
-  "menu.edit.find_previous": "पिछला खोजें",
-  "menu.edit.replace": "बदलें",
-  "menu.edit.cycle_notes": "नोट्स बदलें",
-  "menu.edit.filter_notes": "नोट्स फ़िल्टर करें",
-  "menu.edit.goto_line": "पंक्ति पर जाएं",
-  "menu.edit.top_of_document": "दस्तावेज़ की शुरुआत",
-  "menu.edit.bottom_of_document": "दस्तावेज़ का अंत",
-  "menu.edit.sync_page_navigation": "तुलना में PgUp/PgDn सिंक करें",
-  "menu.edit.date": "तारीख",
-  "menu.edit.time_date": "समय/तारीख",
-  "menu.edit.font": "फ़ॉन्ट",
-  "menu.edit.language": "भाषा",
-
-  "menu.view": "दृश्य",
-  "menu.view.full_screen": "पूर्ण स्क्रीन",
-  "menu.view.switch_tab": "टैब बदलें",
-  "menu.view.status_bar": "स्थिति पट्टी",
-  "menu.view.numbered_lines": "पंक्ति संख्या",
-  "menu.view.autocomplete": "स्वतः पूर्ण",
-  "menu.view.edit_with_notepadx": "Notepad-X से संपादित करें",
-  "menu.view.word_wrap": "लाइन रैप",
-  "menu.view.sound": "ध्वनि",
-  "menu.view.syntax_theme": "सिंटैक्स थीम",
-  "menu.view.syntax_mode": "सिंटैक्स मोड",
-  "menu.view.compare_tabs": "टैब तुलना करें",
-  "menu.view.close_compare_tabs": "तुलना बंद करें",
-
-  "menu.help": "सहायता",
-  "menu.help.contents": "सहायता सामग्री",
-  "menu.help.about": "Notepad-X के बारे में",
-
-  "note.filter.all": "सभी",
-  "note.filter.unread": "अपठित",
-  "note.filter.yellow": "पीला",
-  "note.filter.green": "हरा",
-  "note.filter.red": "लाल",
-  "note.filter.blue": "हल्का नीला",
-
-  "note.popup.title": "कोड नोट",
-  "note.popup.author": "लेखक",
-  "note.popup.author_id": "लेखक आईडी",
-  "note.popup.created": "निर्मित",
-  "note.popup.responses": "प्रतिक्रियाएं",
-
-  "note.prompt.add_title": "नोट जोड़ें",
-  "note.prompt.author": "लेखक:",
-  "note.prompt.note": "नोट:",
-  "note.prompt.select_text_first": "पहले कुछ टेक्स्ट चुनें।",
-  "note.prompt.author_required": "पहले लेखक का नाम दर्ज करें।",
-  "note.prompt.respond_title": "उत्तर दें",
-  "note.prompt.name": "नाम:",
-  "note.prompt.response": "उत्तर:",
-  "note.prompt.response_color": "उत्तर का रंग",
-  "note.prompt.name_required": "पहले नाम दर्ज करें।",
-
-  "status.initial": "पंक्ति 1 में से 1, स्तंभ 1 | 0 अक्षर | UTF-8 | सामान्य",
-  "status.memory_initial": " | उपयोग की गई मेमोरी: 0MB",
-  "status.synced": "| नोट्स सिंक किए गए",
-  "status.line": "पंक्ति",
-  "status.col": "स्तंभ",
-  "status.of": "में से",
-  "status.characters": "अक्षर",
-  "status.bytes": "बाइट",
-  "status.encoding": "UTF-8",
-  "status.mode.normal": "सामान्य",
-  "status.mode.virtual": "वर्चुअल",
-  "status.mode.preview": "पूर्वावलोकन",
-
-  "status.main": "{line_label} {row} {of_label} {total_lines}, {col_label} {col} | {char_info} | {encoding} | {zoom_text}{mode_suffix}",
-  "status.char_count": "{total_chars} {characters_label}",
-  "status.selected_char_count": "{selected_count} {of_label} {total_chars} {characters_label}",
-  "status.byte_count": "{total_bytes} {bytes_label}",
-  "status.memory": " | उपयोग की गई मेमोरी: {memory_mb}MB",
-  "status.editor_id": " | आईडी: {editor_id}",
-  "status.unread_tail": " | {unread_count} अपठित (F3 दबाएं) | ({active_editors} संपादन कर रहे हैं)",
-
-  "compare.need_two_tabs": "तुलना के लिए कम से कम दो टैब खोलें।",
-  "compare.choose_prompt": "वर्तमान टैब के साथ तुलना करने के लिए एक टैब चुनें:",
-  "compare.header": "तुलना: {title}",
-
-  "help.open_failed": "Notepad-X सहायता फ़ाइल खोलने में असमर्थ।",
-  "help.not_found": "Notepad-X सहायता फ़ाइल नहीं मिली।",
-
-  "syntax.theme.default": "डिफ़ॉल्ट",
-  "syntax.theme.soft": "सॉफ्ट",
-  "syntax.theme.vivid": "विविड",
-
-  "syntax.mode.auto": "स्वतः",
-  "syntax.mode.plain": "सादा पाठ",
-  "syntax.mode.python": "Python",
-  "syntax.mode.c": "C",
-  "syntax.mode.cpp": "C++",
-  "syntax.mode.rust": "Rust",
-  "syntax.mode.java": "Java",
-  "syntax.mode.javascript": "JavaScript",
-  "syntax.mode.html": "HTML",
-  "syntax.mode.php": "PHP",
-  "syntax.mode.xml": "XML",
-  "syntax.mode.sql": "SQL",
-
-  "accel.open": "Ctrl+W",
-  "accel.open_project": "Ctrl+Shift+W",
-  "accel.new_tab": "Ctrl+T",
-  "accel.close_tab": "Ctrl+Shift+T",
-  "accel.save": "Ctrl+S",
-  "accel.save_all": "Ctrl+Shift+S",
-  "accel.save_as": "Ctrl+Shift+Q",
-  "accel.save_as_encrypted": "Ctrl+Shift+E",
-  "accel.print": "Ctrl+P",
-  "accel.export_notes": "Ctrl+E",
-  "accel.exit": "Ctrl+Shift+X",
-  "accel.undo": "Ctrl+Z",
-  "accel.redo": "Ctrl+Shift+Z",
-  "accel.cut": "Ctrl+X",
-  "accel.copy": "Ctrl+C",
-  "accel.paste": "Ctrl+V",
-  "accel.select_all": "Ctrl+A",
-  "accel.find": "Ctrl+F",
-  "accel.find_next": "F3",
-  "accel.find_previous": "Shift+F3",
-  "accel.replace": "Ctrl+R",
-  "accel.cycle_notes": "F4",
-  "accel.goto_line": "Ctrl+G",
-  "accel.top_of_document": "Ctrl+PgUp",
-  "accel.bottom_of_document": "Ctrl+PgDn",
-  "accel.date": "Ctrl+D",
-  "accel.time_date": "Ctrl+Shift+D",
-  "accel.font": "Ctrl+Shift+F",
-  "accel.full_screen": "F11",
-  "accel.switch_tab": "Ctrl+Tab",
-  "accel.status_bar": "Ctrl+B",
-  "accel.compare_tabs": "Ctrl+Q",
-  "accel.close_compare_tabs": "Ctrl+Shift+X"
-}
+about.heading: "Notepad-X"
+about.tagline: "क्योंकि Microsoft भूल गया कि Notepad कैसा होना चाहिए।"
+accel.bottom_of_document: "Ctrl+PgDn"
+accel.close_compare_tabs: "Ctrl+Shift+X"
+accel.close_tab: "Ctrl+Shift+T"
+accel.compare_tabs: "Ctrl+Q"
+accel.copy: "Ctrl+C"
+accel.currently_editing: "Ctrl+Shift+C"
+accel.cut: "Ctrl+X"
+accel.cycle_notes: "F4"
+accel.date: "Ctrl+D"
+accel.exit: "Ctrl+Shift+X"
+accel.export_notes: "Ctrl+E"
+accel.find: "Ctrl+F"
+accel.find_next: "F3"
+accel.find_previous: "Shift+F3"
+accel.font: "Ctrl+Shift+F"
+accel.full_screen: "F11"
+accel.goto_line: "Ctrl+G"
+accel.grab_git: "Ctrl+Shift+G"
+accel.new_tab: "Ctrl+T"
+accel.open: "Ctrl+W"
+accel.open_project: "Ctrl+Shift+W"
+accel.paste: "Ctrl+V"
+accel.print: "Ctrl+P"
+accel.redo: "Ctrl+Shift+Z"
+accel.replace: "Ctrl+R"
+accel.save: "Ctrl+S"
+accel.save_all: "Ctrl+Shift+S"
+accel.save_and_run: "Ctrl+Shift+R"
+accel.save_as: "Ctrl+Shift+Q"
+accel.save_as_encrypted: "Ctrl+Shift+E"
+accel.select_all: "Ctrl+A"
+accel.status_bar: "Ctrl+B"
+accel.switch_tab: "Ctrl+Tab"
+accel.time_date: "Ctrl+Shift+D"
+accel.top_of_document: "Ctrl+PgUp"
+accel.undo: "Ctrl+Z"
+app.about_title: "Notepad-X के बारे में"
+app.compare_title: "टैब के साथ तुलना करें"
+app.crash_message: "An unexpected error occurred.\nA crash log was written to:\n{crash_log_path}"
+app.crash_title: "Notepad-X Crash"
+app.help_title: "Notepad-X सहायता"
+app.name: "Notepad-X"
+clipboard.line_copied: "Copied line {line_number} to clipboard"
+common.cancel: "Cancel"
+common.clear_list: "सूची साफ़ करें"
+common.close: "बंद करें"
+common.color: "Color:"
+common.compare: "तुलना करें"
+common.empty: "(खाली)"
+common.go: "Go"
+common.ok: "ठीक है"
+common.save: "Save"
+compare.choose_prompt: "वर्तमान टैब के साथ तुलना करने के लिए एक टैब चुनें:"
+compare.header: "तुलना: {title}"
+compare.need_two_tabs: "तुलना के लिए कम से कम दो टैब खोलें।"
+context.add_note: "नोट जोड़ें"
+context.copy: "कॉपी करें"
+context.cut: "कट करें"
+context.paste: "पेस्ट करें"
+context.remove_note: "नोट हटाएं"
+context.respond: "उत्तर दें"
+context.select_all: "सभी चुनें"
+encryption.confirm_passphrase: "Confirm passphrase:"
+encryption.encrypt_file: "Encrypt file"
+encryption.open_prompt: "Passphrase for:\n{file_name}"
+encryption.open_title: "Open Encrypted File"
+encryption.passphrase: "Passphrase:"
+encryption.passphrase_mismatch: "Passphrases do not match."
+encryption.passphrase_required: "Enter a passphrase first."
+encryption.save_title: "Save Encrypted Copy As"
+encryption.show_passphrase: "Show passphrase"
+encryption.unavailable_message: "Encrypted save/open needs the 'cryptography' Python package.\n\nInstall it on this machine to use Notepad-X encrypted files."
+encryption.unavailable_title: "Encryption Unavailable"
+encryption.unlock_failed: "That passphrase did not unlock the encrypted file."
+export.notes.none: "There are no notes to export in this tab."
+export.notes.saved: "Notes exported to:\n{output_path}"
+file.changed_message: "This file changed on disk after it was opened.\n\nOverwrite the newer disk version with your current editor contents?"
+file.changed_title: "File Changed on Disk"
+file.missing_message: "That file could not be found."
+file.missing_title: "File Missing"
+file.open_failed_message: "Notepad-X could not open:\n{file_path}\n\n{error_detail}"
+file.open_failed_title: "Open Failed"
+file.reload_message: "Do you want Notepad-X to reload the file from disk instead?"
+file.reload_title: "Reload File"
+filesystem.access_error: "Notepad-X could not access:\n{location}\n\n{error_detail}"
+find.panel.find: "Find:"
+find.panel.find_next: "Find Next"
+find.panel.search_all_tabs: "Search across all tabs"
+font.family: "Font:"
+font.invalid_size_message: "Choose a valid font size."
+font.invalid_size_title: "Invalid Size"
+font.preview: "AaBbYyZz 0123456789"
+font.size: "Size:"
+font.title: "Font"
+goto_line.invalid_number: "Enter a valid number."
+goto_line.invalid_range: "Line number out of range."
+goto_line.invalid_title: "Invalid"
+goto_line.prompt: "Line Number:"
+goto_line.title: "Go To Line"
+grab_git.choose_folder: "Choose where to save the GitHub project"
+grab_git.clone_failed: "Notepad-X could not download that GitHub project.\n\n{error_detail}"
+grab_git.downloading: "Downloading Project"
+grab_git.downloading_prompt: "Downloading:\n{repo_identifier}\n\nPlease wait..."
+grab_git.exists: "That destination folder already exists.\nChoose another location or remove the existing folder first."
+grab_git.git_missing: "Git could not be found on this system."
+grab_git.invalid: "Enter the project as username/project.\n\nExample:\nopenai/openai-python"
+grab_git.no_files: "The project downloaded successfully, but no matching files were found to open."
+grab_git.not_found: "GitHub could not find \"{repo_identifier}\".\n\nCheck the username/project and try again."
+grab_git.open_prompt: "Downloaded project root:\n{root_dir}\n\nSelect one or more files to open."
+grab_git.open_selected: "Open Selected"
+grab_git.open_title: "Open Downloaded Project Files"
+grab_git.private_repo: "That GitHub project could not be downloaded.\n\nIt may be private or require authentication."
+grab_git.prompt: "Enter the GitHub project as:\nusername/project"
+grab_git.select_files: "Select one or more files to open."
+grab_git.title: "Grab Git"
+help.not_found: "Notepad-X सहायता फ़ाइल नहीं मिली।"
+help.open_failed: "Notepad-X सहायता फ़ाइल खोलने में असमर्थ।"
+large_file.encryption_disabled: "Encryption is not available for buffered large-file or preview tabs."
+large_file.find_unavailable: "Find is not available in buffered large-file mode yet."
+large_file.replace_unavailable: "Replace is not available in buffered large-file mode."
+large_file.save_as_disabled: "Save As is disabled for buffered large-file tabs."
+large_file.save_disabled: "This tab is opened in buffered large-file mode. Editing and saving are disabled for the full file view."
+large_file.save_run_unavailable: "Save and Run is not available for buffered large-file tabs."
+large_file.title: "Large File Mode"
+menu.edit: "संपादन"
+menu.edit.bottom_of_document: "दस्तावेज़ का अंत"
+menu.edit.copy: "कॉपी करें"
+menu.edit.cut: "कट करें"
+menu.edit.cycle_notes: "नोट्स बदलें"
+menu.edit.date: "तारीख"
+menu.edit.filter_notes: "नोट्स फ़िल्टर करें"
+menu.edit.find: "खोजें"
+menu.edit.find_next: "अगला खोजें"
+menu.edit.find_previous: "पिछला खोजें"
+menu.edit.font: "फ़ॉन्ट"
+menu.edit.goto_line: "पंक्ति पर जाएं"
+menu.edit.language: "भाषा"
+menu.edit.paste: "पेस्ट करें"
+menu.edit.redo: "फिर से करें"
+menu.edit.replace: "बदलें"
+menu.edit.select_all: "सभी चुनें"
+menu.edit.sync_page_navigation: "तुलना में PgUp/PgDn सिंक करें"
+menu.edit.time_date: "समय/तारीख"
+menu.edit.top_of_document: "दस्तावेज़ की शुरुआत"
+menu.edit.undo: "पूर्ववत करें"
+menu.file: "फ़ाइल"
+menu.file.close_tab: "टैब बंद करें"
+menu.file.exit: "बाहर निकलें"
+menu.file.export_notes: "नोट्स निर्यात करें"
+menu.file.grab_git: "Grab Git"
+menu.file.new_tab: "नया टैब"
+menu.file.open: "खोलें"
+menu.file.open_project: "प्रोजेक्ट खोलें"
+menu.file.print: "प्रिंट"
+menu.file.recent: "हाल के"
+menu.file.save: "सहेजें"
+menu.file.save_all: "सभी सहेजें"
+menu.file.save_and_run: "Save and Run"
+menu.file.save_as: "इस रूप में सहेजें"
+menu.file.save_as_encrypted: "एन्क्रिप्ट करके सहेजें"
+menu.help: "सहायता"
+menu.help.about: "Notepad-X के बारे में"
+menu.help.contents: "सहायता सामग्री"
+menu.view: "दृश्य"
+menu.view.autocomplete: "स्वतः पूर्ण"
+menu.view.close_compare_tabs: "तुलना बंद करें"
+menu.view.compare_tabs: "टैब तुलना करें"
+menu.view.create_theme: "Create Theme"
+menu.view.currently_editing: "Currently Editing"
+menu.view.edit_with_notepadx: "Notepad-X से संपादित करें"
+menu.view.full_screen: "पूर्ण स्क्रीन"
+menu.view.numbered_lines: "पंक्ति संख्या"
+menu.view.sound: "ध्वनि"
+menu.view.status_bar: "स्थिति पट्टी"
+menu.view.switch_tab: "टैब बदलें"
+menu.view.syntax_mode: "सिंटैक्स मोड"
+menu.view.syntax_theme: "सिंटैक्स थीम"
+menu.view.word_wrap: "लाइन रैप"
+note.color.prompt: "Color:"
+note.color.title: "Note Color"
+note.filter.all: "सभी"
+note.filter.blue: "हल्का नीला"
+note.filter.green: "हरा"
+note.filter.red: "लाल"
+note.filter.unread: "अपठित"
+note.filter.yellow: "पीला"
+note.popup.author: "लेखक"
+note.popup.author_id: "लेखक आईडी"
+note.popup.created: "निर्मित"
+note.popup.responses: "प्रतिक्रियाएं"
+note.popup.title: "कोड नोट"
+note.prompt.add_title: "नोट जोड़ें"
+note.prompt.author: "लेखक:"
+note.prompt.author_required: "पहले लेखक का नाम दर्ज करें।"
+note.prompt.name: "नाम:"
+note.prompt.name_required: "पहले नाम दर्ज करें।"
+note.prompt.note: "नोट:"
+note.prompt.respond_title: "उत्तर दें"
+note.prompt.response: "उत्तर:"
+note.prompt.response_color: "उत्तर का रंग"
+note.prompt.select_text_first: "पहले कुछ टेक्स्ट चुनें।"
+panel.currently_editing.none: "No active IDs found."
+panel.currently_editing.title: "Currently Editing"
+panel.currently_editing.unsaved: "No active IDs found."
+print.failed_title: "Print Failed"
+print.unavailable: "Print is not available on this platform."
+print.unsafe_path: "That file path could not be sent to the print command safely."
+recover.tabs_message: "Notepad-X found unsaved tabs from a previous crash. Restore them?"
+recover.tabs_title: "Recover Tabs"
+replace_all.completed: "Replaced {count} occurrence(s)."
+replace_all.title: "Replace All"
+replace.panel.replace_all: "Replace All"
+replace.panel.replace_with: "Replace with:"
+run.large_file_unavailable: "Save and Run is not available for buffered large-file tabs."
+run.open_browser_failed: "Notepad-X could not open this file in your browser."
+run.runtime_missing: "Notepad-X could not find a runtime for {language} on this system."
+run.title: "Save and Run"
+run.unsafe_path: "That file path could not be sent to a runtime safely."
+run.unsupported: "Save and Run is not available for this file type yet."
+save.as_title: "Save As"
+save.close_prompt: "Save changes to {file_name} before closing?"
+save.copy_saved: "Copy saved to:\n{output_path}"
+save.copy_title: "Save Copy As"
+save.encrypted_copy_saved: "Encrypted copy saved to:\n{output_path}"
+save.encrypted_copy_title: "Save Encrypted Copy"
+save.failed_title: "Save Failed"
+save.title: "Save"
+status.byte_count: "{total_bytes} {bytes_label}"
+status.bytes: "बाइट"
+status.char_count: "{total_chars} {characters_label}"
+status.characters: "अक्षर"
+status.col: "स्तंभ"
+status.editor_id: " | आईडी: {editor_id}"
+status.encoding: "UTF-8"
+status.initial: "पंक्ति 1 में से 1, स्तंभ 1 | 0 अक्षर | UTF-8 | सामान्य"
+status.line: "पंक्ति"
+status.main: "{line_label} {row} {of_label} {total_lines}, {col_label} {col} | {char_info} | {encoding} | {zoom_text}{mode_suffix}"
+status.memory: " | उपयोग की गई मेमोरी: {memory_mb}MB"
+status.memory_initial: " | उपयोग की गई मेमोरी: 0MB"
+status.mode.normal: "सामान्य"
+status.mode.preview: "पूर्वावलोकन"
+status.mode.virtual: "वर्चुअल"
+status.of: "में से"
+status.resource_initial: " | CPU: 0.0% Memory: 0MB"
+status.resource_usage: " | CPU: {cpu_percent}% Memory: {memory_mb}MB"
+status.selected_char_count: "{selected_count} {of_label} {total_chars} {characters_label}"
+status.synced: "| नोट्स सिंक किए गए"
+status.unread_tail: " | {unread_count} अपठित (F3 दबाएं) | ({active_editors} संपादन कर रहे हैं)"
+syntax.mode.auto: "स्वतः"
+syntax.mode.c: "C"
+syntax.mode.cpp: "C++"
+syntax.mode.html: "HTML"
+syntax.mode.java: "Java"
+syntax.mode.javascript: "JavaScript"
+syntax.mode.php: "PHP"
+syntax.mode.plain: "सादा पाठ"
+syntax.mode.python: "Python"
+syntax.mode.rust: "Rust"
+syntax.mode.sql: "SQL"
+syntax.mode.xml: "XML"
+syntax.theme.base4tone: "Base4Tone"
+syntax.theme.default: "डिफ़ॉल्ट"
+syntax.theme.green_monochrome: "Green Monochrome"
+syntax.theme.lolcat: "Lolcat"
+syntax.theme.orange_monochrome: "Orange Monochrome"
+syntax.theme.soft: "सॉफ्ट"
+syntax.theme.vivid: "विविड"
+theme.create.exists_message: "A theme file with that name already exists.\n\nOverwrite it?"
+theme.create.exists_title: "Overwrite Theme"
+theme.create.invalid_color: "Choose all theme colors before saving."
+theme.create.name: "Theme Name:"
+theme.create.name_required: "Enter a theme name first."
+theme.create.pick_color: "Choose..."
+theme.create.save: "Save Theme"
+theme.create.saved: "Theme saved."
+theme.create.title: "Create Theme"
+theme.field.comment: "Comment"
+theme.field.cursor: "Cursor"
+theme.field.gutter_bg: "Gutter Background"
+theme.field.gutter_current_bg: "Current Line Gutter"
+theme.field.gutter_current_fg: "Current Gutter Text"
+theme.field.gutter_divider: "Gutter Divider"
+theme.field.gutter_fg: "Gutter Text"
+theme.field.keyword: "Keyword"
+theme.field.number: "Number"
+theme.field.preprocessor: "Preprocessor"
+theme.field.selection: "Selection"
+theme.field.string: "String"
+theme.field.tag: "Tag"
+theme.field.text_bg: "Editor Background"
+theme.field.text_fg: "Editor Text"
+theme.field.type: "Type"

@@ -62,6 +62,11 @@ DEFAULT_LOCALE_STRINGS = {
     "common.clear_list": "Clear list",
     "common.empty": "(Empty)",
     "common.ok": "OK",
+    "common.cancel": "Cancel",
+    "common.save": "Save",
+    "common.go": "Go",
+    "common.color": "Color:",
+    "clipboard.line_copied": "Copied line {line_number} to clipboard",
     "context.cut": "Cut",
     "context.copy": "Copy",
     "context.paste": "Paste",
@@ -144,6 +149,8 @@ DEFAULT_LOCALE_STRINGS = {
     "note.prompt.response": "Response:",
     "note.prompt.response_color": "Response Color",
     "note.prompt.name_required": "Enter a name first.",
+    "note.color.title": "Note Color",
+    "note.color.prompt": "Color:",
     "panel.currently_editing.title": "Currently Editing",
     "panel.currently_editing.unsaved": "No active IDs found.",
     "panel.currently_editing.none": "No active IDs found.",
@@ -169,8 +176,71 @@ DEFAULT_LOCALE_STRINGS = {
     "compare.need_two_tabs": "Open at least two tabs to compare.",
     "compare.choose_prompt": "Choose a tab to compare with the current one:",
     "compare.header": "Comparing with: {title}",
+    "find.panel.find": "Find:",
+    "find.panel.find_next": "Find Next",
+    "find.panel.search_all_tabs": "Search across all tabs",
+    "replace.panel.replace_with": "Replace with:",
+    "replace.panel.replace_all": "Replace All",
+    "replace_all.title": "Replace All",
+    "replace_all.completed": "Replaced {count} occurrence(s).",
+    "large_file.title": "Large File Mode",
+    "large_file.find_unavailable": "Find is not available in buffered large-file mode yet.",
+    "large_file.replace_unavailable": "Replace is not available in buffered large-file mode.",
+    "large_file.save_run_unavailable": "Save and Run is not available for buffered large-file tabs.",
+    "large_file.save_disabled": "This tab is opened in buffered large-file mode. Editing and saving are disabled for the full file view.",
+    "large_file.save_as_disabled": "Save As is disabled for buffered large-file tabs.",
+    "large_file.encryption_disabled": "Encryption is not available for buffered large-file or preview tabs.",
+    "file.open_failed_title": "Open Failed",
+    "file.open_failed_message": "Notepad-X could not open:\n{file_path}\n\n{error_detail}",
+    "file.missing_title": "File Missing",
+    "file.missing_message": "That file could not be found.",
+    "file.changed_title": "File Changed on Disk",
+    "file.changed_message": "This file changed on disk after it was opened.\n\nOverwrite the newer disk version with your current editor contents?",
+    "file.reload_title": "Reload File",
+    "file.reload_message": "Do you want Notepad-X to reload the file from disk instead?",
+    "filesystem.access_error": "Notepad-X could not access:\n{location}\n\n{error_detail}",
+    "save.title": "Save",
+    "save.close_prompt": "Save changes to {file_name} before closing?",
+    "save.failed_title": "Save Failed",
+    "save.as_title": "Save As",
+    "save.copy_title": "Save Copy As",
+    "save.copy_saved": "Copy saved to:\n{output_path}",
+    "save.encrypted_copy_title": "Save Encrypted Copy",
+    "save.encrypted_copy_saved": "Encrypted copy saved to:\n{output_path}",
+    "print.failed_title": "Print Failed",
+    "print.unsafe_path": "That file path could not be sent to the print command safely.",
+    "print.unavailable": "Print is not available on this platform.",
+    "app.crash_title": "Notepad-X Crash",
+    "app.crash_message": "An unexpected error occurred.\nA crash log was written to:\n{crash_log_path}",
+    "recover.tabs_title": "Recover Tabs",
+    "recover.tabs_message": "Notepad-X found unsaved tabs from a previous crash. Restore them?",
     "help.open_failed": "Unable to open the Notepad-X help file.",
     "help.not_found": "Notepad-X help file not found.",
+    "export.notes.none": "There are no notes to export in this tab.",
+    "export.notes.saved": "Notes exported to:\n{output_path}",
+    "font.title": "Font",
+    "font.family": "Font:",
+    "font.size": "Size:",
+    "font.preview": "AaBbYyZz 0123456789",
+    "font.invalid_size_title": "Invalid Size",
+    "font.invalid_size_message": "Choose a valid font size.",
+    "goto_line.title": "Go To Line",
+    "goto_line.prompt": "Line Number:",
+    "goto_line.invalid_title": "Invalid",
+    "goto_line.invalid_range": "Line number out of range.",
+    "goto_line.invalid_number": "Enter a valid number.",
+    "encryption.unavailable_title": "Encryption Unavailable",
+    "encryption.unavailable_message": "Encrypted save/open needs the 'cryptography' Python package.\n\nInstall it on this machine to use Notepad-X encrypted files.",
+    "encryption.save_title": "Save Encrypted Copy As",
+    "encryption.encrypt_file": "Encrypt file",
+    "encryption.passphrase": "Passphrase:",
+    "encryption.confirm_passphrase": "Confirm passphrase:",
+    "encryption.show_passphrase": "Show passphrase",
+    "encryption.passphrase_required": "Enter a passphrase first.",
+    "encryption.passphrase_mismatch": "Passphrases do not match.",
+    "encryption.open_title": "Open Encrypted File",
+    "encryption.open_prompt": "Passphrase for:\n{file_name}",
+    "encryption.unlock_failed": "That passphrase did not unlock the encrypted file.",
     "syntax.theme.default": "Default",
     "syntax.theme.soft": "Soft",
     "syntax.theme.vivid": "Vivid",
@@ -251,8 +321,26 @@ DEFAULT_LOCALE_STRINGS = {
     "accel.currently_editing": "Ctrl+Shift+C",
     "accel.compare_tabs": "Ctrl+Q",
     "accel.close_compare_tabs": "Ctrl+Shift+X",
+    "grab_git.title": "Grab Git",
+    "grab_git.prompt": "Enter the GitHub project as:\nusername/project",
+    "grab_git.invalid": "Enter the project as username/project.\n\nExample:\nopenai/openai-python",
+    "grab_git.git_missing": "Git could not be found on this system.",
+    "grab_git.choose_folder": "Choose where to save the GitHub project",
+    "grab_git.exists": "That destination folder already exists.\nChoose another location or remove the existing folder first.",
+    "grab_git.downloading": "Downloading Project",
+    "grab_git.downloading_prompt": "Downloading:\n{repo_identifier}\n\nPlease wait...",
+    "grab_git.clone_failed": "Notepad-X could not download that GitHub project.\n\n{error_detail}",
+    "grab_git.not_found": "GitHub could not find \"{repo_identifier}\".\n\nCheck the username/project and try again.",
+    "grab_git.private_repo": "That GitHub project could not be downloaded.\n\nIt may be private or require authentication.",
+    "grab_git.no_files": "The project downloaded successfully, but no matching files were found to open.",
+    "grab_git.open_title": "Open Downloaded Project Files",
+    "grab_git.open_prompt": "Downloaded project root:\n{root_dir}\n\nSelect one or more files to open.",
+    "grab_git.select_files": "Select one or more files to open.",
+    "grab_git.open_selected": "Open Selected",
     "run.title": "Save and Run",
     "run.unsupported": "Save and Run is not available for this file type yet.",
+    "run.large_file_unavailable": "Save and Run is not available for buffered large-file tabs.",
+    "run.unsafe_path": "That file path could not be sent to a runtime safely.",
     "run.runtime_missing": "Notepad-X could not find a runtime for {language} on this system.",
     "run.open_browser_failed": "Notepad-X could not open this file in your browser."
 }
@@ -1307,21 +1395,31 @@ class NotepadX:
 
     def load_locale_strings(self, locale_path):
         strings = dict(DEFAULT_LOCALE_STRINGS)
+        payload = {}
+        needs_write = False
         if not os.path.exists(locale_path):
+            needs_write = True
+        try:
+            if os.path.exists(locale_path):
+                with open(locale_path, 'r', encoding='utf-8') as f:
+                    loaded_payload = self.parse_locale_strings(f.read())
+                if isinstance(loaded_payload, dict):
+                    for key, value in loaded_payload.items():
+                        if isinstance(key, str) and isinstance(value, str):
+                            payload[key] = value
+        except OSError:
+            pass
+        if payload:
+            strings.update(payload)
+        if not payload or any(key not in payload for key in DEFAULT_LOCALE_STRINGS):
+            needs_write = True
+        if needs_write:
             try:
+                os.makedirs(os.path.dirname(locale_path), exist_ok=True)
                 with open(locale_path, 'w', encoding='utf-8') as f:
                     f.write(self.serialize_locale_strings(strings))
             except OSError:
-                return strings
-        try:
-            with open(locale_path, 'r', encoding='utf-8') as f:
-                payload = self.parse_locale_strings(f.read())
-            if isinstance(payload, dict):
-                for key, value in payload.items():
-                    if isinstance(key, str) and isinstance(value, str):
-                        strings[key] = value
-        except OSError:
-            pass
+                pass
         return strings
 
     def tr(self, key, default=None, **kwargs):
@@ -1471,7 +1569,7 @@ class NotepadX:
             self.status.config(text=self.tr('status.initial', "Ln 1 of 1, Col 1 | 0 characters | UTF-8 | Normal"))
             self.status.config(anchor=self.ui_anchor_start())
         if hasattr(self, 'status_tail'):
-            self.status_tail.config(text=self.tr('status.memory_initial', " | Memory used: 0MB"))
+            self.status_tail.config(text=self.tr('status.resource_initial', " | CPU: 0.0% Memory: 0MB"))
             self.status_tail.config(anchor=self.ui_anchor_start())
         if hasattr(self, 'status_sync'):
             self.status_sync.config(text="")
@@ -1846,16 +1944,18 @@ class NotepadX:
 
     def show_encryption_unavailable(self, parent=None):
         messagebox.showerror(
-            "Encryption Unavailable",
-            "Encrypted save/open needs the 'cryptography' Python package.\n\n"
-            "Install it on this machine to use Notepad-X encrypted files.",
+            self.tr('encryption.unavailable_title', 'Encryption Unavailable'),
+            self.tr(
+                'encryption.unavailable_message',
+                "Encrypted save/open needs the 'cryptography' Python package.\n\nInstall it on this machine to use Notepad-X encrypted files."
+            ),
             parent=parent or self.root
         )
 
     def prompt_encryption_options(self, default_encrypt=False, parent=None):
         parent = parent or self.root
         dialog = tk.Toplevel(parent)
-        dialog.title("Save Encrypted Copy As")
+        dialog.title(self.tr('encryption.save_title', 'Save Encrypted Copy As'))
         dialog.transient(parent)
         dialog.resizable(False, False)
         dialog.configure(bg='#f0f0f0', padx=14, pady=12)
@@ -1869,17 +1969,17 @@ class NotepadX:
 
         tk.Checkbutton(
             dialog,
-            text="Encrypt file",
+            text=self.tr('encryption.encrypt_file', 'Encrypt file'),
             variable=encrypt_var,
             bg='#f0f0f0',
             anchor='w'
         ).pack(anchor='w', pady=(0, 8))
 
-        tk.Label(dialog, text="Passphrase:", bg='#f0f0f0', fg='black', font=('Segoe UI', 9)).pack(anchor='w')
+        tk.Label(dialog, text=self.tr('encryption.passphrase', 'Passphrase:'), bg='#f0f0f0', fg='black', font=('Segoe UI', 9)).pack(anchor='w')
         passphrase_entry = tk.Entry(dialog, textvariable=passphrase_var, width=34, show='*')
         passphrase_entry.pack(fill='x', pady=(0, 6))
 
-        tk.Label(dialog, text="Confirm passphrase:", bg='#f0f0f0', fg='black', font=('Segoe UI', 9)).pack(anchor='w')
+        tk.Label(dialog, text=self.tr('encryption.confirm_passphrase', 'Confirm passphrase:'), bg='#f0f0f0', fg='black', font=('Segoe UI', 9)).pack(anchor='w')
         confirm_entry = tk.Entry(dialog, textvariable=confirm_var, width=34, show='*')
         confirm_entry.pack(fill='x', pady=(0, 6))
 
@@ -1890,7 +1990,7 @@ class NotepadX:
 
         tk.Checkbutton(
             dialog,
-            text="Show passphrase",
+            text=self.tr('encryption.show_passphrase', 'Show passphrase'),
             variable=show_var,
             bg='#f0f0f0',
             anchor='w',
@@ -1908,10 +2008,18 @@ class NotepadX:
                 passphrase = passphrase_var.get()
                 confirm = confirm_var.get()
                 if not passphrase:
-                    messagebox.showinfo("Save Encrypted Copy As", "Enter a passphrase first.", parent=dialog)
+                    messagebox.showinfo(
+                        self.tr('encryption.save_title', 'Save Encrypted Copy As'),
+                        self.tr('encryption.passphrase_required', 'Enter a passphrase first.'),
+                        parent=dialog
+                    )
                     return "break"
                 if passphrase != confirm:
-                    messagebox.showinfo("Save Encrypted Copy As", "Passphrases do not match.", parent=dialog)
+                    messagebox.showinfo(
+                        self.tr('encryption.save_title', 'Save Encrypted Copy As'),
+                        self.tr('encryption.passphrase_mismatch', 'Passphrases do not match.'),
+                        parent=dialog
+                    )
                     return "break"
                 result['value'] = {'encrypt': True, 'passphrase': passphrase}
             else:
@@ -1924,8 +2032,8 @@ class NotepadX:
             dialog.destroy()
             return "break"
 
-        tk.Button(button_row, text="OK", width=10, command=submit).pack(side='left')
-        tk.Button(button_row, text="Cancel", width=10, command=cancel).pack(side='right')
+        tk.Button(button_row, text=self.tr('common.ok', 'OK'), width=10, command=submit).pack(side='left')
+        tk.Button(button_row, text=self.tr('common.cancel', 'Cancel'), width=10, command=cancel).pack(side='right')
 
         dialog.bind('<Return>', submit)
         dialog.bind('<Escape>', cancel)
@@ -1953,7 +2061,7 @@ class NotepadX:
     def prompt_open_passphrase(self, file_path, parent=None):
         parent = parent or self.root
         dialog = tk.Toplevel(parent)
-        dialog.title("Open Encrypted File")
+        dialog.title(self.tr('encryption.open_title', 'Open Encrypted File'))
         dialog.transient(parent)
         dialog.resizable(False, False)
         dialog.configure(bg='#f0f0f0', padx=14, pady=12)
@@ -1965,7 +2073,7 @@ class NotepadX:
 
         tk.Label(
             dialog,
-            text=f"Passphrase for:\n{os.path.basename(file_path)}",
+            text=self.tr('encryption.open_prompt', 'Passphrase for:\n{file_name}', file_name=os.path.basename(file_path)),
             bg='#f0f0f0',
             fg='black',
             justify='left',
@@ -1980,7 +2088,7 @@ class NotepadX:
 
         tk.Checkbutton(
             dialog,
-            text="Show passphrase",
+            text=self.tr('encryption.show_passphrase', 'Show passphrase'),
             variable=show_var,
             bg='#f0f0f0',
             anchor='w',
@@ -2000,8 +2108,8 @@ class NotepadX:
             dialog.destroy()
             return "break"
 
-        tk.Button(button_row, text="OK", width=10, command=submit).pack(side='left')
-        tk.Button(button_row, text="Cancel", width=10, command=cancel).pack(side='right')
+        tk.Button(button_row, text=self.tr('common.ok', 'OK'), width=10, command=submit).pack(side='left')
+        tk.Button(button_row, text=self.tr('common.cancel', 'Cancel'), width=10, command=cancel).pack(side='right')
 
         dialog.bind('<Return>', submit)
         dialog.bind('<Escape>', cancel)
@@ -2184,7 +2292,16 @@ class NotepadX:
         doc.pop('pending_insert_content', None)
         doc.pop('pending_insert_offset', None)
         file_path = doc.get('file_path')
-        messagebox.showerror("Open Failed", f"Notepad-X could not open:\n{file_path}\n\n{exc}", parent=self.root)
+        messagebox.showerror(
+            self.tr('file.open_failed_title', 'Open Failed'),
+            self.tr(
+                'file.open_failed_message',
+                'Notepad-X could not open:\n{file_path}\n\n{error_detail}',
+                file_path=file_path,
+                error_detail=exc
+            ),
+            parent=self.root
+        )
         if doc.get('background_open_new_tab'):
             try:
                 self.notebook.forget(doc['frame'])
@@ -2266,8 +2383,8 @@ class NotepadX:
                 raise
             except (InvalidTag, ValueError, UnicodeDecodeError):
                 retry = messagebox.askretrycancel(
-                    "Open Encrypted File",
-                    "That passphrase did not unlock the encrypted file.",
+                    self.tr('encryption.open_title', 'Open Encrypted File'),
+                    self.tr('encryption.unlock_failed', 'That passphrase did not unlock the encrypted file.'),
                     parent=self.root
                 )
                 if not retry:
@@ -2296,16 +2413,18 @@ class NotepadX:
         if known_signature is None or current_signature is None or current_signature == known_signature:
             return True
         answer = messagebox.askyesno(
-            "File Changed on Disk",
-            "This file changed on disk after it was opened.\n\n"
-            "Overwrite the newer disk version with your current editor contents?",
+            self.tr('file.changed_title', 'File Changed on Disk'),
+            self.tr(
+                'file.changed_message',
+                'This file changed on disk after it was opened.\n\nOverwrite the newer disk version with your current editor contents?'
+            ),
             parent=self.root
         )
         if answer:
             return True
         refreshed = messagebox.askyesno(
-            "Reload File",
-            "Do you want Notepad-X to reload the file from disk instead?",
+            self.tr('file.reload_title', 'Reload File'),
+            self.tr('file.reload_message', 'Do you want Notepad-X to reload the file from disk instead?'),
             parent=self.root
         )
         if refreshed:
@@ -2323,7 +2442,11 @@ class NotepadX:
 
     def show_filesystem_error(self, title, file_path, exc):
         location = os.path.abspath(file_path) if file_path else "that path"
-        messagebox.showerror(title, f"Notepad-X could not access:\n{location}\n\n{exc}", parent=self.root)
+        messagebox.showerror(
+            title,
+            self.tr('filesystem.access_error', 'Notepad-X could not access:\n{location}\n\n{error_detail}', location=location, error_detail=exc),
+            parent=self.root
+        )
 
     def is_probably_binary_file(self, file_path, sample_size=8192):
         try:
@@ -2540,7 +2663,15 @@ class NotepadX:
         if exc_type is KeyboardInterrupt:
             return
         try:
-            messagebox.showerror("Notepad-X Crash", f"An unexpected error occurred.\nA crash log was written to:\n{self.crash_log_path}", parent=self.root)
+            messagebox.showerror(
+                self.tr('app.crash_title', 'Notepad-X Crash'),
+                self.tr(
+                    'app.crash_message',
+                    'An unexpected error occurred.\nA crash log was written to:\n{crash_log_path}',
+                    crash_log_path=self.crash_log_path
+                ),
+                parent=self.root
+            )
         except Exception:
             pass
 
@@ -3314,7 +3445,7 @@ class NotepadX:
         toast_x = event.widget.winfo_rootx() + event.x
         toast_y = event.widget.winfo_rooty() + event.y
         self.show_toast(
-            f"Copied line {display_line} to clipboard",
+            self.tr('clipboard.line_copied', 'Copied line {line_number} to clipboard', line_number=display_line),
             x=toast_x,
             y=toast_y
         )
@@ -3328,15 +3459,15 @@ class NotepadX:
 
         # Find panel
         self.find_frame = tk.Frame(self.bottom_frame, bg=self.panel_bg)
-        tk.Label(self.find_frame, text="Find:", bg=self.panel_bg, fg=self.fg_color)\
+        tk.Label(self.find_frame, text=self.tr('find.panel.find', 'Find:'), bg=self.panel_bg, fg=self.fg_color)\
             .pack(side='left', padx=(8,4), pady=6)
         self.find_entry = tk.Entry(self.find_frame, width=40)
         self.find_entry.pack(side='left', padx=4, pady=6)
-        tk.Button(self.find_frame, text="Find Next", command=self.find_next)\
+        tk.Button(self.find_frame, text=self.tr('find.panel.find_next', 'Find Next'), command=self.find_next)\
             .pack(side='left', padx=4, pady=6)
         tk.Checkbutton(
             self.find_frame,
-            text="Search across all tabs",
+            text=self.tr('find.panel.search_all_tabs', 'Search across all tabs'),
             variable=self.search_all_tabs,
             bg=self.panel_bg,
             fg=self.fg_color,
@@ -3350,19 +3481,19 @@ class NotepadX:
 
         # Replace panel
         self.replace_frame = tk.Frame(self.bottom_frame, bg=self.panel_bg)
-        tk.Label(self.replace_frame, text="Find:", bg=self.panel_bg, fg=self.fg_color)\
+        tk.Label(self.replace_frame, text=self.tr('find.panel.find', 'Find:'), bg=self.panel_bg, fg=self.fg_color)\
             .pack(side='left', padx=(8,4), pady=6)
         self.replace_find_entry = tk.Entry(self.replace_frame, width=30)
         self.replace_find_entry.pack(side='left', padx=4, pady=6)
-        tk.Label(self.replace_frame, text="Replace with:", bg=self.panel_bg, fg=self.fg_color)\
+        tk.Label(self.replace_frame, text=self.tr('replace.panel.replace_with', 'Replace with:'), bg=self.panel_bg, fg=self.fg_color)\
             .pack(side='left', padx=(12,4), pady=6)
         self.replace_entry = tk.Entry(self.replace_frame, width=30)
         self.replace_entry.pack(side='left', padx=4, pady=6)
-        tk.Button(self.replace_frame, text="Replace All", command=self.replace_all)\
+        tk.Button(self.replace_frame, text=self.tr('replace.panel.replace_all', 'Replace All'), command=self.replace_all)\
             .pack(side='left', padx=8, pady=6)
         tk.Checkbutton(
             self.replace_frame,
-            text="Search across all tabs",
+            text=self.tr('find.panel.search_all_tabs', 'Search across all tabs'),
             variable=self.search_all_tabs,
             bg=self.panel_bg,
             fg=self.fg_color,
@@ -3527,7 +3658,11 @@ class NotepadX:
     def show_find_panel(self):
         current_doc = self.get_current_doc()
         if current_doc and current_doc.get('virtual_mode'):
-            messagebox.showinfo("Large File Mode", "Find is not available in buffered large-file mode yet.", parent=self.root)
+            messagebox.showinfo(
+                self.tr('large_file.title', 'Large File Mode'),
+                self.tr('large_file.find_unavailable', 'Find is not available in buffered large-file mode yet.'),
+                parent=self.root
+            )
             return "break"
 
         self.cancel_find_change_job()
@@ -3555,7 +3690,11 @@ class NotepadX:
     def show_replace_panel(self):
         current_doc = self.get_current_doc()
         if current_doc and current_doc.get('virtual_mode'):
-            messagebox.showinfo("Large File Mode", "Replace is not available in buffered large-file mode.", parent=self.root)
+            messagebox.showinfo(
+                self.tr('large_file.title', 'Large File Mode'),
+                self.tr('large_file.replace_unavailable', 'Replace is not available in buffered large-file mode.'),
+                parent=self.root
+            )
             return "break"
 
         self.cancel_find_change_job()
@@ -4442,7 +4581,11 @@ class NotepadX:
         self.text.delete('1.0', tk.END)
         self.text.insert('1.0', new_content.rstrip('\n'))
         self.text.edit_modified(True)
-        messagebox.showinfo("Replace All", f"Replaced {content.count(query)} occurrence(s).", parent=self.root)
+        messagebox.showinfo(
+            self.tr('replace_all.title', 'Replace All'),
+            self.tr('replace_all.completed', 'Replaced {count} occurrence(s).', count=content.count(query)),
+            parent=self.root
+        )
         self.update_status()
 
     # ─── Key Bindings ────────────────────────────────────────────
@@ -7091,8 +7234,8 @@ class NotepadX:
             dialog.destroy()
             return "break"
 
-        tk.Button(button_row, text="OK", width=10, command=submit).pack(side='right' if self.is_rtl_locale() else 'left')
-        tk.Button(button_row, text="Cancel", width=10, command=cancel).pack(side='left' if self.is_rtl_locale() else 'right')
+        tk.Button(button_row, text=self.tr('common.ok', 'OK'), width=10, command=submit).pack(side='right' if self.is_rtl_locale() else 'left')
+        tk.Button(button_row, text=self.tr('common.cancel', 'Cancel'), width=10, command=cancel).pack(side='left' if self.is_rtl_locale() else 'right')
 
         entry.bind('<Return>', submit)
         dialog.bind('<Return>', submit)
@@ -7116,12 +7259,12 @@ class NotepadX:
             self.autocomplete_suspended = max(0, self.autocomplete_suspended - 1)
             self.hide_autocomplete_popup()
 
-    def prompt_note_color(self, title="Note Color", initialvalue='yellow', parent=None):
+    def prompt_note_color(self, title=None, initialvalue='yellow', parent=None):
         parent = parent or self.root
         self.hide_autocomplete_popup()
         self.autocomplete_suspended += 1
         dialog = tk.Toplevel(parent)
-        dialog.title(title)
+        dialog.title(title or self.tr('note.color.title', 'Note Color'))
         dialog.transient(parent)
         dialog.resizable(False, False)
         dialog.configure(bg='#f0f0f0', padx=14, pady=12)
@@ -7132,7 +7275,7 @@ class NotepadX:
 
         tk.Label(
             dialog,
-            text="Color:",
+            text=self.tr('note.color.prompt', 'Color:'),
             bg='#f0f0f0',
             fg='black',
             font=('Segoe UI', 9)
@@ -7164,8 +7307,8 @@ class NotepadX:
             dialog.destroy()
             return "break"
 
-        tk.Button(button_row, text="OK", width=10, command=submit).pack(side='right' if self.is_rtl_locale() else 'left')
-        tk.Button(button_row, text="Cancel", width=10, command=cancel).pack(side='left' if self.is_rtl_locale() else 'right')
+        tk.Button(button_row, text=self.tr('common.ok', 'OK'), width=10, command=submit).pack(side='right' if self.is_rtl_locale() else 'left')
+        tk.Button(button_row, text=self.tr('common.cancel', 'Cancel'), width=10, command=cancel).pack(side='left' if self.is_rtl_locale() else 'right')
 
         dialog.bind('<Return>', submit)
         dialog.bind('<Escape>', cancel)
@@ -7189,7 +7332,11 @@ class NotepadX:
     def export_notes_report(self):
         doc = self.get_current_doc()
         if not doc or not doc.get('notes'):
-            messagebox.showinfo("Export Notes", "There are no notes to export in this tab.", parent=self.root)
+            messagebox.showinfo(
+                self.tr('menu.file.export_notes', 'Export Notes'),
+                self.tr('export.notes.none', 'There are no notes to export in this tab.'),
+                parent=self.root
+            )
             return "break"
         initial_name = f"{self.get_doc_name(doc['frame'])}-notes.json"
         output_path = filedialog.asksaveasfilename(
@@ -7251,12 +7398,16 @@ class NotepadX:
             else:
                 if not self.write_json_atomically(output_path, note_rows, 'notepadx-export-', 'export notes report'):
                     raise OSError(output_path)
-            messagebox.showinfo("Export Notes", f"Notes exported to:\n{output_path}", parent=self.root)
+            messagebox.showinfo(
+                self.tr('menu.file.export_notes', 'Export Notes'),
+                self.tr('export.notes.saved', 'Notes exported to:\n{output_path}', output_path=output_path),
+                parent=self.root
+            )
         except PermissionError as exc:
-            self.show_filesystem_error("Export Notes", output_path, exc)
+            self.show_filesystem_error(self.tr('menu.file.export_notes', 'Export Notes'), output_path, exc)
         except OSError as exc:
             self.log_exception("export notes report", exc)
-            self.show_filesystem_error("Export Notes", output_path, exc)
+            self.show_filesystem_error(self.tr('menu.file.export_notes', 'Export Notes'), output_path, exc)
         return "break"
 
     def add_note_to_selection(self, tab_id=None, event=None):
@@ -8344,7 +8495,16 @@ class NotepadX:
             file_size = os.path.getsize(file_path)
         except OSError as exc:
             self.log_exception("load content into doc", exc)
-            messagebox.showerror("Open Failed", f"Notepad-X could not open:\n{file_path}\n\n{exc}", parent=self.root)
+            messagebox.showerror(
+                self.tr('file.open_failed_title', 'Open Failed'),
+                self.tr(
+                    'file.open_failed_message',
+                    'Notepad-X could not open:\n{file_path}\n\n{error_detail}',
+                    file_path=file_path,
+                    error_detail=exc
+                ),
+                parent=self.root
+            )
             return False
         doc['encrypted_file'] = False
         doc['encryption_header'] = None
@@ -8418,11 +8578,20 @@ class NotepadX:
                     doc['window_end_line'] = doc['total_file_lines']
         except RuntimeError as exc:
             self.log_exception("load content into doc", exc)
-            messagebox.showerror("Open Failed", str(exc), parent=self.root)
+            messagebox.showerror(self.tr('file.open_failed_title', 'Open Failed'), str(exc), parent=self.root)
             return False
         except (OSError, UnicodeDecodeError, ValueError) as exc:
             self.log_exception("load content into doc", exc)
-            messagebox.showerror("Open Failed", f"Notepad-X could not open:\n{file_path}\n\n{exc}", parent=self.root)
+            messagebox.showerror(
+                self.tr('file.open_failed_title', 'Open Failed'),
+                self.tr(
+                    'file.open_failed_message',
+                    'Notepad-X could not open:\n{file_path}\n\n{error_detail}',
+                    file_path=file_path,
+                    error_detail=exc
+                ),
+                parent=self.root
+            )
             return False
 
         text.edit_modified(False)
@@ -8596,7 +8765,11 @@ class NotepadX:
         recovery_tabs = recovery.get('recovery_tabs', [])
         if not isinstance(recovery_tabs, list) or not recovery_tabs:
             return
-        if not messagebox.askyesno("Recover Tabs", "Notepad-X found unsaved tabs from a previous crash. Restore them?", parent=self.root):
+        if not messagebox.askyesno(
+            self.tr('recover.tabs_title', 'Recover Tabs'),
+            self.tr('recover.tabs_message', 'Notepad-X found unsaved tabs from a previous crash. Restore them?'),
+            parent=self.root
+        ):
             return
         current_doc = self.get_current_doc()
         if current_doc and not current_doc.get('file_path') and not current_doc['text'].edit_modified() and not current_doc['text'].get('1.0', 'end-1c').strip():
@@ -10224,7 +10397,11 @@ class NotepadX:
 
     def open_file_path(self, file_path):
         if not file_path or not os.path.exists(file_path):
-            messagebox.showwarning("File Missing", "That file could not be found.", parent=self.root)
+            messagebox.showwarning(
+                self.tr('file.missing_title', 'File Missing'),
+                self.tr('file.missing_message', 'That file could not be found.'),
+                parent=self.root
+            )
             self.recent_files = [path for path in self.recent_files if path != file_path]
             self.refresh_recent_files_menu()
             self.save_session()
@@ -10460,7 +10637,7 @@ class NotepadX:
         if doc.get('preview_mode') or doc.get('virtual_mode'):
             messagebox.showinfo(
                 self.tr('run.title', 'Save and Run'),
-                "Save and Run is not available for buffered large-file tabs.",
+                self.tr('run.large_file_unavailable', 'Save and Run is not available for buffered large-file tabs.'),
                 parent=self.root
             )
             return "break"
@@ -10474,7 +10651,7 @@ class NotepadX:
         if not self.path_looks_safe_for_shell(file_path):
             messagebox.showerror(
                 self.tr('run.title', 'Save and Run'),
-                "That file path could not be sent to a runtime safely.",
+                self.tr('run.unsafe_path', 'That file path could not be sent to a runtime safely.'),
                 parent=self.root
             )
             return "break"
@@ -10539,8 +10716,11 @@ class NotepadX:
             return False
         if doc.get('preview_mode') or doc.get('virtual_mode'):
             messagebox.showinfo(
-                "Large File Mode",
-                "This tab is opened in buffered large-file mode. Editing and saving are disabled for the full file view.",
+                self.tr('large_file.title', 'Large File Mode'),
+                self.tr(
+                    'large_file.save_disabled',
+                    'This tab is opened in buffered large-file mode. Editing and saving are disabled for the full file view.'
+                ),
                 parent=self.root
             )
             return False
@@ -10561,17 +10741,17 @@ class NotepadX:
                 else:
                     self.write_file_atomically(doc['file_path'], text_content)
             except PermissionError as exc:
-                self.show_filesystem_error("Save Failed", doc['file_path'], exc)
+                self.show_filesystem_error(self.tr('save.failed_title', 'Save Failed'), doc['file_path'], exc)
                 return False
             except RuntimeError as exc:
-                messagebox.showerror("Save Failed", str(exc), parent=self.root)
+                messagebox.showerror(self.tr('save.failed_title', 'Save Failed'), str(exc), parent=self.root)
                 return False
             except ValueError as exc:
-                messagebox.showerror("Save Failed", str(exc), parent=self.root)
+                messagebox.showerror(self.tr('save.failed_title', 'Save Failed'), str(exc), parent=self.root)
                 return False
             except OSError as exc:
                 self.log_exception("save file", exc)
-                self.show_filesystem_error("Save Failed", doc['file_path'], exc)
+                self.show_filesystem_error(self.tr('save.failed_title', 'Save Failed'), doc['file_path'], exc)
                 return False
             doc['text'].edit_modified(False)
             self.update_doc_file_signature(doc)
@@ -10617,14 +10797,14 @@ class NotepadX:
             return False
         if doc.get('preview_mode') or doc.get('virtual_mode'):
             messagebox.showinfo(
-                "Large File Mode",
-                "Save As is disabled for buffered large-file tabs.",
+                self.tr('large_file.title', 'Large File Mode'),
+                self.tr('large_file.save_as_disabled', 'Save As is disabled for buffered large-file tabs.'),
                 parent=self.root
             )
             return False
         file_path = filedialog.asksaveasfilename(
             parent=self.root,
-            title="Save As",
+            title=self.tr('save.as_title', 'Save As'),
             filetypes=self.get_save_filetypes()
         )
         if file_path:
@@ -10646,7 +10826,7 @@ class NotepadX:
         suggested_name = self.get_doc_name(doc['frame'])
         output_path = filedialog.asksaveasfilename(
             parent=self.root,
-            title="Save As",
+            title=self.tr('save.as_title', 'Save As'),
             initialfile=suggested_name,
             filetypes=self.get_save_filetypes()
         )
@@ -10662,16 +10842,20 @@ class NotepadX:
                         dst.write(chunk)
             else:
                 self.write_file_atomically(output_path, doc['text'].get('1.0', tk.END).rstrip('\n'))
-            messagebox.showinfo("Save Copy As", f"Copy saved to:\n{output_path}", parent=self.root)
+            messagebox.showinfo(
+                self.tr('save.copy_title', 'Save Copy As'),
+                self.tr('save.copy_saved', 'Copy saved to:\n{output_path}', output_path=output_path),
+                parent=self.root
+            )
         except PermissionError as exc:
-            self.show_filesystem_error("Save Copy As", output_path, exc)
+            self.show_filesystem_error(self.tr('save.copy_title', 'Save Copy As'), output_path, exc)
         except RuntimeError as exc:
-            messagebox.showerror("Save Copy As", str(exc), parent=self.root)
+            messagebox.showerror(self.tr('save.copy_title', 'Save Copy As'), str(exc), parent=self.root)
         except ValueError as exc:
-            messagebox.showerror("Save Copy As", str(exc), parent=self.root)
+            messagebox.showerror(self.tr('save.copy_title', 'Save Copy As'), str(exc), parent=self.root)
         except OSError as exc:
             self.log_exception("save copy as", exc)
-            self.show_filesystem_error("Save Copy As", output_path, exc)
+            self.show_filesystem_error(self.tr('save.copy_title', 'Save Copy As'), output_path, exc)
         return "break"
 
     def save_encrypted_copy(self):
@@ -10685,7 +10869,7 @@ class NotepadX:
         suggested_encrypted_name = suggested_name if suggested_name.lower().endswith('.npxe') else f"{suggested_name}.npxe"
         output_path = filedialog.asksaveasfilename(
             parent=self.root,
-            title="Save Encrypted Copy",
+            title=self.tr('save.encrypted_copy_title', 'Save Encrypted Copy'),
             initialfile=suggested_encrypted_name,
             defaultextension=".npxe",
             filetypes=self.get_save_filetypes(include_encrypted=True)
@@ -10697,8 +10881,11 @@ class NotepadX:
         try:
             if doc.get('virtual_mode') or doc.get('preview_mode'):
                 messagebox.showinfo(
-                    "Save Encrypted Copy",
-                    "Encryption is not available for buffered large-file or preview tabs.",
+                    self.tr('save.encrypted_copy_title', 'Save Encrypted Copy'),
+                    self.tr(
+                        'large_file.encryption_disabled',
+                        'Encryption is not available for buffered large-file or preview tabs.'
+                    ),
                     parent=self.root
                 )
                 return "break"
@@ -10708,16 +10895,24 @@ class NotepadX:
                 passphrase=encryption_options.get('passphrase'),
                 original_name=suggested_name
             )
-            messagebox.showinfo("Save Encrypted Copy", f"Encrypted copy saved to:\n{output_path}", parent=self.root)
+            messagebox.showinfo(
+                self.tr('save.encrypted_copy_title', 'Save Encrypted Copy'),
+                self.tr(
+                    'save.encrypted_copy_saved',
+                    'Encrypted copy saved to:\n{output_path}',
+                    output_path=output_path
+                ),
+                parent=self.root
+            )
         except PermissionError as exc:
-            self.show_filesystem_error("Save Encrypted Copy", output_path, exc)
+            self.show_filesystem_error(self.tr('save.encrypted_copy_title', 'Save Encrypted Copy'), output_path, exc)
         except RuntimeError as exc:
-            messagebox.showerror("Save Encrypted Copy", str(exc), parent=self.root)
+            messagebox.showerror(self.tr('save.encrypted_copy_title', 'Save Encrypted Copy'), str(exc), parent=self.root)
         except ValueError as exc:
-            messagebox.showerror("Save Encrypted Copy", str(exc), parent=self.root)
+            messagebox.showerror(self.tr('save.encrypted_copy_title', 'Save Encrypted Copy'), str(exc), parent=self.root)
         except OSError as exc:
             self.log_exception("save encrypted copy", exc)
-            self.show_filesystem_error("Save Encrypted Copy", output_path, exc)
+            self.show_filesystem_error(self.tr('save.encrypted_copy_title', 'Save Encrypted Copy'), output_path, exc)
         return "break"
 
     def print_file(self, event=None):
@@ -10732,7 +10927,11 @@ class NotepadX:
             doc = self.get_current_doc()
 
         if not self.path_looks_safe_for_shell(doc['file_path']):
-            messagebox.showerror("Print Failed", "That file path could not be sent to the print command safely.", parent=self.root)
+            messagebox.showerror(
+                self.tr('print.failed_title', 'Print Failed'),
+                self.tr('print.unsafe_path', 'That file path could not be sent to the print command safely.'),
+                parent=self.root
+            )
             return "break"
 
         print_error = None
@@ -10776,9 +10975,9 @@ class NotepadX:
                         print_error = exc
 
         if print_error is None:
-            print_error = OSError("Print is not available on this platform.")
+            print_error = OSError(self.tr('print.unavailable', 'Print is not available on this platform.'))
         self.log_exception("print file", print_error)
-        messagebox.showerror("Print Failed", str(print_error), parent=self.root)
+        messagebox.showerror(self.tr('print.failed_title', 'Print Failed'), str(print_error), parent=self.root)
         return "break"
 
     def exit_app(self, event=None):
@@ -10811,8 +11010,12 @@ class NotepadX:
         self.notebook.select(doc['frame'])
         self.set_active_document(doc['frame'])
         answer = messagebox.askyesnocancel(
-            "Save",
-            f"Save changes to {self.get_doc_name(doc['frame'])} before closing?",
+            self.tr('save.title', 'Save'),
+            self.tr(
+                'save.close_prompt',
+                'Save changes to {file_name} before closing?',
+                file_name=self.get_doc_name(doc['frame'])
+            ),
             parent=self.root
         )
         if answer is True:
@@ -11006,14 +11209,14 @@ class NotepadX:
 
     def show_font_dialog(self, event=None):
         dialog = tk.Toplevel(self.root)
-        dialog.title("Font")
+        dialog.title(self.tr('font.title', 'Font'))
         dialog.transient(self.root)
         dialog.resizable(False, False)
         dialog.configure(bg=self.bg_color, padx=16, pady=16)
         self.apply_window_icon(dialog)
 
-        tk.Label(dialog, text="Font:", bg=self.bg_color, fg=self.fg_color).grid(row=0, column=0, sticky='w', pady=(0, 8))
-        tk.Label(dialog, text="Size:", bg=self.bg_color, fg=self.fg_color).grid(row=0, column=1, sticky='w', padx=(12, 0), pady=(0, 8))
+        tk.Label(dialog, text=self.tr('font.family', 'Font:'), bg=self.bg_color, fg=self.fg_color).grid(row=0, column=0, sticky='w', pady=(0, 8))
+        tk.Label(dialog, text=self.tr('font.size', 'Size:'), bg=self.bg_color, fg=self.fg_color).grid(row=0, column=1, sticky='w', padx=(12, 0), pady=(0, 8))
 
         families = sorted(set(tkfont.families()))
         family_var = tk.StringVar(value=self.font_family)
@@ -11026,7 +11229,7 @@ class NotepadX:
 
         preview = tk.Label(
             dialog,
-            text="AaBbYyZz 0123456789",
+            text=self.tr('font.preview', 'AaBbYyZz 0123456789'),
             bg=self.text_bg,
             fg=self.text_fg,
             padx=12,
@@ -11052,7 +11255,11 @@ class NotepadX:
             try:
                 new_size = int(size_var.get())
             except ValueError:
-                messagebox.showwarning("Invalid Size", "Choose a valid font size.", parent=dialog)
+                messagebox.showwarning(
+                    self.tr('font.invalid_size_title', 'Invalid Size'),
+                    self.tr('font.invalid_size_message', 'Choose a valid font size.'),
+                    parent=dialog
+                )
                 return
 
             self.font_family = family_var.get() or self.font_family
@@ -11063,7 +11270,7 @@ class NotepadX:
 
         tk.Button(
             button_row,
-            text="OK",
+            text=self.tr('common.ok', 'OK'),
             command=apply_font,
             bg='#2d2d2d',
             fg=self.fg_color,
@@ -11077,7 +11284,7 @@ class NotepadX:
 
         tk.Button(
             button_row,
-            text="Cancel",
+            text=self.tr('common.cancel', 'Cancel'),
             command=dialog.destroy,
             bg='#2d2d2d',
             fg=self.fg_color,
@@ -11104,13 +11311,13 @@ class NotepadX:
     # ─── Goto Line ───────────────────────────────────────────────
     def goto_line_dialog(self, event=None):
         dialog = tk.Toplevel(self.root)
-        dialog.title("Go To Line")
+        dialog.title(self.tr('goto_line.title', 'Go To Line'))
         dialog.transient(self.root)
         dialog.resizable(False, False)
         dialog.configure(bg=self.bg_color)
         self.apply_window_icon(dialog)
 
-        tk.Label(dialog, text="Line Number:", bg=self.bg_color, fg=self.fg_color)\
+        tk.Label(dialog, text=self.tr('goto_line.prompt', 'Line Number:'), bg=self.bg_color, fg=self.fg_color)\
             .grid(row=0, column=0, padx=6, pady=8)
 
         entry = tk.Entry(dialog, width=15)
@@ -11138,11 +11345,19 @@ class NotepadX:
                     self.update_status()
                     dialog.destroy()
                 else:
-                    messagebox.showwarning("Invalid", "Line number out of range.", parent=dialog)
+                    messagebox.showwarning(
+                        self.tr('goto_line.invalid_title', 'Invalid'),
+                        self.tr('goto_line.invalid_range', 'Line number out of range.'),
+                        parent=dialog
+                    )
             except ValueError:
-                messagebox.showwarning("Invalid", "Enter a valid number.", parent=dialog)
+                messagebox.showwarning(
+                    self.tr('goto_line.invalid_title', 'Invalid'),
+                    self.tr('goto_line.invalid_number', 'Enter a valid number.'),
+                    parent=dialog
+                )
 
-        tk.Button(dialog, text="Go", command=goto)\
+        tk.Button(dialog, text=self.tr('common.go', 'Go'), command=goto)\
             .grid(row=1, column=1, sticky='e', padx=6, pady=6)
 
         dialog.bind('<Return>', lambda e: goto())
