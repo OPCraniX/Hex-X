@@ -20,6 +20,7 @@ import stat
 import socket
 import threading
 import webbrowser
+import gc
 from datetime import datetime, timezone
 from ctypes import wintypes
 from pathlib import Path
@@ -2824,7 +2825,7 @@ class NotepadX:
                 counters.cb
             )
             if success:
-                return max(1, round(counters.PagefileUsage / (1024 * 1024)))
+                return max(1, round(counters.WorkingSetSize / (1024 * 1024)))
         except Exception:
             pass
         return 0
@@ -8908,6 +8909,7 @@ class NotepadX:
         tab_id = str(doc['frame'])
         self.notebook.forget(doc['frame'])
         self.documents.pop(tab_id, None)
+        self.dispose_doc_resources(doc)
 
         if not self.documents:
             if recreate_if_empty:
@@ -8922,8 +8924,52 @@ class NotepadX:
             self.set_active_document(self.notebook.select())
         if not any(existing_doc.get('file_path') for existing_doc in self.documents.values()):
             self.current_file = None
+        self.memory_used_mb = self.get_memory_usage_mb()
+        self.update_status()
         self.save_session()
         return "break"
+
+    def dispose_doc_resources(self, doc):
+        if not doc:
+            return
+        self.cancel_text_theme_effect_job(doc)
+        syntax_job = doc.get('syntax_job')
+        if syntax_job:
+            try:
+                self.root.after_cancel(syntax_job)
+            except tk.TclError:
+                pass
+            doc['syntax_job'] = None
+
+        text_widget = doc.get('text')
+        if text_widget:
+            try:
+                if text_widget.winfo_exists():
+                    text_widget.configure(undo=False, autoseparators=False)
+                    text_widget.edit_reset()
+                    text_widget.delete('1.0', tk.END)
+            except tk.TclError:
+                pass
+
+        doc['notes'] = {}
+        doc['context_note_tag'] = None
+        doc['percolator'] = None
+        doc['colorizer'] = None
+        doc['line_starts'] = None
+        doc['pending_insert_content'] = None
+        doc['background_loading'] = False
+        doc['background_load_kind'] = None
+        doc['background_load_file_path'] = None
+
+        frame = doc.get('frame')
+        if frame:
+            try:
+                if frame.winfo_exists():
+                    frame.destroy()
+            except tk.TclError:
+                pass
+
+        gc.collect()
 
     # ─── Menu ────────────────────────────────────────────────────
     def create_menu(self):
