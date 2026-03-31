@@ -3043,12 +3043,43 @@ class NotepadX:
         row, col = text_widget.index(tk.INSERT).split('.')
         row = int(row)
         col = int(col) + 1
-        total_lines = int(text_widget.index('end-1c').split('.')[0])
 
         if doc and doc.get('virtual_mode'):
             row = doc['window_start_line'] + row - 1
             total_lines = doc['total_file_lines']
-
+            total_chars = doc.get('file_size_bytes', 0)
+            char_info = self.tr(
+                'status.byte_count',
+                '{total_bytes} {bytes_label}',
+                total_bytes=f"{total_chars:,}",
+                bytes_label=self.tr('status.bytes', 'bytes')
+            )
+        else:
+            full_content = text_widget.get('1.0', 'end-1c')
+            total_lines = int(text_widget.index('end-1c').split('.')[0])
+            total_chars = len(full_content)
+            try:
+                sel_start = text_widget.index('sel.first')
+                sel_end = text_widget.index('sel.last')
+                selected_count = len(text_widget.get(sel_start, sel_end))
+            except tk.TclError:
+                selected_count = 0
+            if selected_count > 0:
+                char_info = self.tr(
+                    'status.selected_char_count',
+                    '{selected_count} {of_label} {total_chars} {characters_label}',
+                    selected_count=f"{selected_count:,}",
+                    of_label=self.tr('status.of', 'of'),
+                    total_chars=f"{total_chars:,}",
+                    characters_label=self.tr('status.characters', 'characters')
+                )
+            else:
+                char_info = self.tr(
+                    'status.char_count',
+                    '{total_chars} {characters_label}',
+                    total_chars=f"{total_chars:,}",
+                    characters_label=self.tr('status.characters', 'characters')
+                )
         mode_suffix = ""
         if doc and doc.get('virtual_mode'):
             mode_suffix = f" | {self.tr('status.mode.virtual', 'Virtual')}"
@@ -3057,13 +3088,14 @@ class NotepadX:
 
         return self.tr(
             'status.compare',
-            '{line_label} {row} {of_label} {total_lines}, {col_label} {col}{mode_suffix}',
+            '{line_label} {row} {of_label} {total_lines}, {col_label} {col} | {char_info}{mode_suffix}',
             line_label=self.tr('status.line', 'Ln'),
             row=row,
             of_label=self.tr('status.of', 'of'),
             total_lines=total_lines,
             col_label=self.tr('status.col', 'Col'),
             col=col,
+            char_info=char_info,
             mode_suffix=mode_suffix
         )
 
