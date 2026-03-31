@@ -9372,9 +9372,15 @@ class NotepadX:
         if not self.compare_active:
             return
         try:
+            self.editor_paned.update_idletasks()
             width = self.editor_paned.winfo_width()
-            if width > 0:
-                self.editor_paned.sash_place(0, max(240, width // 2), 0)
+            sash_width = int(self.editor_paned.cget('sashwidth') or 0)
+            available_width = max(0, width - sash_width)
+            if available_width > 0:
+                sash_x = available_width // 2
+                if available_width >= 480:
+                    sash_x = max(240, min(sash_x, available_width - 240))
+                self.editor_paned.sash_place(0, sash_x, 0)
                 self.position_compare_status()
         except tk.TclError:
             pass
