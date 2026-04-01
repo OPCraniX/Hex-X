@@ -10654,7 +10654,7 @@ class NotepadX:
         file_path = filedialog.askopenfilename(
             parent=self.root,
             title=self.tr('menu.file.open', 'Open'),
-            filetypes=self.get_save_filetypes(include_encrypted=True)
+            filetypes=self.get_open_filetypes()
         )
         if file_path:
             self.open_file_path(file_path)
@@ -10771,6 +10771,29 @@ class NotepadX:
         if include_encrypted:
             return [(t('filetype.encrypted', 'Notepad-X Encrypted'), "*.npxe"), *filetypes]
         return filetypes
+
+    def get_open_filetypes(self):
+        t = self.tr
+        all_supported_label = t('filetype.all_supported', 'All Supported')
+        all_files_label = t('filetype.all_files', 'All Files')
+        encrypted_entry = (t('filetype.encrypted', 'Notepad-X Encrypted'), "*.npxe")
+        all_supported_pattern = ""
+        all_files_entry = (all_files_label, "*.*")
+        other_filetypes = []
+
+        for label, pattern in self.get_save_filetypes():
+            if label == all_supported_label:
+                all_supported_pattern = str(pattern)
+            elif label == all_files_label:
+                all_files_entry = (label, pattern)
+            else:
+                other_filetypes.append((label, pattern))
+
+        supported_patterns = list(dict.fromkeys(
+            token for token in f"{all_supported_pattern} {encrypted_entry[1]}".split() if token
+        ))
+        all_supported_entry = (all_supported_label, " ".join(supported_patterns))
+        return [all_supported_entry, encrypted_entry, *other_filetypes, all_files_entry]
 
     def get_save_and_run_language(self, doc, file_path):
         extension = os.path.splitext(file_path or '')[1].lower()
