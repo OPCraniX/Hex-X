@@ -8,7 +8,7 @@ It keeps a simple desktop-editor feel, but adds persistent sessions, live search
 
 ![EXE benchmark comparison](gfx/exe_benchmark.png)
 
-This benchmark is a point-in-time comparison between the packaged `Notepad-X 0.9.9` build and Microsoft Notepad. In this run, Microsoft Notepad launches faster at roughly `0.0076s` versus about `0.0100s` for Notepad-X and also shuts down quicker, but Notepad-X still stays far lighter on memory at about `44 MB` instead of roughly `127-128 MB`. The tradeoff is that Notepad-X hits a much larger startup CPU spike and far heavier launch-time disk I/O while it initializes. Exact results will still vary depending on hardware, OS state, background load, and what each editor has to initialize.
+This benchmark is a point-in-time comparison between the packaged `Notepad-X 0.9.9` build and Microsoft Notepad. In this run, Notepad-X comes out slightly ahead on average launch time at about `0.0037s` versus roughly `0.0043s` for Microsoft Notepad, stays dramatically lighter on memory at around `9 MB` at startup and about `5 MB` after settling instead of roughly `127-129 MB`, and also shuts down faster at about `0.0139s` versus `0.0789s`. The tradeoff is that Notepad-X still hits a much larger startup CPU spike and far heavier launch-time disk activity while it initializes, with about `18.18 MB` of startup reads and `538` read operations versus roughly `0.05 MB` and `60` reads for Microsoft Notepad. Exact results will still vary depending on hardware, OS state, background load, and what each editor has to initialize.
 
 ## Features
 
