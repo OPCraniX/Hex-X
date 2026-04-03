@@ -187,6 +187,7 @@ DEFAULT_LOCALE_STRINGS = {
     "find.panel.find": "Find:",
     "find.panel.find_next": "Find Next",
     "find.panel.search_all_tabs": "Search across all tabs",
+    "find.panel.browse": "Browse",
     "find.panel.find_in_label": "Find in:",
     "find.panel.find_in_button": "Find In",
     "find.panel.found_summary": "| Found: {count} {instance_word} of \"{query}\"",
@@ -3587,13 +3588,11 @@ class NotepadX:
             activeforeground='white',
             selectcolor=self.panel_bg
         ).pack(side='left', padx=(10, 4), pady=6)
-        tk.Label(self.find_frame, text=self.tr('find.panel.find_in_label', 'Find in:'), bg=self.panel_bg, fg=self.fg_color)\
+        tk.Button(self.find_frame, text=self.tr('find.panel.browse', 'Browse'), command=self.choose_find_in_directory_and_search)\
             .pack(side='left', padx=(10,4), pady=6)
         self.find_in_directory_var = tk.StringVar()
-        self.find_in_entry = tk.Entry(self.find_frame, width=28, textvariable=self.find_in_directory_var)
+        self.find_in_entry = tk.Entry(self.find_frame, width=42, textvariable=self.find_in_directory_var)
         self.find_in_entry.pack(side='left', padx=4, pady=6)
-        tk.Button(self.find_frame, text=self.tr('find.panel.find_in_button', 'Find In'), command=self.choose_find_in_directory_and_search)\
-            .pack(side='left', padx=4, pady=6)
         self.find_results_label = tk.Label(
             self.find_frame,
             text="",
