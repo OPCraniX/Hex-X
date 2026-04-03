@@ -254,6 +254,7 @@ DEFAULT_LOCALE_STRINGS = {
     "filetype.json": "JSON",
     "filetype.ini_config": "INI / Config",
     "filetype.batch": "Batch",
+    "filetype.powershell": "PowerShell",
     "filetype.shell": "Shell",
     "filetype.assembly": "Assembly",
     "filetype.pascal": "Pascal",
@@ -9065,7 +9066,7 @@ class NotepadX:
         saved_edit_with_shell = bool(session.get('edit_with_shell_enabled', False))
         shell_registered = self.is_edit_with_shell_registered()
         self.edit_with_shell_enabled.set(saved_edit_with_shell or shell_registered)
-        if saved_edit_with_shell and not shell_registered:
+        if self.edit_with_shell_enabled.get():
             self.sync_edit_with_shell_menu(show_errors=False)
         self.apply_locale(session.get('locale_code', self.locale_code), persist=False)
         saved_font_size = session.get('current_font_size', self.base_font_size)
@@ -10317,7 +10318,8 @@ class NotepadX:
             '.txt', '.md', '.rst', '.log', '.ini', '.cfg', '.conf', '.toml', '.yaml', '.yml',
             '.json', '.xml', '.csv', '.tsv', '.html', '.htm', '.css', '.js', '.ts', '.tsx',
             '.jsx', '.py', '.pyw', '.rs', '.c', '.h', '.cpp', '.cc', '.cxx', '.hpp', '.hh',
-            '.hxx', '.java', '.php', '.sql', '.sh', '.bat', '.cmd', '.ps1', '.asm', '.s',
+            '.hxx', '.java', '.php', '.sql', '.sh', '.bat', '.cmd', '.ps1', '.psm1', '.psd1',
+            '.ps1xml', '.pssc', '.psrc', '.psc1', '.cdxml', '.asm', '.s',
             '.tex', '.vb', '.vbs', '.pas', '.pl', '.pm', '.diff', '.patch', '.nsi', '.nsh',
             '.iss', '.rc', '.as', '.mx', '.asp', '.aspx', '.au3', '.ml', '.mli', '.sml',
             '.thy', '.for', '.f', '.f90', '.f95', '.f2k', '.lsp', '.lisp', '.mak', '.m',
@@ -10727,7 +10729,7 @@ class NotepadX:
     def get_save_filetypes(self, include_encrypted=False):
         t = self.tr
         filetypes = [
-            (t('filetype.all_supported', 'All Supported'), "*.txt *.md .gitignore *.py *.pyw *.c *.cpp *.cxx *.cc *.h *.hpp *.hxx *.hh *.cs *.rs *.java *.js *.html *.htm *.php *.xml *.sql *.css *.json *.ini *.bat *.cmd *.sh *.asm *.s *.tex *.vb *.vbs *.pas *.pl *.pm *.diff *.patch *.nsi *.nsh *.iss *.rc *.as *.mx *.asp *.aspx *.au3 *.ml *.mli *.sml *.thy *.for *.f *.f90 *.f95 *.f2k *.lsp *.lisp *.mak *.m *.nfo *.st *.xsd *.xsml *.xsl *.kml"),
+            (t('filetype.all_supported', 'All Supported'), "*.txt *.md .gitignore *.py *.pyw *.c *.cpp *.cxx *.cc *.h *.hpp *.hxx *.hh *.cs *.rs *.java *.js *.html *.htm *.php *.xml *.sql *.css *.json *.ini *.bat *.cmd *.ps1 *.psm1 *.psd1 *.ps1xml *.pssc *.psrc *.psc1 *.cdxml *.sh *.asm *.s *.tex *.vb *.vbs *.pas *.pl *.pm *.diff *.patch *.nsi *.nsh *.iss *.rc *.as *.mx *.asp *.aspx *.au3 *.ml *.mli *.sml *.thy *.for *.f *.f90 *.f95 *.f2k *.lsp *.lisp *.mak *.m *.nfo *.st *.xsd *.xsml *.xsl *.kml"),
             (t('filetype.text_document', 'Text Document'), "*.txt"),
             (t('filetype.markdown', 'Markdown'), "*.md"),
             (t('filetype.git_ignore', 'Git Ignore'), ".gitignore"),
@@ -10746,6 +10748,7 @@ class NotepadX:
             (t('filetype.json', 'JSON'), "*.json"),
             (t('filetype.ini_config', 'INI / Config'), "*.ini *.inf *.reg *.url"),
             (t('filetype.batch', 'Batch'), "*.bat *.cmd"),
+            (t('filetype.powershell', 'PowerShell'), "*.ps1 *.psm1 *.psd1 *.ps1xml *.pssc *.psrc *.psc1 *.cdxml"),
             (t('filetype.shell', 'Shell'), "*.sh *.bsh"),
             (t('filetype.assembly', 'Assembly'), "*.asm *.s"),
             (t('filetype.pascal', 'Pascal'), "*.pas *.inc"),
