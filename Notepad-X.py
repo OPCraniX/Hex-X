@@ -726,7 +726,6 @@ class NotepadX:
         self.create_status_bar()
         self.restore_session()
         self.restore_recovery_state()
-        self.open_startup_files(self.startup_files)
 
         self.bind_keys()
         self.update_font()
@@ -736,6 +735,7 @@ class NotepadX:
         self.process_remote_open_requests()
         self.poll_shared_notes()
         self.center_window(self.root)
+        self.schedule_startup_file_opening()
         self.schedule_blank_startup_memory_trim()
 
     class PROCESS_MEMORY_COUNTERS(ctypes.Structure):
@@ -3100,6 +3100,16 @@ class NotepadX:
             except tk.TclError:
                 break
 
+    def schedule_startup_file_opening(self):
+        if not self.startup_files:
+            return
+        pending_files = list(self.startup_files)
+        self.startup_files = []
+        try:
+            self.root.after_idle(lambda files=pending_files: self.open_startup_files(files))
+        except tk.TclError:
+            pass
+
     # ─── Status Bar ──────────────────────────────────────────────
     def create_status_bar(self):
         self.status_frame = tk.Frame(self.root, bg='#2d2d2d')
@@ -4937,7 +4947,7 @@ class NotepadX:
         seen = set()
         all_supported_label = self.tr('filetype.all_supported', 'All Supported')
         all_files_label = self.tr('filetype.all_files', 'All Files')
-        for label, pattern in self.get_save_filetypes():
+        for label, pattern in self.get_open_filetypes():
             if label in (all_supported_label, all_files_label):
                 continue
             for token in str(pattern).split():
@@ -10632,6 +10642,7 @@ class NotepadX:
                 current_doc['file_path'] = None
                 return False
             current_doc['background_open_new_tab'] = False
+            self.notebook.tab(current_doc['frame'], text=self.get_doc_title(current_doc['frame']))
             self.set_active_document(current_doc['frame'])
         else:
             tab_id = self.create_tab(file_path=file_path, select=True)
