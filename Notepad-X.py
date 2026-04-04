@@ -236,7 +236,7 @@ DEFAULT_LOCALE_STRINGS = {
     "spellcheck.unavailable_title": "Spell Check Unavailable",
     "spellcheck.unavailable_message": "Spell check needs pyspellchecker and the bundled English dictionary. Rebuild Notepad-X if the menu shows enabled but no words are marked.",
     "grammarcheck.unavailable_title": "Grammar Check Unavailable",
-    "grammarcheck.unavailable_message": "Grammar check needs language-tool-python. The first run may also download LanguageTool data before grammar suggestions are available.",
+    "grammarcheck.unavailable_message": "Grammar check needs language-tool-python plus either a working Java runtime for the local LanguageTool service or internet access for the public LanguageTool API. The first run may also download LanguageTool data before grammar suggestions are available.",
     "file.open_failed_title": "Open Failed",
     "file.open_failed_message": "Notepad-X could not open:\n{file_path}\n\n{error_detail}",
     "file.missing_title": "File Missing",
@@ -696,6 +696,7 @@ class NotepadX:
         self.grammarcheck_max_chars = 40000
         self.grammarcheck_supported_modes = {None, 'nfo', 'tex', 'markdown'}
         self.grammar_tool = None
+        self.grammar_tool_source = None
         self.grammar_tool_ready = False
         self.grammar_tool_lock = threading.Lock()
         self.grammar_check_lock = threading.Lock()
@@ -6692,15 +6693,27 @@ class NotepadX:
         if language_tool_python is not None:
             return True
         if notify:
-            messagebox.showinfo(
-                self.tr('grammarcheck.unavailable_title', 'Grammar Check Unavailable'),
-                self.tr(
-                    'grammarcheck.unavailable_message',
-                    'Grammar check needs language-tool-python. The first run may also download LanguageTool data before grammar suggestions are available.'
-                ),
-                parent=self.root
-            )
+            self.show_grammarcheck_unavailable_message()
         return False
+
+    def show_grammarcheck_unavailable_message(self):
+        messagebox.showinfo(
+            self.tr('grammarcheck.unavailable_title', 'Grammar Check Unavailable'),
+            self.tr(
+                'grammarcheck.unavailable_message',
+                'Grammar check needs language-tool-python plus either a working Java runtime for the local LanguageTool service or internet access for the public LanguageTool API. The first run may also download LanguageTool data before grammar suggestions are available.'
+            ),
+            parent=self.root
+        )
+
+    def configure_grammar_tool(self, tool):
+        if tool is None:
+            return None
+        try:
+            tool.disable_spellchecking()
+        except Exception:
+            pass
+        return tool
 
     def get_grammar_tool(self):
         if self.grammar_tool_ready:
@@ -6708,20 +6721,26 @@ class NotepadX:
         if language_tool_python is None:
             self.grammar_tool_ready = True
             self.grammar_tool = None
+            self.grammar_tool_source = None
             return None
         with self.grammar_tool_lock:
             if self.grammar_tool_ready:
                 return self.grammar_tool
+            self.grammar_tool = None
+            self.grammar_tool_source = None
             try:
-                tool = language_tool_python.LanguageTool('en-US')
-                try:
-                    tool.disable_spellchecking()
-                except Exception:
-                    pass
-                self.grammar_tool = tool
+                self.grammar_tool = self.configure_grammar_tool(language_tool_python.LanguageTool('en-US'))
+                self.grammar_tool_source = 'local'
             except Exception as exc:
                 self.log_exception("initialize grammar tool", exc)
-                self.grammar_tool = None
+                public_api_cls = getattr(language_tool_python, 'LanguageToolPublicAPI', None)
+                if public_api_cls is not None:
+                    try:
+                        self.grammar_tool = self.configure_grammar_tool(public_api_cls('en-US'))
+                        self.grammar_tool_source = 'public_api'
+                    except Exception as public_exc:
+                        self.log_exception("initialize public grammar tool", public_exc)
+                        self.grammar_tool = None
             self.grammar_tool_ready = True
         return self.grammar_tool
 
@@ -6734,6 +6753,7 @@ class NotepadX:
         except Exception as exc:
             self.log_exception("close grammar tool", exc)
         self.grammar_tool = None
+        self.grammar_tool_source = None
         self.grammar_tool_ready = False
 
     def queue_grammar_result(self, result):
@@ -6788,14 +6808,7 @@ class NotepadX:
                 if self.compare_view:
                     self.clear_grammarcheck(self.compare_view)
                 self.save_session()
-                messagebox.showinfo(
-                    self.tr('grammarcheck.unavailable_title', 'Grammar Check Unavailable'),
-                    self.tr(
-                        'grammarcheck.unavailable_message',
-                        'Grammar check needs language-tool-python. The first run may also download LanguageTool data before grammar suggestions are available.'
-                    ),
-                    parent=self.root
-                )
+                self.show_grammarcheck_unavailable_message()
             return
         text_widget = doc.get('text')
         if not isinstance(text_widget, tk.Text):
