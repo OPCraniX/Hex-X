@@ -7180,7 +7180,7 @@ class NotepadX:
     def is_spellcheck_candidate_word(self, content, match):
         token = match.group(0)
         normalized = token.lower()
-        if len(normalized) < 3 or len(normalized) > 32:
+        if len(normalized) < 2 or len(normalized) > 32:
             return False
         if normalized in self.spellcheck_custom_words:
             return False
