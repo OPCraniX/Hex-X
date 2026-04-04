@@ -6679,7 +6679,18 @@ class NotepadX:
         end = match.end()
         before_char = content[start - 1] if start > 0 else ''
         after_char = content[end] if end < len(content) else ''
-        if before_char in self.spellcheck_skip_neighbor_chars or after_char in self.spellcheck_skip_neighbor_chars:
+        skip_chars = self.spellcheck_skip_neighbor_chars - {'.'}
+        if before_char in skip_chars or after_char in skip_chars:
+            return False
+        if before_char == '.':
+            prior_char = content[start - 2] if start > 1 else ''
+            if prior_char and (prior_char.isalnum() or prior_char in {'_', '-', '@'}):
+                return False
+        if after_char == '.':
+            next_char = content[end + 1] if end + 1 < len(content) else ''
+            if next_char and (next_char.isalnum() or next_char in {'_', '-', '@'}):
+                return False
+        if before_char == '.' and after_char == '.':
             return False
         return True
 
