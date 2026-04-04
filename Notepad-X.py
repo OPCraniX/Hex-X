@@ -55,6 +55,11 @@ try:
 except ImportError:
     SpellChecker = None
 
+try:
+    import language_tool_python
+except ImportError:
+    language_tool_python = None
+
 DEFAULT_LOCALE_STRINGS = {
     "app.name": "Notepad-X",
     "app.about_title": "About Notepad-X",
@@ -132,6 +137,7 @@ DEFAULT_LOCALE_STRINGS = {
     "menu.view.numbered_lines": "Numbered Lines",
     "menu.view.autocomplete": "Autocomplete",
     "menu.view.spell_check": "Spell Check",
+    "menu.view.grammar_check": "Grammar Check",
     "menu.view.edit_with_notepadx": "Edit with Notepad-X",
     "menu.view.word_wrap": "Word Wrap",
     "menu.view.sound": "Sound",
@@ -229,6 +235,8 @@ DEFAULT_LOCALE_STRINGS = {
     "large_file.encryption_disabled": "Encryption is not available for buffered large-file or preview tabs.",
     "spellcheck.unavailable_title": "Spell Check Unavailable",
     "spellcheck.unavailable_message": "Spell check needs pyspellchecker and the bundled English dictionary. Rebuild Notepad-X if the menu shows enabled but no words are marked.",
+    "grammarcheck.unavailable_title": "Grammar Check Unavailable",
+    "grammarcheck.unavailable_message": "Grammar check needs language-tool-python. The first run may also download LanguageTool data before grammar suggestions are available.",
     "file.open_failed_title": "Open Failed",
     "file.open_failed_message": "Notepad-X could not open:\n{file_path}\n\n{error_detail}",
     "file.missing_title": "File Missing",
@@ -406,6 +414,7 @@ DEFAULT_LOCALE_STRINGS = {
     "accel.switch_tab": "Ctrl+Tab",
     "accel.status_bar": "Ctrl+B",
     "accel.spell_check": "F7",
+    "accel.grammar_check": "F8",
     "accel.preview_markdown": "Ctrl+Shift+P",
     "accel.currently_editing": "Ctrl+Shift+C",
     "accel.compare_tabs": "Ctrl+Q",
@@ -608,6 +617,7 @@ class NotepadX:
         self.find_matches_tag = 'find_match'
         self.find_current_tag = 'find_current'
         self.spellcheck_tag = 'spellcheck_misspelled'
+        self.grammarcheck_tag = 'grammar_issue'
         self.documents = {}
         self.cpu_used_percent = 0.0
         self.memory_used_mb = 0
@@ -682,6 +692,16 @@ class NotepadX:
         self.spellcheck_supported_modes = {None, 'ini', 'nfo', 'tex', 'markdown'}
         self.spell_checker = None
         self.spell_checker_ready = False
+        self.grammarcheck_delay_ms = 700
+        self.grammarcheck_max_chars = 40000
+        self.grammarcheck_supported_modes = {None, 'nfo', 'tex', 'markdown'}
+        self.grammar_tool = None
+        self.grammar_tool_ready = False
+        self.grammar_tool_lock = threading.Lock()
+        self.grammar_check_lock = threading.Lock()
+        self.grammar_result_queue = []
+        self.grammar_result_lock = threading.Lock()
+        self.grammar_unavailable_notified = False
         self.recent_files = []
         self.closed_session_files = set()
         self.note_sync_interval_ms = 100
@@ -710,6 +730,7 @@ class NotepadX:
         self.numbered_lines_enabled = tk.BooleanVar(value=True)
         self.autocomplete_enabled = tk.BooleanVar(value=True)
         self.spell_check_enabled = tk.BooleanVar(value=SpellChecker is not None)
+        self.grammar_check_enabled = tk.BooleanVar(value=language_tool_python is not None)
         self.edit_with_shell_enabled = tk.BooleanVar(value=False)
         self.search_all_tabs = tk.BooleanVar(value=False)
         self.note_filter = tk.StringVar(value='all')
@@ -782,6 +803,7 @@ class NotepadX:
         self.update_clock()
         self.update_memory_usage()
         self.process_background_file_results()
+        self.process_grammar_results()
         self.process_remote_open_requests()
         self.poll_shared_notes()
         self.center_window(self.root)
@@ -2627,6 +2649,7 @@ class NotepadX:
             'numbered_lines_enabled': bool(session.get('numbered_lines_enabled', True)),
             'autocomplete_enabled': bool(session.get('autocomplete_enabled', True)),
             'spell_check_enabled': bool(session.get('spell_check_enabled', SpellChecker is not None)),
+            'grammar_check_enabled': bool(session.get('grammar_check_enabled', language_tool_python is not None)),
             'markdown_preview_enabled': bool(session.get('markdown_preview_enabled', False)),
             'sync_page_navigation_enabled': bool(session.get('sync_page_navigation_enabled', False)),
             'edit_with_shell_enabled': bool(session.get('edit_with_shell_enabled', False)),
@@ -5209,6 +5232,7 @@ class NotepadX:
         self.root.bind('<Control-Shift-p>', self.toggle_markdown_preview)
         self.root.bind('<Control-Shift-P>', self.toggle_markdown_preview)
         self.root.bind('<F7>', self.toggle_spell_check)
+        self.root.bind('<F8>', self.toggle_grammar_check)
         self.root.bind_all('<KeyPress>', self.handle_global_ctrl_shift_shortcuts, add='+')
         self.root.bind_all('<Control-Shift-x>', self.ctrl_shift_x)
         self.root.bind_all('<Control-Shift-X>', self.ctrl_shift_x)
@@ -5360,6 +5384,27 @@ class NotepadX:
                 self.schedule_spellcheck(doc)
             else:
                 self.clear_spellcheck(doc)
+        self.save_session()
+        return "break"
+
+    def toggle_grammar_check(self, event=None):
+        if event is not None:
+            self.grammar_check_enabled.set(not self.grammar_check_enabled.get())
+        if self.grammar_check_enabled.get():
+            self.grammar_unavailable_notified = False
+            if not self.ensure_grammarcheck_dependency_available(notify=True):
+                self.grammar_check_enabled.set(False)
+                return "break"
+        for doc in self.documents.values():
+            if self.grammar_check_enabled.get():
+                self.schedule_grammarcheck(doc)
+            else:
+                self.clear_grammarcheck(doc)
+        if self.compare_view:
+            if self.grammar_check_enabled.get():
+                self.schedule_grammarcheck(self.compare_view)
+            else:
+                self.clear_grammarcheck(self.compare_view)
         self.save_session()
         return "break"
 
@@ -6016,6 +6061,7 @@ class NotepadX:
             'text': self.compare_text,
             'line_numbers': self.compare_line_numbers,
             'notes': {},
+            'grammar_matches': [],
             'percolator': None,
             'colorizer': None,
             'theme_effect_job': None,
@@ -6023,6 +6069,8 @@ class NotepadX:
             'preview_mode': False,
             'virtual_mode': False,
             'syntax_job': None,
+            'grammar_job': None,
+            'grammar_request_id': 0,
             'syntax_mode': None,
             'syntax_override': None,
             'file_path': None,
@@ -6206,6 +6254,9 @@ class NotepadX:
             'theme_effect_job': None,
             'syntax_job': None,
             'spellcheck_job': None,
+            'grammar_job': None,
+            'grammar_matches': [],
+            'grammar_request_id': 0,
             'syntax_mode': None,
             'syntax_override': None,
             'last_insert_index': '1.0',
@@ -6473,6 +6524,7 @@ class NotepadX:
 
         self.apply_text_theme_effect(doc)
         self.schedule_spellcheck(doc)
+        self.schedule_grammarcheck(doc)
 
     def build_rainbow_theme_palette(self, color_count=28):
         palette = []
@@ -6520,6 +6572,22 @@ class NotepadX:
             return '#ff7b8f', '#35141a'
         return '#9f1239', '#ffd7df'
 
+    def get_grammarcheck_tag_colors(self):
+        surface = self.get_syntax_surface_palette()
+        bg_value = str(surface.get('text_bg') or '#0d1117').lstrip('#')
+        if len(bg_value) != 6:
+            bg_value = '0d1117'
+        try:
+            red = int(bg_value[0:2], 16)
+            green = int(bg_value[2:4], 16)
+            blue = int(bg_value[4:6], 16)
+        except ValueError:
+            red, green, blue = (13, 17, 23)
+        luminance = (0.2126 * red) + (0.7152 * green) + (0.0722 * blue)
+        if luminance < 140:
+            return '#ffd36b', '#3d2a09'
+        return '#8a5200', '#ffe6a7'
+
     def get_rainbow_theme_tag_name(self, palette_index):
         return f"{self.rainbow_theme_tag_prefix}{int(palette_index)}"
 
@@ -6565,6 +6633,7 @@ class NotepadX:
             for tag_name in text_widget.tag_names():
                 if str(tag_name).startswith('note_'):
                     text_widget.tag_raise(tag_name)
+            text_widget.tag_raise(self.grammarcheck_tag)
             text_widget.tag_raise(self.spellcheck_tag)
             text_widget.tag_raise(self.bracket_match_tag)
             self.raise_find_tags(text_widget)
@@ -6618,6 +6687,300 @@ class NotepadX:
                 parent=self.root
             )
         return False
+
+    def ensure_grammarcheck_dependency_available(self, notify=False):
+        if language_tool_python is not None:
+            return True
+        if notify:
+            messagebox.showinfo(
+                self.tr('grammarcheck.unavailable_title', 'Grammar Check Unavailable'),
+                self.tr(
+                    'grammarcheck.unavailable_message',
+                    'Grammar check needs language-tool-python. The first run may also download LanguageTool data before grammar suggestions are available.'
+                ),
+                parent=self.root
+            )
+        return False
+
+    def get_grammar_tool(self):
+        if self.grammar_tool_ready:
+            return self.grammar_tool
+        if language_tool_python is None:
+            self.grammar_tool_ready = True
+            self.grammar_tool = None
+            return None
+        with self.grammar_tool_lock:
+            if self.grammar_tool_ready:
+                return self.grammar_tool
+            try:
+                tool = language_tool_python.LanguageTool('en-US')
+                try:
+                    tool.disable_spellchecking()
+                except Exception:
+                    pass
+                self.grammar_tool = tool
+            except Exception as exc:
+                self.log_exception("initialize grammar tool", exc)
+                self.grammar_tool = None
+            self.grammar_tool_ready = True
+        return self.grammar_tool
+
+    def shutdown_grammar_tool(self):
+        tool = getattr(self, 'grammar_tool', None)
+        if tool is None:
+            return
+        try:
+            tool.close()
+        except Exception as exc:
+            self.log_exception("close grammar tool", exc)
+        self.grammar_tool = None
+        self.grammar_tool_ready = False
+
+    def queue_grammar_result(self, result):
+        with self.grammar_result_lock:
+            self.grammar_result_queue.append(result)
+
+    def process_grammar_results(self):
+        results = []
+        with self.grammar_result_lock:
+            if self.grammar_result_queue:
+                results = self.grammar_result_queue[:]
+                self.grammar_result_queue.clear()
+        for result in results:
+            try:
+                self.handle_grammar_result(result)
+            except Exception as exc:
+                self.log_exception("handle grammar result", exc)
+        self.root.after(80, self.process_grammar_results)
+
+    def get_doc_by_id(self, doc_id):
+        doc = self.documents.get(str(doc_id))
+        if doc is not None:
+            return doc
+        if self.compare_view and str(self.compare_view.get('frame')) == str(doc_id):
+            return self.compare_view
+        return None
+
+    def build_text_signature(self, content):
+        text_value = str(content or '')
+        return hashlib.md5(text_value.encode('utf-8')).hexdigest()
+
+    def handle_grammar_result(self, result):
+        doc = self.get_doc_by_id(result.get('doc_id'))
+        if not doc:
+            return
+        if not self.grammar_check_enabled.get():
+            self.clear_grammarcheck(doc)
+            return
+        if int(doc.get('grammar_request_id') or 0) != int(result.get('request_id') or 0):
+            return
+        doc['grammar_matches'] = []
+        if not self.doc_supports_grammarcheck(doc):
+            self.clear_grammarcheck(doc)
+            return
+        if result.get('unavailable'):
+            self.clear_grammarcheck(doc)
+            if self.grammar_check_enabled.get() and not self.grammar_unavailable_notified:
+                self.grammar_unavailable_notified = True
+                self.grammar_check_enabled.set(False)
+                for open_doc in self.documents.values():
+                    self.clear_grammarcheck(open_doc)
+                if self.compare_view:
+                    self.clear_grammarcheck(self.compare_view)
+                self.save_session()
+                messagebox.showinfo(
+                    self.tr('grammarcheck.unavailable_title', 'Grammar Check Unavailable'),
+                    self.tr(
+                        'grammarcheck.unavailable_message',
+                        'Grammar check needs language-tool-python. The first run may also download LanguageTool data before grammar suggestions are available.'
+                    ),
+                    parent=self.root
+                )
+            return
+        text_widget = doc.get('text')
+        if not isinstance(text_widget, tk.Text):
+            return
+        try:
+            current_content = text_widget.get('1.0', 'end-1c')
+        except tk.TclError:
+            return
+        if self.build_text_signature(current_content) != result.get('content_signature'):
+            return
+        self.clear_grammarcheck(doc)
+        matches = result.get('matches') or []
+        if not matches:
+            return
+        doc['grammar_matches'] = matches
+        for match in matches:
+            start_offset = int(match.get('offset') or 0)
+            end_offset = start_offset + int(match.get('length') or 0)
+            start_index = self.text_index_from_offset(text_widget, start_offset, content=current_content)
+            end_index = self.text_index_from_offset(text_widget, end_offset, content=current_content)
+            if not start_index or not end_index:
+                continue
+            try:
+                text_widget.tag_add(self.grammarcheck_tag, start_index, end_index)
+            except tk.TclError:
+                continue
+        self.raise_editor_overlay_tags(text_widget)
+
+    def cancel_grammarcheck_job(self, doc):
+        if not doc:
+            return
+        job = doc.get('grammar_job')
+        if not job:
+            return
+        try:
+            self.root.after_cancel(job)
+        except tk.TclError:
+            pass
+        doc['grammar_job'] = None
+
+    def clear_grammarcheck(self, doc_or_widget):
+        if isinstance(doc_or_widget, dict):
+            doc = doc_or_widget
+            self.cancel_grammarcheck_job(doc)
+            doc['grammar_matches'] = []
+            text_widget = doc.get('text')
+        else:
+            doc = None
+            text_widget = doc_or_widget
+        if not isinstance(text_widget, tk.Text):
+            return
+        try:
+            if text_widget.winfo_exists():
+                text_widget.tag_remove(self.grammarcheck_tag, '1.0', tk.END)
+        except tk.TclError:
+            pass
+
+    def doc_supports_grammarcheck(self, doc):
+        if not doc or not self.grammar_check_enabled.get() or language_tool_python is None:
+            return False
+        if doc.get('virtual_mode') or doc.get('preview_mode') or doc.get('large_file_mode'):
+            return False
+        if doc.get('syntax_mode') not in self.grammarcheck_supported_modes:
+            return False
+        text_widget = doc.get('text')
+        if not isinstance(text_widget, tk.Text):
+            return False
+        try:
+            return bool(text_widget.winfo_exists())
+        except tk.TclError:
+            return False
+
+    def get_grammar_match_issue_type(self, match):
+        issue_type = getattr(match, 'rule_issue_type', None)
+        if issue_type is None:
+            issue_type = getattr(match, 'ruleIssueType', None)
+        return str(issue_type or '').strip().lower()
+
+    def normalize_grammar_replacements(self, match):
+        replacements = []
+        for replacement in (getattr(match, 'replacements', None) or []):
+            if isinstance(replacement, str):
+                candidate = replacement
+            else:
+                candidate = getattr(replacement, 'value', None)
+                if candidate is None:
+                    candidate = str(replacement)
+            candidate = str(candidate or '').strip()
+            if candidate and candidate not in replacements:
+                replacements.append(candidate)
+            if len(replacements) >= 6:
+                break
+        return replacements
+
+    def start_grammarcheck_worker(self, doc):
+        if not self.doc_supports_grammarcheck(doc):
+            self.clear_grammarcheck(doc)
+            return
+        text_widget = doc.get('text')
+        doc['grammar_job'] = None
+        try:
+            content = text_widget.get('1.0', 'end-1c')
+        except tk.TclError:
+            return
+        if not content or len(content) > self.grammarcheck_max_chars:
+            self.clear_grammarcheck(doc)
+            return
+        request_id = int(doc.get('grammar_request_id') or 0) + 1
+        doc['grammar_request_id'] = request_id
+        doc_id = str(doc.get('frame'))
+        content_signature = self.build_text_signature(content)
+
+        def worker(snapshot=content, current_doc_id=doc_id, current_request_id=request_id, current_signature=content_signature):
+            tool = self.get_grammar_tool()
+            if tool is None:
+                self.queue_grammar_result({
+                    'doc_id': current_doc_id,
+                    'request_id': current_request_id,
+                    'content_signature': current_signature,
+                    'unavailable': True,
+                })
+                return
+            try:
+                with self.grammar_check_lock:
+                    raw_matches = tool.check(snapshot)
+            except Exception as exc:
+                self.log_exception("grammarcheck scan", exc)
+                self.queue_grammar_result({
+                    'doc_id': current_doc_id,
+                    'request_id': current_request_id,
+                    'content_signature': current_signature,
+                    'unavailable': True,
+                })
+                return
+
+            matches = []
+            for match in raw_matches or []:
+                issue_type = self.get_grammar_match_issue_type(match)
+                if issue_type == 'misspelling':
+                    continue
+                try:
+                    offset = int(getattr(match, 'offset', 0) or 0)
+                except (TypeError, ValueError):
+                    continue
+                raw_length = getattr(match, 'error_length', None)
+                if raw_length is None:
+                    raw_length = getattr(match, 'errorLength', None)
+                try:
+                    error_length = int(raw_length or 0)
+                except (TypeError, ValueError):
+                    error_length = 0
+                if error_length <= 0:
+                    continue
+                matches.append({
+                    'offset': offset,
+                    'length': error_length,
+                    'message': str(getattr(match, 'message', '') or '').strip(),
+                    'issue_type': issue_type,
+                    'replacements': self.normalize_grammar_replacements(match),
+                })
+
+            self.queue_grammar_result({
+                'doc_id': current_doc_id,
+                'request_id': current_request_id,
+                'content_signature': current_signature,
+                'matches': matches,
+            })
+
+        threading.Thread(target=worker, name='NotepadXGrammarCheck', daemon=True).start()
+
+    def schedule_grammarcheck(self, doc):
+        if not doc:
+            return
+        if not self.doc_supports_grammarcheck(doc):
+            self.clear_grammarcheck(doc)
+            return
+        self.cancel_grammarcheck_job(doc)
+        try:
+            doc['grammar_job'] = self.root.after(
+                self.grammarcheck_delay_ms,
+                lambda current=doc: self.start_grammarcheck_worker(current)
+            )
+        except tk.TclError:
+            doc['grammar_job'] = None
+            self.start_grammarcheck_worker(doc)
 
     def cancel_spellcheck_job(self, doc):
         if not doc:
@@ -6867,6 +7230,7 @@ class NotepadX:
         surface = self.get_syntax_surface_palette()
         palette = self.get_syntax_palette()
         spellcheck_fg, spellcheck_bg = self.get_spellcheck_tag_colors()
+        grammarcheck_fg, grammarcheck_bg = self.get_grammarcheck_tag_colors()
         text_widget.configure(
             bg=surface['text_bg'],
             fg=surface['text_fg'],
@@ -6882,6 +7246,7 @@ class NotepadX:
         text_widget.tag_config('syntax_preprocessor', foreground=palette['preprocessor'])
         text_widget.tag_config('syntax_tag', foreground=palette['tag'])
         text_widget.tag_config(self.spellcheck_tag, underline=1, foreground=spellcheck_fg, background=spellcheck_bg)
+        text_widget.tag_config(self.grammarcheck_tag, underline=1, foreground=grammarcheck_fg, background=grammarcheck_bg)
 
     def set_syntax_theme(self, theme_name):
         if theme_name not in self.get_available_syntax_theme_names():
@@ -7286,6 +7651,7 @@ class NotepadX:
         if event_type in {'3', 'KeyRelease'} and not doc.get('virtual_mode') and not doc.get('preview_mode'):
             self.schedule_text_theme_effect(doc)
             self.schedule_spellcheck(doc)
+            self.schedule_grammarcheck(doc)
         self.update_bracket_match_highlight(doc)
         self.update_line_number_gutter(doc)
         self.update_status()
@@ -7529,6 +7895,7 @@ class NotepadX:
         if event_type in {'3', 'KeyRelease'}:
             self.schedule_text_theme_effect(compare_doc)
             self.schedule_spellcheck(compare_doc)
+            self.schedule_grammarcheck(compare_doc)
         self.update_bracket_match_highlight(compare_doc)
         self.update_line_number_gutter(compare_doc)
         self.update_status()
@@ -7744,8 +8111,11 @@ class NotepadX:
 
         target_widget = doc.get('context_target_widget') or doc.get('text')
         word_info = None
+        grammar_info = None
         if not is_readonly_target and isinstance(target_widget, tk.Text):
             word_info = self.get_misspelled_word_info_at_index(target_widget, word_index, doc=doc)
+            if word_info is None:
+                grammar_info = self.get_grammar_issue_info_at_index(target_widget, word_index, doc=doc)
 
         if word_info:
             suggestions = self.get_spellcheck_suggestions(word_info['word'])
@@ -7766,6 +8136,19 @@ class NotepadX:
                     lambda current_word=word: self.add_word_to_spellcheck_dictionary(current_word)
                 )
             )
+            menu.add_separator()
+        elif grammar_info:
+            suggestions = self.format_spellcheck_suggestions(grammar_info.get('replacements') or [], grammar_info)
+            if suggestions:
+                for suggestion in suggestions:
+                    menu.add_command(
+                        label=suggestion,
+                        command=lambda frame=action_target, start=grammar_info['start'], end=grammar_info['end'], replacement=suggestion:
+                            self.run_context_menu_action(lambda current_frame=frame, current_start=start, current_end=end, current_replacement=replacement:
+                                self.replace_word_in_widget(current_frame, current_start, current_end, current_replacement))
+                    )
+            else:
+                menu.add_command(label=self.tr('context.no_suggestions', 'No suggestions'), state='disabled')
             menu.add_separator()
 
         menu.add_command(label=self.tr('context.cut', 'Cut'), state='disabled' if is_readonly_target else 'normal', command=lambda frame=action_target: self.run_context_menu_widget_action(frame, self.cut))
@@ -7796,6 +8179,7 @@ class NotepadX:
         doc = self.get_doc_for_text_widget(target_widget)
         if doc:
             self.schedule_spellcheck(doc)
+            self.schedule_grammarcheck(doc)
             self.update_status()
         return "break"
 
@@ -7869,6 +8253,36 @@ class NotepadX:
             seen.add(dedupe_key)
             formatted.append(display_value)
         return formatted
+
+    def get_grammar_issue_info_at_index(self, text_widget, index, doc=None):
+        if not isinstance(text_widget, tk.Text):
+            return None
+        doc = doc or self.get_doc_for_text_widget(text_widget)
+        if not self.doc_supports_grammarcheck(doc):
+            return None
+        try:
+            resolved_index = text_widget.index(index or tk.INSERT)
+        except tk.TclError:
+            return None
+        for match in doc.get('grammar_matches') or []:
+            start_offset = int(match.get('offset') or 0)
+            end_offset = start_offset + int(match.get('length') or 0)
+            start_index = self.text_index_from_offset(text_widget, start_offset)
+            end_index = self.text_index_from_offset(text_widget, end_offset)
+            if not start_index or not end_index:
+                continue
+            try:
+                if text_widget.compare(resolved_index, '>=', start_index) and text_widget.compare(resolved_index, '<', end_index):
+                    return {
+                        'start': start_index,
+                        'end': end_index,
+                        'replacements': list(match.get('replacements') or []),
+                        'message': str(match.get('message') or ''),
+                        'capitalize_suggestions': self.should_capitalize_spellcheck_suggestion(text_widget, start_index),
+                    }
+            except tk.TclError:
+                continue
+        return None
 
     def get_misspelled_word_info_at_index(self, text_widget, index, doc=None):
         if not isinstance(text_widget, tk.Text):
@@ -9697,6 +10111,7 @@ class NotepadX:
             'numbered_lines_enabled': bool(self.numbered_lines_enabled.get()),
             'autocomplete_enabled': bool(self.autocomplete_enabled.get()),
             'spell_check_enabled': bool(self.spell_check_enabled.get()),
+            'grammar_check_enabled': bool(self.grammar_check_enabled.get()),
             'markdown_preview_enabled': bool(self.markdown_preview_enabled.get()),
             'sync_page_navigation_enabled': bool(self.sync_page_navigation_enabled.get()),
             'edit_with_shell_enabled': bool(self.edit_with_shell_enabled.get()),
@@ -9914,6 +10329,7 @@ class NotepadX:
         self.numbered_lines_enabled.set(bool(session.get('numbered_lines_enabled', True)))
         self.autocomplete_enabled.set(bool(session.get('autocomplete_enabled', True)))
         self.spell_check_enabled.set(bool(session.get('spell_check_enabled', SpellChecker is not None)) and self.ensure_spellcheck_available(notify=False))
+        self.grammar_check_enabled.set(bool(session.get('grammar_check_enabled', language_tool_python is not None)) and language_tool_python is not None)
         self.markdown_preview_enabled.set(bool(session.get('markdown_preview_enabled', False)))
         self.sync_page_navigation_enabled.set(bool(session.get('sync_page_navigation_enabled', False)))
         saved_edit_with_shell = bool(session.get('edit_with_shell_enabled', False))
@@ -10148,6 +10564,7 @@ class NotepadX:
             self.schedule_syntax_highlight(doc)
         self.schedule_text_theme_effect(doc)
         self.schedule_spellcheck(doc)
+        self.schedule_grammarcheck(doc)
         if self.markdown_preview_enabled.get() and self.markdown_preview_source_tab == str(tab_id):
             self.schedule_markdown_preview_refresh()
         self.update_line_number_gutter(doc)
@@ -10275,12 +10692,20 @@ class NotepadX:
             except tk.TclError:
                 pass
             doc['spellcheck_job'] = None
+        grammar_job = doc.get('grammar_job')
+        if grammar_job:
+            try:
+                self.root.after_cancel(grammar_job)
+            except tk.TclError:
+                pass
+            doc['grammar_job'] = None
 
         text_widget = doc.get('text')
         if text_widget:
             try:
                 if text_widget.winfo_exists():
                     text_widget.tag_remove(self.spellcheck_tag, '1.0', tk.END)
+                    text_widget.tag_remove(self.grammarcheck_tag, '1.0', tk.END)
                     text_widget.configure(undo=False, autoseparators=False)
                     text_widget.edit_reset()
                     text_widget.delete('1.0', tk.END)
@@ -10288,6 +10713,7 @@ class NotepadX:
                 pass
 
         doc['notes'] = {}
+        doc['grammar_matches'] = []
         doc['context_note_tag'] = None
         doc['percolator'] = None
         doc['colorizer'] = None
@@ -10369,6 +10795,7 @@ class NotepadX:
         view_menu.add_checkbutton(label=t('menu.view.numbered_lines', 'Numbered Lines'), variable=self.numbered_lines_enabled, command=self.toggle_numbered_lines)
         view_menu.add_checkbutton(label=t('menu.view.autocomplete', 'Autocomplete'), variable=self.autocomplete_enabled, command=self.toggle_autocomplete)
         view_menu.add_checkbutton(label=t('menu.view.spell_check', 'Spell Check'), variable=self.spell_check_enabled, command=self.toggle_spell_check, accelerator=t('accel.spell_check', 'F7'))
+        view_menu.add_checkbutton(label=t('menu.view.grammar_check', 'Grammar Check'), variable=self.grammar_check_enabled, command=self.toggle_grammar_check, accelerator=t('accel.grammar_check', 'F8'))
         view_menu.add_checkbutton(label=t('menu.view.word_wrap', 'Word Wrap'), variable=self.word_wrap_enabled, command=self.toggle_word_wrap)
         view_menu.add_checkbutton(label=t('menu.view.preview_markdown', 'Preview Markdown'), variable=self.markdown_preview_enabled, command=self.toggle_markdown_preview, accelerator=t('accel.preview_markdown', 'Ctrl+Shift+P'))
         view_menu.add_command(label=t('menu.view.currently_editing', 'Currently Editing'), command=self.toggle_currently_editing_panel, accelerator=t('accel.currently_editing', 'Ctrl+Shift+C'))
@@ -12338,6 +12765,7 @@ class NotepadX:
                 os.remove(self.recovery_path)
             except OSError as exc:
                 self.log_exception("remove recovery file on exit", exc)
+        self.shutdown_grammar_tool()
         self.persist_editor_identity()
         self.save_session()
         self.root.quit()
