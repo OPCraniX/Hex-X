@@ -603,7 +603,6 @@ class NotepadX:
         self.note_color_order = ('yellow', 'green', 'red', 'blue')
         self.note_bg      = self.note_colors['yellow']
         self.panel_bg     = '#252525'
-        self.spellcheck_fg = '#ff5d73'
 
         self.current_file = None
         self.find_matches_tag = 'find_match'
@@ -6504,6 +6503,22 @@ class NotepadX:
         selected = self.get_current_syntax_theme_definition()
         return dict(selected['syntax'])
 
+    def get_spellcheck_tag_colors(self):
+        surface = self.get_syntax_surface_palette()
+        bg_value = str(surface.get('text_bg') or '#0d1117').lstrip('#')
+        if len(bg_value) != 6:
+            bg_value = '0d1117'
+        try:
+            red = int(bg_value[0:2], 16)
+            green = int(bg_value[2:4], 16)
+            blue = int(bg_value[4:6], 16)
+        except ValueError:
+            red, green, blue = (13, 17, 23)
+        luminance = (0.2126 * red) + (0.7152 * green) + (0.0722 * blue)
+        if luminance < 140:
+            return '#ff7b8f', '#35141a'
+        return '#9f1239', '#ffd7df'
+
     def get_rainbow_theme_tag_name(self, palette_index):
         return f"{self.rainbow_theme_tag_prefix}{int(palette_index)}"
 
@@ -6839,6 +6854,7 @@ class NotepadX:
     def apply_syntax_tag_colors(self, text_widget):
         surface = self.get_syntax_surface_palette()
         palette = self.get_syntax_palette()
+        spellcheck_fg, spellcheck_bg = self.get_spellcheck_tag_colors()
         text_widget.configure(
             bg=surface['text_bg'],
             fg=surface['text_fg'],
@@ -6853,6 +6869,7 @@ class NotepadX:
         text_widget.tag_config('syntax_number', foreground=palette['number'])
         text_widget.tag_config('syntax_preprocessor', foreground=palette['preprocessor'])
         text_widget.tag_config('syntax_tag', foreground=palette['tag'])
+        text_widget.tag_config(self.spellcheck_tag, underline=1, foreground=spellcheck_fg, background=spellcheck_bg)
 
     def set_syntax_theme(self, theme_name):
         if theme_name not in self.get_available_syntax_theme_names():
