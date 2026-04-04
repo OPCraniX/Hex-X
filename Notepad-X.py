@@ -7012,6 +7012,253 @@ class NotepadX:
     def normalize_grammar_token(self, value):
         return re.sub(r'[^A-Za-z0-9]+', '', str(value or '')).lower()
 
+    def preserve_grammar_replacement_case(self, source, replacement):
+        source_text = str(source or '')
+        replacement_text = str(replacement or '')
+        if not replacement_text:
+            return replacement_text
+        if source_text.isupper():
+            return replacement_text.upper()
+        if source_text[:1].isupper():
+            return replacement_text[:1].upper() + replacement_text[1:]
+        return replacement_text
+
+    def infer_grammar_subject_number(self, subject, determiner=''):
+        subject_value = str(subject or '').strip().lower()
+        determiner_value = str(determiner or '').strip().lower()
+        if subject_value in {'i', 'he', 'she', 'it', 'this', 'that'}:
+            return 'singular'
+        if subject_value in {'we', 'they', 'these', 'those', 'you'}:
+            return 'plural'
+        if determiner_value in {'a', 'an', 'this', 'that', 'each', 'every'}:
+            return 'singular'
+        if determiner_value in {'these', 'those', 'many', 'several'}:
+            return 'plural'
+        if subject_value in {'news', 'series', 'species', 'physics', 'mathematics'}:
+            return 'singular'
+        if subject_value.endswith('ies'):
+            return 'plural'
+        if subject_value.endswith('ss'):
+            return 'singular'
+        if subject_value.endswith('s') and len(subject_value) > 2:
+            return 'plural'
+        return 'singular'
+
+    def infer_grammar_verb_number(self, verb):
+        verb_value = str(verb or '').strip().lower()
+        if verb_value in {'is', 'has', 'does', 'was', 'begins', 'transforms', 'feeds', 'grows', 'plays', 'flies'}:
+            return 'singular'
+        if verb_value in {'are', 'have', 'do', 'were', 'begin', 'transform', 'feed', 'grow', 'play', 'fly', 'thrive'}:
+            return 'plural'
+        return None
+
+    def convert_grammar_verb(self, verb, target_number):
+        verb_value = str(verb or '').strip()
+        lower_value = verb_value.lower()
+        singular_to_plural = {
+            'is': 'are',
+            'has': 'have',
+            'does': 'do',
+            'was': 'were',
+            'begins': 'begin',
+            'transforms': 'transform',
+            'feeds': 'feed',
+            'grows': 'grow',
+            'plays': 'play',
+            'flies': 'fly',
+        }
+        plural_to_singular = {
+            'are': 'is',
+            'have': 'has',
+            'do': 'does',
+            'were': 'was',
+            'begin': 'begins',
+            'transform': 'transforms',
+            'feed': 'feeds',
+            'grow': 'grows',
+            'play': 'plays',
+            'fly': 'flies',
+        }
+        if target_number == 'plural':
+            replacement = singular_to_plural.get(lower_value, lower_value[:-1] if lower_value.endswith('s') else lower_value)
+        else:
+            if lower_value in plural_to_singular:
+                replacement = plural_to_singular[lower_value]
+            elif lower_value.endswith('y') and len(lower_value) > 1 and lower_value[-2] not in 'aeiou':
+                replacement = f"{lower_value[:-1]}ies"
+            elif lower_value.endswith(('s', 'x', 'z', 'ch', 'sh')):
+                replacement = f"{lower_value}es"
+            else:
+                replacement = f"{lower_value}s"
+        return self.preserve_grammar_replacement_case(verb_value, replacement)
+
+    def pluralize_grammar_noun(self, noun):
+        noun_value = str(noun or '').strip()
+        lower_value = noun_value.lower()
+        if lower_value.endswith('y') and len(lower_value) > 1 and lower_value[-2] not in 'aeiou':
+            replacement = f"{lower_value[:-1]}ies"
+        elif lower_value.endswith(('s', 'x', 'z', 'ch', 'sh')):
+            replacement = f"{lower_value}es"
+        else:
+            replacement = f"{lower_value}s"
+        return self.preserve_grammar_replacement_case(noun_value, replacement)
+
+    def get_previous_grammar_word(self, content, start_offset):
+        prefix = str(content[:max(0, int(start_offset or 0))] or '')
+        matches = list(re.finditer(r"[A-Za-z]+", prefix))
+        if not matches:
+            return ''
+        return matches[-1].group(0)
+
+    def build_local_grammar_match(self, start_offset, end_offset, message, replacements):
+        start_value = max(0, int(start_offset or 0))
+        end_value = max(start_value + 1, int(end_offset or 0))
+        normalized_replacements = []
+        for replacement in replacements or []:
+            candidate = str(replacement or '').strip()
+            if candidate and candidate not in normalized_replacements:
+                normalized_replacements.append(candidate)
+        return {
+            'offset': start_value,
+            'length': end_value - start_value,
+            'message': str(message or '').strip(),
+            'issue_type': 'grammar',
+            'replacements': normalized_replacements[:6],
+        }
+
+    def dedupe_grammar_matches(self, matches):
+        deduped = []
+        seen = set()
+        for match in matches or []:
+            key = (
+                int(match.get('offset') or 0),
+                int(match.get('length') or 0),
+                tuple(str(item or '') for item in (match.get('replacements') or [])),
+            )
+            if key in seen:
+                continue
+            seen.add(key)
+            deduped.append(match)
+        return deduped
+
+    def collect_local_grammar_matches(self, snapshot):
+        content = str(snapshot or '')
+        if not content:
+            return []
+
+        matches = []
+        verb_pattern = re.compile(
+            r"\b(?:(?P<det>a|an|this|that|these|those|many|several)\s+)?(?P<subject>[A-Za-z]+)\s+(?P<verb>is|are|has|have|does|do|was|were|begin|begins|transform|transforms|feed|feeds|grow|grows|play|plays|fly|flies)\b",
+            re.IGNORECASE
+        )
+        for match in verb_pattern.finditer(content):
+            subject = match.group('subject') or ''
+            if subject.lower() in {'that', 'which'}:
+                continue
+            target_number = self.infer_grammar_subject_number(subject, match.group('det') or '')
+            verb = match.group('verb') or ''
+            current_number = self.infer_grammar_verb_number(verb)
+            if not target_number or not current_number or target_number == current_number:
+                continue
+            replacement = self.convert_grammar_verb(verb, target_number)
+            matches.append(
+                self.build_local_grammar_match(
+                    match.start('verb'),
+                    match.end('verb'),
+                    'Subject and verb do not agree.',
+                    [replacement]
+                )
+            )
+
+        relative_pattern = re.compile(
+            r"\b(?P<rel>that|which)\s+(?P<verb>is|are|has|have|does|do|was|were|begin|begins|transform|transforms|feed|feeds|grow|grows|play|plays|fly|flies)\b",
+            re.IGNORECASE
+        )
+        for match in relative_pattern.finditer(content):
+            antecedent = self.get_previous_grammar_word(content, match.start('rel'))
+            if not antecedent:
+                continue
+            target_number = self.infer_grammar_subject_number(antecedent)
+            verb = match.group('verb') or ''
+            current_number = self.infer_grammar_verb_number(verb)
+            if not target_number or not current_number or target_number == current_number:
+                continue
+            replacement = self.convert_grammar_verb(verb, target_number)
+            matches.append(
+                self.build_local_grammar_match(
+                    match.start('verb'),
+                    match.end('verb'),
+                    'The relative clause verb should agree with the noun it describes.',
+                    [replacement]
+                )
+            )
+
+        for match in re.finditer(r"(?<![A-Za-z])im(?![A-Za-z])", content, re.IGNORECASE):
+            matches.append(
+                self.build_local_grammar_match(
+                    match.start(),
+                    match.end(),
+                    "Use the contraction \"I'm\" here.",
+                    ["I'm"]
+                )
+            )
+
+        for match in re.finditer(r"(?<![A-Za-z])i(?![A-Za-z])", content):
+            matches.append(
+                self.build_local_grammar_match(
+                    match.start(),
+                    match.end(),
+                    'Capitalize the pronoun I.',
+                    ['I']
+                )
+            )
+
+        for match in re.finditer(r"\bfly\s+graceful\b", content, re.IGNORECASE):
+            matches.append(
+                self.build_local_grammar_match(
+                    match.start() + (match.group(0).lower().rfind('graceful')),
+                    match.end(),
+                    'Use an adverb after fly.',
+                    ['gracefully']
+                )
+            )
+
+        for match in re.finditer(r"\bplay\s+important\s+role\b", content, re.IGNORECASE):
+            matches.append(
+                self.build_local_grammar_match(
+                    match.start(),
+                    match.end(),
+                    'This phrase usually needs an article.',
+                    ['play an important role']
+                )
+            )
+
+        for match in re.finditer(r"\bThese\s+([A-Za-z]+)\b", content):
+            noun = match.group(1) or ''
+            if self.infer_grammar_subject_number(noun) == 'singular':
+                matches.append(
+                    self.build_local_grammar_match(
+                        match.start(1),
+                        match.end(1),
+                        'These should be followed by a plural noun.',
+                        [self.pluralize_grammar_noun(noun)]
+                    )
+                )
+
+        for match in re.finditer(r"\bmany\s+([A-Za-z]+)\b", content, re.IGNORECASE):
+            noun = match.group(1) or ''
+            if self.infer_grammar_subject_number(noun) == 'singular':
+                matches.append(
+                    self.build_local_grammar_match(
+                        match.start(1),
+                        match.end(1),
+                        'Many should be followed by a plural noun.',
+                        [self.pluralize_grammar_noun(noun)]
+                    )
+                )
+
+        return self.dedupe_grammar_matches(matches)
+
     def should_keep_grammar_match(self, snapshot, match, issue_type, replacements=None):
         if issue_type != 'misspelling':
             return True
@@ -7058,13 +7305,15 @@ class NotepadX:
         content_signature = self.build_text_signature(content)
 
         def worker(snapshot=content, current_doc_id=doc_id, current_request_id=request_id, current_signature=content_signature):
+            local_matches = self.collect_local_grammar_matches(snapshot)
             tool = self.get_grammar_tool()
             if tool is None:
                 self.queue_grammar_result({
                     'doc_id': current_doc_id,
                     'request_id': current_request_id,
                     'content_signature': current_signature,
-                    'unavailable': True,
+                    'matches': local_matches,
+                    'unavailable': not bool(local_matches),
                 })
                 return
             try:
@@ -7076,11 +7325,12 @@ class NotepadX:
                     'doc_id': current_doc_id,
                     'request_id': current_request_id,
                     'content_signature': current_signature,
-                    'unavailable': True,
+                    'matches': local_matches,
+                    'unavailable': not bool(local_matches),
                 })
                 return
 
-            matches = []
+            matches = list(local_matches)
             for match in raw_matches or []:
                 issue_type = self.get_grammar_match_issue_type(match)
                 replacements = self.normalize_grammar_replacements(match)
@@ -7111,7 +7361,7 @@ class NotepadX:
                 'doc_id': current_doc_id,
                 'request_id': current_request_id,
                 'content_signature': current_signature,
-                'matches': matches,
+                'matches': self.dedupe_grammar_matches(matches),
             })
 
         threading.Thread(target=worker, name='NotepadXGrammarCheck', daemon=True).start()
