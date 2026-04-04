@@ -7749,6 +7749,7 @@ class NotepadX:
 
         if word_info:
             suggestions = self.get_spellcheck_suggestions(word_info['word'])
+            suggestions = self.format_spellcheck_suggestions(suggestions, word_info)
             if suggestions:
                 for suggestion in suggestions:
                     menu.add_command(
@@ -7834,6 +7835,41 @@ class NotepadX:
                 break
         return ordered[:6]
 
+    def should_capitalize_spellcheck_suggestion(self, text_widget, start_index):
+        if not isinstance(text_widget, tk.Text):
+            return False
+        try:
+            leading_text = text_widget.get('1.0', start_index)
+        except tk.TclError:
+            return False
+        if not leading_text:
+            return True
+        skip_chars = set('\'"`“”‘’()[]{}')
+        for char in reversed(leading_text):
+            if char.isspace():
+                continue
+            if char in skip_chars:
+                continue
+            return char in '.!?'
+        return True
+
+    def format_spellcheck_suggestions(self, suggestions, word_info=None):
+        if not suggestions:
+            return []
+        capitalize_first = bool(word_info and word_info.get('capitalize_suggestions'))
+        formatted = []
+        seen = set()
+        for suggestion in suggestions:
+            display_value = str(suggestion or '')
+            if capitalize_first and display_value:
+                display_value = display_value[0].upper() + display_value[1:]
+            dedupe_key = display_value.lower()
+            if dedupe_key in seen:
+                continue
+            seen.add(dedupe_key)
+            formatted.append(display_value)
+        return formatted
+
     def get_misspelled_word_info_at_index(self, text_widget, index, doc=None):
         if not isinstance(text_widget, tk.Text):
             return None
@@ -7870,7 +7906,11 @@ class NotepadX:
                 'word': match.group(0),
                 'normalized': normalized,
                 'start': f"{line_start}+{match.start()}c",
-                'end': f"{line_start}+{match.end()}c"
+                'end': f"{line_start}+{match.end()}c",
+                'capitalize_suggestions': self.should_capitalize_spellcheck_suggestion(
+                    text_widget,
+                    f"{line_start}+{match.start()}c"
+                )
             }
         return None
 
