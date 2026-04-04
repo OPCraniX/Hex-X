@@ -228,7 +228,7 @@ DEFAULT_LOCALE_STRINGS = {
     "large_file.save_as_disabled": "Save As is disabled for buffered large-file tabs.",
     "large_file.encryption_disabled": "Encryption is not available for buffered large-file or preview tabs.",
     "spellcheck.unavailable_title": "Spell Check Unavailable",
-    "spellcheck.unavailable_message": "Install pyspellchecker to use spell check in Notepad-X.",
+    "spellcheck.unavailable_message": "Spell check needs pyspellchecker and the bundled English dictionary. Rebuild Notepad-X if the menu shows enabled but no words are marked.",
     "file.open_failed_title": "Open Failed",
     "file.open_failed_message": "Notepad-X could not open:\n{file_path}\n\n{error_detail}",
     "file.missing_title": "File Missing",
@@ -5352,13 +5352,8 @@ class NotepadX:
     def toggle_spell_check(self, event=None):
         if event is not None:
             self.spell_check_enabled.set(not self.spell_check_enabled.get())
-        if self.spell_check_enabled.get() and SpellChecker is None:
+        if self.spell_check_enabled.get() and not self.ensure_spellcheck_available(notify=True):
             self.spell_check_enabled.set(False)
-            messagebox.showinfo(
-                self.tr('spellcheck.unavailable_title', 'Spell Check Unavailable'),
-                self.tr('spellcheck.unavailable_message', 'Install pyspellchecker to use spell check in Notepad-X.'),
-                parent=self.root
-            )
             return "break"
         for doc in self.documents.values():
             if self.spell_check_enabled.get():
@@ -6593,6 +6588,18 @@ class NotepadX:
             if os.path.isfile(candidate):
                 return candidate
         return None
+
+    def ensure_spellcheck_available(self, notify=False):
+        checker = self.get_spell_checker()
+        if checker is not None:
+            return True
+        if notify:
+            messagebox.showinfo(
+                self.tr('spellcheck.unavailable_title', 'Spell Check Unavailable'),
+                self.tr('spellcheck.unavailable_message', 'Spell check needs pyspellchecker and the bundled English dictionary. Rebuild Notepad-X if the menu shows enabled but no words are marked.'),
+                parent=self.root
+            )
+        return False
 
     def cancel_spellcheck_job(self, doc):
         if not doc:
@@ -9833,7 +9840,7 @@ class NotepadX:
         self.status_bar_enabled.set(bool(session.get('status_bar_enabled', True)))
         self.numbered_lines_enabled.set(bool(session.get('numbered_lines_enabled', True)))
         self.autocomplete_enabled.set(bool(session.get('autocomplete_enabled', True)))
-        self.spell_check_enabled.set(bool(session.get('spell_check_enabled', SpellChecker is not None)) and SpellChecker is not None)
+        self.spell_check_enabled.set(bool(session.get('spell_check_enabled', SpellChecker is not None)) and self.ensure_spellcheck_available(notify=False))
         self.markdown_preview_enabled.set(bool(session.get('markdown_preview_enabled', False)))
         self.sync_page_navigation_enabled.set(bool(session.get('sync_page_navigation_enabled', False)))
         saved_edit_with_shell = bool(session.get('edit_with_shell_enabled', False))
