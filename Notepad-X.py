@@ -697,6 +697,7 @@ class NotepadX:
         self.grammarcheck_supported_modes = {None, 'nfo', 'tex', 'markdown'}
         self.grammar_tool = None
         self.grammar_tool_source = None
+        self.grammar_java_path = None
         self.grammar_tool_ready = False
         self.grammar_tool_lock = threading.Lock()
         self.grammar_check_lock = threading.Lock()
@@ -6715,6 +6716,103 @@ class NotepadX:
             pass
         return tool
 
+    def iter_grammar_java_candidates(self):
+        candidates = []
+        seen = set()
+
+        def add_candidate(path):
+            candidate = str(path or '').strip().strip('"')
+            if not candidate:
+                return
+            candidate = os.path.normpath(candidate)
+            normalized = os.path.normcase(os.path.abspath(candidate))
+            if normalized in seen:
+                return
+            seen.add(normalized)
+            if os.path.isfile(candidate):
+                candidates.append(candidate)
+
+        java_name = 'java.exe' if self.is_windows else 'java'
+        java_home = os.environ.get('JAVA_HOME', '').strip()
+        if java_home:
+            add_candidate(os.path.join(java_home, 'bin', java_name))
+
+        resolved_java = shutil.which('java')
+        if resolved_java:
+            add_candidate(resolved_java)
+
+        if self.is_windows:
+            try:
+                completed = subprocess.run(
+                    ['where.exe', 'java'],
+                    capture_output=True,
+                    text=True,
+                    creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0)
+                )
+                for line in (completed.stdout or '').splitlines():
+                    add_candidate(line)
+            except Exception:
+                pass
+
+            for root in (
+                r'C:\Program Files\Java',
+                r'C:\Program Files\Eclipse Adoptium',
+                r'C:\Program Files\Microsoft',
+                r'C:\Program Files\Amazon Corretto',
+                r'C:\Program Files\Zulu',
+                r'C:\Program Files\BellSoft',
+            ):
+                if not os.path.isdir(root):
+                    continue
+                try:
+                    for java_path in Path(root).rglob('java.exe'):
+                        add_candidate(java_path)
+                except Exception:
+                    continue
+
+        return candidates
+
+    def is_working_grammar_java(self, java_path):
+        if not java_path or not os.path.isfile(java_path):
+            return False
+        try:
+            completed = subprocess.run(
+                [java_path, '-version'],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=8,
+                check=False,
+                creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0)
+            )
+            return completed.returncode == 0
+        except Exception:
+            return False
+
+    def ensure_grammar_java_runtime(self):
+        if self.grammar_java_path and self.is_working_grammar_java(self.grammar_java_path):
+            java_path = self.grammar_java_path
+        else:
+            java_path = None
+            for candidate in self.iter_grammar_java_candidates():
+                if self.is_working_grammar_java(candidate):
+                    java_path = candidate
+                    break
+            self.grammar_java_path = java_path
+        if not java_path:
+            return None
+        java_bin_dir = os.path.dirname(java_path)
+        java_home = os.path.dirname(java_bin_dir)
+        os.environ['JAVA_HOME'] = java_home
+        current_path = os.environ.get('PATH', '')
+        path_parts = current_path.split(os.pathsep) if current_path else []
+        normalized_bin = os.path.normcase(os.path.abspath(java_bin_dir))
+        filtered_parts = [
+            part for part in path_parts
+            if os.path.normcase(os.path.abspath(part or '.')) != normalized_bin
+        ]
+        os.environ['PATH'] = os.pathsep.join([java_bin_dir] + filtered_parts) if filtered_parts else java_bin_dir
+        return java_path
+
     def get_grammar_tool(self):
         if self.grammar_tool_ready:
             return self.grammar_tool
@@ -6728,6 +6826,7 @@ class NotepadX:
                 return self.grammar_tool
             self.grammar_tool = None
             self.grammar_tool_source = None
+            self.ensure_grammar_java_runtime()
             try:
                 self.grammar_tool = self.configure_grammar_tool(language_tool_python.LanguageTool('en-US'))
                 self.grammar_tool_source = 'local'
