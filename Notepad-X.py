@@ -570,7 +570,7 @@ class NotepadX:
     def init_config(self):
         self.is_windows = os.name == 'nt'
         self.is_linux = sys.platform.startswith('linux')
-        self.app_version = "v1.0.1"
+        self.app_version = "v1.0.2"
         self.resource_dir = self.get_resource_dir()
         self.app_dir = self.get_app_dir()
         self.machine_profile_slug = self.get_machine_profile_slug()
@@ -656,6 +656,7 @@ class NotepadX:
             'blue': self.tr('note.filter.blue', 'Light Blue'),
         }
         self.max_recent_files = 10
+        self.max_search_history = 10
         self.max_session_files = 100
         self.max_recovery_tabs = 20
         self.shared_editor_stale_seconds = 30
@@ -689,6 +690,8 @@ class NotepadX:
         self.spell_checker = None
         self.spell_checker_ready = False
         self.recent_files = []
+        self.find_history = []
+        self.find_in_history = []
         self.closed_session_files = set()
         self.note_sync_interval_ms = 100
         self.note_editor_heartbeat_interval_ms = 1500
@@ -741,6 +744,11 @@ class NotepadX:
         self.autocomplete_start_index = None
         self.autocomplete_prefix = ""
         self.autocomplete_suspended = 0
+        self.search_history_popup = None
+        self.search_history_listbox = None
+        self.search_history_entry = None
+        self.search_history_items = []
+        self.search_history_hide_job = None
         self.active_context_menu = None
         self.context_menu_posted_at = 0.0
         self.hovered_editor_widget = None
@@ -2598,6 +2606,9 @@ class NotepadX:
             if isinstance(path, str):
                 closed_files.append(path)
 
+        find_history = self.sanitize_search_history_entries(session.get('find_history', []))
+        find_in_history = self.sanitize_search_history_entries(session.get('find_in_history', []))
+
         selected_file = session.get('selected_file')
         if not isinstance(selected_file, str) or selected_file not in open_files:
             selected_file = None
@@ -2627,6 +2638,8 @@ class NotepadX:
             'open_files': open_files,
             'selected_file': selected_file,
             'recent_files': recent_files,
+            'find_history': find_history,
+            'find_in_history': find_in_history,
             'closed_session_files': closed_files,
             'sound_enabled': bool(session.get('sound_enabled', True)),
             'status_bar_enabled': bool(session.get('status_bar_enabled', True)),
@@ -3627,13 +3640,6 @@ class NotepadX:
         self.find_entry.pack(side='left', padx=4, pady=6)
         tk.Button(self.find_frame, text=self.tr('menu.edit.find', 'Find'), command=self.find_next)\
             .pack(side='left', padx=4, pady=6)
-        tk.Label(self.find_frame, text=self.tr('find.panel.find_in_label', 'Find In:'), bg=self.panel_bg, fg=self.fg_color)\
-            .pack(side='left', padx=(10, 4), pady=6)
-        self.find_in_query_var = tk.StringVar()
-        self.find_in_entry = tk.Entry(self.find_frame, width=42, textvariable=self.find_in_query_var)
-        self.find_in_entry.pack(side='left', padx=4, pady=6)
-        tk.Button(self.find_frame, text=self.tr('find.panel.browse', 'Browse'), command=self.choose_find_in_directory_and_search)\
-            .pack(side='left', padx=4, pady=6)
         self.find_results_label = tk.Label(
             self.find_frame,
             text="",
@@ -3641,11 +3647,29 @@ class NotepadX:
             fg='#9aa0a6'
         )
         self.find_results_label.pack(side='left', padx=(4, 8), pady=6)
+        tk.Label(self.find_frame, text='|', bg=self.panel_bg, fg='#9aa0a6')\
+            .pack(side='left', padx=(4, 4), pady=6)
+        tk.Label(self.find_frame, text=self.tr('find.panel.find_in_label', 'Find In:'), bg=self.panel_bg, fg=self.fg_color)\
+            .pack(side='left', padx=(0, 4), pady=6)
+        self.find_in_query_var = tk.StringVar()
+        self.find_in_entry = tk.Entry(self.find_frame, width=42, textvariable=self.find_in_query_var)
+        self.find_in_entry.pack(side='left', padx=4, pady=6)
+        tk.Button(self.find_frame, text=self.tr('find.panel.browse', 'Browse'), command=self.choose_find_in_directory_and_search)\
+            .pack(side='left', padx=4, pady=6)
+        self.find_entry.bind('<KeyPress>', self.handle_search_history_keypress)
         self.find_entry.bind('<Return>', self.find_from_input)
         self.find_entry.bind('<KeyRelease>', self.on_find_entry_change)
         self.find_entry.bind('<Escape>', lambda e: self.show_find_panel())   # ← added
+        self.find_entry.bind('<FocusIn>', self.on_search_history_entry_focus)
+        self.find_entry.bind('<FocusOut>', self.on_search_history_entry_focus_out)
+        self.find_entry.bind('<ButtonRelease-1>', self.on_search_history_entry_focus)
+        self.find_in_entry.bind('<KeyPress>', self.handle_search_history_keypress)
         self.find_in_entry.bind('<Return>', self.find_in_directory_from_entry)
+        self.find_in_entry.bind('<KeyRelease>', self.on_find_in_entry_change)
         self.find_in_entry.bind('<Escape>', lambda e: self.show_find_panel())
+        self.find_in_entry.bind('<FocusIn>', self.on_search_history_entry_focus)
+        self.find_in_entry.bind('<FocusOut>', self.on_search_history_entry_focus_out)
+        self.find_in_entry.bind('<ButtonRelease-1>', self.on_search_history_entry_focus)
 
         # Replace panel
         self.replace_frame = tk.Frame(self.bottom_frame, bg=self.panel_bg)
@@ -3667,9 +3691,13 @@ class NotepadX:
         )
         self.replace_results_label.pack(side='left', padx=(4, 8), pady=6)
 
+        self.replace_find_entry.bind('<KeyPress>', self.handle_search_history_keypress)
         self.replace_find_entry.bind('<Return>', self.find_from_input)     # ← added
         self.replace_find_entry.bind('<KeyRelease>', self.on_find_entry_change)
         self.replace_find_entry.bind('<Escape>', lambda e: self.show_replace_panel())  # ← added
+        self.replace_find_entry.bind('<FocusIn>', self.on_search_history_entry_focus)
+        self.replace_find_entry.bind('<FocusOut>', self.on_search_history_entry_focus_out)
+        self.replace_find_entry.bind('<ButtonRelease-1>', self.on_search_history_entry_focus)
         self.replace_entry.bind('<Escape>', lambda e: self.show_replace_panel())       # ← added
 
         # Hide both initially
@@ -3682,6 +3710,313 @@ class NotepadX:
             self.bottom_frame.grid()
         else:
             self.bottom_frame.grid_remove()
+
+    def sanitize_search_history_entries(self, entries):
+        cleaned_entries = []
+        seen = set()
+        source_entries = entries if isinstance(entries, list) else []
+        for entry in source_entries:
+            if not isinstance(entry, str):
+                continue
+            value = entry.strip()
+            if not value:
+                continue
+            lowered = value.lower()
+            if lowered in seen:
+                continue
+            seen.add(lowered)
+            cleaned_entries.append(value)
+            if len(cleaned_entries) >= self.max_search_history:
+                break
+        return cleaned_entries
+
+    def cancel_search_history_hide_job(self):
+        if self.search_history_hide_job:
+            try:
+                self.root.after_cancel(self.search_history_hide_job)
+            except tk.TclError:
+                pass
+            self.search_history_hide_job = None
+
+    def hide_search_history_popup(self):
+        self.cancel_search_history_hide_job()
+        popup = getattr(self, 'search_history_popup', None)
+        if popup is not None:
+            try:
+                popup.destroy()
+            except tk.TclError:
+                pass
+        self.search_history_popup = None
+        self.search_history_listbox = None
+        self.search_history_entry = None
+        self.search_history_items = []
+
+    def search_history_popup_visible(self):
+        popup = getattr(self, 'search_history_popup', None)
+        if popup is None:
+            return False
+        try:
+            return popup.winfo_exists()
+        except tk.TclError:
+            return False
+
+    def maybe_hide_search_history_popup(self):
+        self.search_history_hide_job = None
+        focus_widget = self.safe_focus_get()
+        listbox = getattr(self, 'search_history_listbox', None)
+        if focus_widget is not None and focus_widget in (self.search_history_entry, listbox):
+            return
+        self.hide_search_history_popup()
+
+    def schedule_search_history_popup_hide(self):
+        self.cancel_search_history_hide_job()
+        try:
+            self.search_history_hide_job = self.root.after(120, self.maybe_hide_search_history_popup)
+        except tk.TclError:
+            self.search_history_hide_job = None
+
+    def get_search_history_for_entry(self, entry_widget):
+        if entry_widget in (getattr(self, 'find_entry', None), getattr(self, 'replace_find_entry', None)):
+            return list(self.find_history)
+        if entry_widget == getattr(self, 'find_in_entry', None):
+            return list(self.find_in_history)
+        return []
+
+    def get_search_history_matches(self, history_items, query_text):
+        normalized_query = str(query_text or '').strip().lower()
+        if not normalized_query:
+            return list(history_items[:self.max_search_history])
+
+        prefix_matches = []
+        substring_matches = []
+        for item in history_items:
+            lowered = item.lower()
+            if lowered.startswith(normalized_query):
+                prefix_matches.append(item)
+            elif normalized_query in lowered:
+                substring_matches.append(item)
+        return (prefix_matches + substring_matches)[:self.max_search_history]
+
+    def select_search_history_index(self, index):
+        if not self.search_history_popup_visible() or not self.search_history_listbox:
+            return False
+        listbox = self.search_history_listbox
+        if listbox.size() <= 0:
+            return False
+        safe_index = max(0, min(listbox.size() - 1, index))
+        listbox.selection_clear(0, tk.END)
+        listbox.selection_set(safe_index)
+        listbox.activate(safe_index)
+        listbox.see(safe_index)
+        return True
+
+    def update_search_history_popup(self, entry_widget, force_show=False):
+        if not entry_widget:
+            self.hide_search_history_popup()
+            return False
+        try:
+            if not entry_widget.winfo_exists() or not entry_widget.winfo_ismapped():
+                self.hide_search_history_popup()
+                return False
+            current_text = entry_widget.get()
+        except tk.TclError:
+            self.hide_search_history_popup()
+            return False
+
+        history_items = self.get_search_history_for_entry(entry_widget)
+        if not history_items:
+            self.hide_search_history_popup()
+            return False
+
+        query_text = current_text.strip()
+        suggestions = self.get_search_history_matches(history_items, query_text)
+        if not suggestions or (not force_show and not query_text):
+            self.hide_search_history_popup()
+            return False
+
+        selected_value = None
+        if self.search_history_popup_visible() and self.search_history_entry == entry_widget and self.search_history_listbox:
+            selection = self.search_history_listbox.curselection()
+            if selection:
+                selected_value = self.search_history_listbox.get(selection[0])
+        elif self.search_history_entry != entry_widget:
+            self.hide_search_history_popup()
+
+        popup = self.search_history_popup
+        if not self.search_history_popup_visible():
+            popup = tk.Toplevel(self.root)
+            popup.wm_overrideredirect(True)
+            popup.configure(bg='#2d2d2d')
+            listbox = tk.Listbox(
+                popup,
+                bg='#161b22',
+                fg=self.fg_color,
+                selectbackground='#264f78',
+                selectforeground='white',
+                activestyle='none',
+                highlightthickness=1,
+                highlightbackground='#30363d',
+                relief='flat',
+                borderwidth=0,
+                font=('Segoe UI', 10),
+                exportselection=False,
+                takefocus=False,
+                selectmode='browse',
+                width=max(18, min(60, max(len(item) for item in suggestions) + 2)),
+                height=min(8, len(suggestions))
+            )
+            listbox.pack(fill='both', expand=True)
+            listbox.bind('<Motion>', self.on_search_history_listbox_motion)
+            listbox.bind('<ButtonRelease-1>', self.on_search_history_listbox_click)
+            self.search_history_popup = popup
+            self.search_history_listbox = listbox
+        else:
+            listbox = self.search_history_listbox
+            listbox.configure(
+                width=max(18, min(60, max(len(item) for item in suggestions) + 2)),
+                height=min(8, len(suggestions))
+            )
+
+        listbox.delete(0, tk.END)
+        for suggestion in suggestions:
+            listbox.insert(tk.END, suggestion)
+
+        selected_index = 0
+        if selected_value in suggestions:
+            selected_index = suggestions.index(selected_value)
+        self.select_search_history_index(selected_index)
+
+        popup.geometry(f"+{entry_widget.winfo_rootx()}+{entry_widget.winfo_rooty() + entry_widget.winfo_height() + 2}")
+        popup.lift()
+        self.search_history_entry = entry_widget
+        self.search_history_items = suggestions
+        return True
+
+    def move_search_history_selection(self, direction):
+        if not self.search_history_popup_visible() or not self.search_history_listbox:
+            return None
+        listbox = self.search_history_listbox
+        selection = listbox.curselection()
+        current_index = selection[0] if selection else 0
+        next_index = max(0, min(listbox.size() - 1, current_index + direction))
+        self.select_search_history_index(next_index)
+        return "break"
+
+    def accept_search_history_selection(self):
+        if not self.search_history_popup_visible() or not self.search_history_listbox or not self.search_history_entry:
+            return False
+        selection = self.search_history_listbox.curselection()
+        if selection:
+            suggestion = self.search_history_listbox.get(selection[0])
+        elif self.search_history_listbox.size() > 0:
+            suggestion = self.search_history_listbox.get(0)
+        else:
+            return False
+
+        entry_widget = self.search_history_entry
+        try:
+            entry_widget.delete(0, tk.END)
+            entry_widget.insert(0, suggestion)
+            entry_widget.icursor(tk.END)
+            entry_widget.focus_set()
+        except tk.TclError:
+            self.hide_search_history_popup()
+            return False
+
+        self.hide_search_history_popup()
+        if entry_widget in (getattr(self, 'find_entry', None), getattr(self, 'replace_find_entry', None)):
+            self.on_find_entry_change()
+        elif entry_widget == getattr(self, 'find_in_entry', None):
+            self.on_find_in_entry_change()
+        return True
+
+    def on_search_history_listbox_motion(self, event=None):
+        listbox = getattr(self, 'search_history_listbox', None)
+        if not listbox:
+            return None
+        index = listbox.nearest(getattr(event, 'y', 0))
+        self.select_search_history_index(index)
+        return None
+
+    def on_search_history_listbox_click(self, event=None):
+        listbox = getattr(self, 'search_history_listbox', None)
+        if not listbox:
+            return "break"
+        index = listbox.nearest(getattr(event, 'y', 0))
+        self.select_search_history_index(index)
+        self.accept_search_history_selection()
+        return "break"
+
+    def on_search_history_entry_focus(self, event=None):
+        entry_widget = getattr(event, 'widget', None)
+        if not entry_widget:
+            return None
+        self.cancel_search_history_hide_job()
+        try:
+            self.root.after_idle(lambda widget=entry_widget: self.update_search_history_popup(widget, force_show=True))
+        except tk.TclError:
+            return None
+        return None
+
+    def on_search_history_entry_focus_out(self, event=None):
+        self.schedule_search_history_popup_hide()
+        return None
+
+    def handle_search_history_keypress(self, event):
+        entry_widget = getattr(event, 'widget', None)
+        if not entry_widget:
+            return None
+
+        keysym = str(getattr(event, 'keysym', '') or '')
+        popup_visible = self.search_history_popup_visible() and self.search_history_entry == entry_widget
+
+        if keysym == 'Escape' and popup_visible:
+            self.hide_search_history_popup()
+            return "break"
+
+        if keysym in {'Up', 'Down'}:
+            if popup_visible:
+                return self.move_search_history_selection(-1 if keysym == 'Up' else 1)
+            if self.update_search_history_popup(entry_widget, force_show=True):
+                if keysym == 'Up' and self.search_history_listbox:
+                    self.select_search_history_index(self.search_history_listbox.size() - 1)
+                return "break"
+            return None
+
+        if keysym == 'Tab' and popup_visible:
+            if self.accept_search_history_selection():
+                return "break"
+            return None
+
+        if popup_visible and keysym in {'Left', 'Right', 'Home', 'End', 'Prior', 'Next'}:
+            self.hide_search_history_popup()
+        return None
+
+    def add_search_history_entry(self, attribute_name, query):
+        cleaned_query = str(query or '').strip()
+        if not cleaned_query:
+            return False
+
+        existing_history = list(getattr(self, attribute_name, []))
+        lowered_query = cleaned_query.lower()
+        updated_history = [
+            item for item in existing_history
+            if str(item).strip().lower() != lowered_query
+        ]
+        updated_history.insert(0, cleaned_query)
+        updated_history = updated_history[:self.max_search_history]
+        if updated_history == existing_history:
+            return False
+
+        setattr(self, attribute_name, updated_history)
+        self.save_session()
+        return True
+
+    def add_find_history_entry(self, query):
+        return self.add_search_history_entry('find_history', query)
+
+    def add_find_in_history_entry(self, query):
+        return self.add_search_history_entry('find_in_history', query)
 
     def refresh_currently_editing_panel(self):
         if not hasattr(self, 'currently_editing_content_label'):
@@ -3831,6 +4166,7 @@ class NotepadX:
             return "break"
 
         self.cancel_find_change_job()
+        self.hide_search_history_popup()
         if self.replace_panel_visible:
             self.replace_frame.grid_remove()
             self.replace_panel_visible = False
@@ -3866,6 +4202,7 @@ class NotepadX:
             return "break"
 
         self.cancel_find_change_job()
+        self.hide_search_history_popup()
         if self.find_panel_visible:
             self.find_frame.grid_remove()
             self.find_panel_visible = False
@@ -4212,6 +4549,8 @@ class NotepadX:
         if not query:
             return
 
+        self.hide_search_history_popup()
+        self.add_find_history_entry(query)
         self.update_find_match_summary(query, allow_short_query=True)
 
         target_widget = self.get_active_search_widget()
@@ -4238,6 +4577,8 @@ class NotepadX:
         if not query:
             return "break"
 
+        self.hide_search_history_popup()
+        self.add_find_history_entry(query)
         self.update_find_match_summary(query, allow_short_query=True)
 
         target_widget = self.get_active_search_widget()
@@ -4333,6 +4674,8 @@ class NotepadX:
         if not query:
             return "break"
 
+        self.hide_search_history_popup()
+        self.add_find_history_entry(query)
         self.update_find_match_summary(query, allow_short_query=True)
 
         target_widget = self.get_active_search_widget()
@@ -4885,6 +5228,8 @@ class NotepadX:
         selected_directory = self.prompt_for_find_in_directory()
         if not selected_directory:
             return "break"
+        self.hide_search_history_popup()
+        self.add_find_in_history_entry(query)
         self.start_find_in_directory_search(selected_directory, query)
         return "break"
 
@@ -4902,6 +5247,8 @@ class NotepadX:
             directory = self.prompt_for_find_in_directory()
             if not directory:
                 return "break"
+        self.hide_search_history_popup()
+        self.add_find_in_history_entry(query)
         self.start_find_in_directory_search(directory, query)
         return "break"
 
@@ -5084,15 +5431,19 @@ class NotepadX:
     def on_find_entry_change(self, event=None):
         try:
             if self.find_panel_visible:
-                query = self.find_entry.get().strip()
+                entry_widget = self.find_entry
+                query = entry_widget.get().strip()
             elif self.replace_panel_visible:
-                query = self.replace_find_entry.get().strip()
+                entry_widget = self.replace_find_entry
+                query = entry_widget.get().strip()
             else:
+                self.hide_search_history_popup()
                 return
         except tk.TclError as exc:
             self.log_exception("read live find query", exc)
             return
 
+        self.update_search_history_popup(entry_widget, force_show=True)
         self.cancel_find_change_job()
         self.update_find_match_summary(query, allow_short_query=True)
         if not query:
@@ -5106,11 +5457,25 @@ class NotepadX:
         except tk.TclError as exc:
             self.log_exception("schedule live find change", exc)
 
+    def on_find_in_entry_change(self, event=None):
+        try:
+            query = self.find_in_entry.get().strip()
+        except tk.TclError as exc:
+            self.log_exception("read find in query", exc)
+            return
+
+        if not query and not self.find_in_history:
+            self.hide_search_history_popup()
+            return
+        self.update_search_history_popup(self.find_in_entry, force_show=True)
+
     def replace_all(self):
         query = self.replace_find_entry.get().strip()
         replace_text = self.replace_entry.get()
         if not query:
             return
+        self.hide_search_history_popup()
+        self.add_find_history_entry(query)
         content = self.text.get('1.0', tk.END)
         pattern = self.build_find_query_pattern(query)
         flags = pattern.flags | re.IGNORECASE
@@ -9633,6 +9998,8 @@ class NotepadX:
                 path for path in self.recent_files
                 if isinstance(path, str) and os.path.exists(path)
             ][:self.max_recent_files],
+            'find_history': self.sanitize_search_history_entries(self.find_history),
+            'find_in_history': self.sanitize_search_history_entries(self.find_in_history),
             'closed_session_files': [
                 path for path in self.closed_session_files
                 if isinstance(path, str)
@@ -9854,6 +10221,8 @@ class NotepadX:
         self.closed_session_files = set(session.get('closed_session_files', []))
         open_files = [path for path in open_files if path not in self.closed_session_files]
         self.recent_files = list(session.get('recent_files', []))[:self.max_recent_files]
+        self.find_history = self.sanitize_search_history_entries(session.get('find_history', []))
+        self.find_in_history = self.sanitize_search_history_entries(session.get('find_in_history', []))
         self.sound_enabled.set(bool(session.get('sound_enabled', True)))
         self.status_bar_enabled.set(bool(session.get('status_bar_enabled', True)))
         self.numbered_lines_enabled.set(bool(session.get('numbered_lines_enabled', True)))
@@ -10034,6 +10403,7 @@ class NotepadX:
 
     def on_tab_changed(self, event=None):
         self.hide_autocomplete_popup()
+        self.hide_search_history_popup()
         previous_widget = getattr(self, 'last_active_editor_widget', None)
         if previous_widget is not None:
             previous_doc = self.get_doc_for_text_widget(previous_widget)

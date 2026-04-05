@@ -35,6 +35,8 @@ It keeps a familiar desktop editor workflow while adding session restore, live s
 - The `Find` button and `F3` move forward through matches
 - `Shift+F3` moves backward through matches
 - The Replace panel uses the same live highlighting as Find
+- Find and `Find In:` remember recent search strings and suggest them in a popup while you type
+- `Up` and `Down` move through saved search suggestions, `Tab` accepts one, and `Enter` searches the current text
 - Search continues across open tabs by default
 - `Find In:` accepts a folder-search query, and `Browse` chooses the folder to search
 - Pressing `Enter` in `Find In:` searches the most recently selected folder or prompts for one if none has been chosen yet
@@ -86,6 +88,8 @@ It keeps a familiar desktop editor workflow while adding session restore, live s
 - Live search highlights matches while typing without moving the caret
 - Pressing `Enter` in the Find or Replace query box jumps to the first match from the top
 - The Find panel includes a `Find In:` query field and `Browse`
+- Recent search strings are stored for both `Find` and `Find In:` and appear in an autocomplete-style suggestion list
+- `Up` and `Down` step through saved suggestions, `Tab` accepts one, and `Esc` closes the list
 - Match highlighting follows the visible query across open tabs, including after switching tabs
 - `Browse` chooses the folder for Find In Files without replacing the query text in the box
 - Find In Files searches supported files under the selected folder and shows match counts in an `Open Selected` results window

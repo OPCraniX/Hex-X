@@ -114,6 +114,8 @@ Find, Replace, and Find In Files
 - The Find panel's `Find` button and `F3` continue forward through matches.
 - `Shift+F3` moves backward through matches.
 - Replace uses the same live highlighting in its Find field.
+- Find and `Find In:` remember recent search strings and show them in a suggestion list while you type or refocus the field.
+- `Up` and `Down` move through saved suggestions, `Tab` accepts one, and `Esc` closes the list.
 - Forward and backward search continue across open tabs by default.
 - The Find panel also includes a `Find In:` query field and a `Browse` button.
 - Type the folder-search text into `Find In:`.
@@ -231,6 +233,7 @@ Session Restore and Recovery
 - File-backed tabs are written to the session and restored on startup.
 - The last active tab is restored when possible.
 - Compare mode can be restored when both files still exist.
+- Recent file lists and saved Find / Find In histories are restored with the session.
 - Sound, status bar, numbered lines, autocomplete, spell check, Markdown Preview, compare page-sync, and theme settings are restored.
 - Unsaved untitled tabs are not part of normal session restore, but they can be recovered after a crash.
 - Modified file-backed tabs can also be restored after a crash without overwriting the on-disk file automatically.
