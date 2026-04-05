@@ -1,0 +1,24 @@
+{
+  "name": "Lolcat",
+  "surface": {
+    "text_bg": "#101218",
+    "text_fg": "#f8f8ff",
+    "cursor": "#ffffff",
+    "selection": "#3c2a57",
+    "gutter_bg": "#0c0e13",
+    "gutter_current_bg": "#171b25",
+    "gutter_fg": "#8a90a3",
+    "gutter_current_fg": "#f8f8ff",
+    "gutter_divider": "#31384b"
+  },
+  "syntax": {
+    "keyword": "#ff4d4d",
+    "type": "#ff9f1c",
+    "string": "#ffe66d",
+    "comment": "#4cd964",
+    "number": "#34c3ff",
+    "preprocessor": "#5b5bff",
+    "tag": "#c155ff"
+  },
+  "text_effect": "rainbow"
+}
