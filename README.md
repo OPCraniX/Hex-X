@@ -8,7 +8,7 @@ It keeps a familiar desktop editor workflow while adding session restore, live s
 
 ![EXE benchmark comparison](gfx/exe_benchmark.png)
 
-The benchmark compares Microsoft Notepad and Notepad-X across launch time, memory use, CPU activity, and disk activity. In this snapshot, Notepad-X launches slightly faster on average and uses much less memory, while showing heavier startup CPU and disk work as the app initializes its extra editor features. The result is a lighter runtime footprint with a busier startup profile.
+This updated benchmark compares Microsoft Notepad and Notepad-X across launch time, memory use, CPU activity, and disk activity. Each EXE was run 10 times to gather the data, so the chart reflects a steadier average instead of a single pass. In this snapshot, Notepad-X keeps a much lighter memory footprint while trading that for heavier startup CPU and disk activity as it initializes its added editor features.
 
 ## Highlights
 
