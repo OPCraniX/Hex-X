@@ -1,7 +1,7 @@
 Notepad-X Help
 
 Overview
-Notepad-X is a tabbed desktop text editor focused on fast editing, search, side-by-side comparison, shared notes, and safer handling of large files. The app keeps a familiar single-window editor layout while adding session restore, Markdown preview, syntax-aware themes, language switching, encrypted saves, and recovery tools.
+Notepad-X is a tabbed desktop text editor focused on fast editing, search, side-by-side comparison, shared notes, and safer handling of large files. The app keeps a familiar single-window editor layout while adding session restore, Markdown preview, syntax-aware themes, language switching, encrypted saves, recovery tools, and bundled locale files.
 
 Quick Start
 - `Ctrl+W` opens a file.
@@ -192,8 +192,11 @@ Language Support
 - `Edit > Language` lists available UI languages.
 - Friendly native language names are shown when available.
 - The selected language is saved in the session and restored on launch.
-- Arabic switches the visible UI text direction to right-to-left.
-- Locale changes can also switch the editor font to a better installed script-friendly fallback automatically.
+- Bundled locale files currently include `en_us`, `ar`, `ar_AE`, `ar_EG`, `ar_MA`, `ar_SA`, `bn_BD`, `de_DE`, `es_419`, `es_ES`, `fr_CA`, `he_IL`, `hi_IN`, `id_ID`, `it_IT`, `ja_JP`, `nl_NL`, `pt_BR`, `ru_RU`, `uk_UA`, and `zh_CN`.
+- Arabic and Hebrew switch the visible UI text direction to right-to-left.
+- Locale changes can also switch the editor font to a better installed script-friendly fallback automatically for Arabic, Bengali, Hebrew, Hindi, Japanese, Chinese, and Russian UI text.
+- Translation files live in `cfg/language`.
+- `en_us.yml` is the source key set used to keep the shipped locale files aligned.
 
 Save and Run
 - Save and Run saves the current tab before launching it.

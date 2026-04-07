@@ -22,7 +22,7 @@ The benchmark compares Microsoft Notepad and Notepad-X across launch time, memor
 - `Save As Encrypted` for passphrase-protected `.npxe` files
 - Background large-file loading plus buffered virtual mode for very large files
 - Crash recovery, conflict detection, and atomic save behavior
-- Language switching with friendly locale names and Arabic RTL support
+- Language switching with friendly locale names, bundled locale files, and RTL support for Arabic and Hebrew
 - Built-in Help, About dialog, and Windows shell integration toggle
 
 ## How It Works
@@ -127,6 +127,10 @@ The benchmark compares Microsoft Notepad and Notepad-X across launch time, memor
 - `View > Syntax Mode` overrides automatic syntax detection for the active tab
 - `Edit > Language` switches the visible UI language
 - Locale entries use friendly native names when available
+- Bundled locale files currently include `en_us`, `ar`, `ar_AE`, `ar_EG`, `ar_MA`, `ar_SA`, `bn_BD`, `de_DE`, `es_419`, `es_ES`, `fr_CA`, `he_IL`, `hi_IN`, `id_ID`, `it_IT`, `ja_JP`, `nl_NL`, `pt_BR`, `ru_RU`, `uk_UA`, and `zh_CN`
+- Arabic and Hebrew switch the visible UI flow to right-to-left automatically
+- Locale-aware font fallback helps Arabic, Bengali, Hebrew, Hindi, Japanese, Chinese, and Russian UI text render more cleanly when matching fonts are installed
+- Translation files live under `cfg/language`, and `en_us.yml` is the source key set used to keep the shipped locale files aligned
 
 <p align="center">
   <img src="gfx/create_syntax_theme.png" alt="Create theme dialog in Notepad-X" width="420">
