@@ -2,7 +2,6 @@ import tkinter as tk
 import tkinter.font as tkfont
 from tkinter import filedialog, messagebox, ttk, simpledialog, colorchooser
 import colorsys
-import errno
 import os
 import sys
 import ctypes
@@ -177,8 +176,8 @@ DEFAULT_LOCALE_STRINGS = {
     "note.color.title": "Note Color",
     "note.color.prompt": "Color:",
     "panel.currently_editing.title": "Currently Editing",
-    "panel.currently_editing.unsaved": "No active IDs found.",
-    "panel.currently_editing.none": "No active IDs found.",
+    "panel.currently_editing.unsaved": "Save this tab to track currently editing IDs.",
+    "panel.currently_editing.none": "No active editing IDs for this file.",
     "status.initial": "Ln 1 of 1, Col 1 | 0 characters | UTF-8 | Normal",
     "status.resource_initial": " | CPU: 0.0% Memory: 0MB",
     "status.synced": "| Notes Synced",
@@ -207,7 +206,6 @@ DEFAULT_LOCALE_STRINGS = {
     "find.panel.find_next": "Find Next",
     "find.panel.browse": "Browse",
     "find.panel.find_in_label": "Find In:",
-    "find.panel.find_in_button": "Find In",
     "find.panel.found_summary": "| Found: {count} {instance_word} of \"{query}\"",
     "find.panel.instance_singular": "instance",
     "find.panel.instance_plural": "instances",
@@ -229,6 +227,8 @@ DEFAULT_LOCALE_STRINGS = {
     "replace_all.completed": "Replaced {count} occurrence(s).",
     "large_file.title": "Large File Mode",
     "large_file.find_unavailable": "Find is not available in buffered large-file mode yet.",
+    "large_file.loading": "Loading large file...",
+    "large_file.indexing": "Indexing large file...",
     "large_file.replace_unavailable": "Replace is not available in buffered large-file mode.",
     "large_file.save_run_unavailable": "Save and Run is not available for buffered large-file tabs.",
     "large_file.save_disabled": "This tab is opened in buffered large-file mode. Editing and saving are disabled for the full file view.",
@@ -238,9 +238,6 @@ DEFAULT_LOCALE_STRINGS = {
     "spellcheck.unavailable_message": "Spell check needs pyspellchecker and the bundled English dictionary. Rebuild Notepad-X if the menu shows enabled but no words are marked.",
     "file.open_failed_title": "Open Failed",
     "file.open_failed_message": "Notepad-X could not open:\n{file_path}\n\n{error_detail}",
-    "file.open_admin_title": "Administrator Rights Needed",
-    "file.open_admin_message": "Notepad-X needs Administrator rights to open:\n{file_path}\n\nWould you like to restart Notepad-X as Administrator and try again?",
-    "file.open_admin_launch_failed": "Notepad-X could not restart with Administrator rights.\n\n{error_detail}",
     "file.missing_title": "File Missing",
     "file.missing_message": "That file could not be found.",
     "file.changed_title": "File Changed on Disk",
@@ -580,7 +577,7 @@ class NotepadX:
     def init_config(self):
         self.is_windows = os.name == 'nt'
         self.is_linux = sys.platform.startswith('linux')
-        self.app_version = "v1.0.3"
+        self.app_version = "v1.0.4"
         self.resource_dir = self.get_resource_dir()
         self.app_dir = self.get_app_dir()
         self.machine_profile_slug = self.get_machine_profile_slug()
@@ -705,7 +702,17 @@ class NotepadX:
         self.closed_session_files = set()
         self.note_sync_interval_ms = 100
         self.note_editor_heartbeat_interval_ms = 1500
-        self.markdown_preview_delay_ms = 120
+        self.markdown_preview_delay_ms = 45
+        self.markdown_link_pattern = re.compile(r'\[([^\]]+)\]\(([^)]+)\)')
+        self.markdown_inline_patterns = (
+            ('md_code_inline', re.compile(r'`([^`]+)`')),
+            ('md_bold', re.compile(r'(\*\*|__)(.+?)\1')),
+            ('md_italic', re.compile(r'(?<!\*)\*([^*\n]+)\*(?!\*)|(?<!_)_([^_\n]+)_(?!_)')),
+        )
+        self.markdown_heading_pattern = re.compile(r'^(#{1,6})\s+(.*)$')
+        self.markdown_quote_pattern = re.compile(r'^\s*>\s?(.*)$')
+        self.markdown_list_pattern = re.compile(r'^(\s*)([-*+])\s+(.*)$')
+        self.markdown_ordered_list_pattern = re.compile(r'^(\s*)(\d+)[.)]\s+(.*)$')
         self.single_instance_host = '127.0.0.1'
         self.single_instance_port = get_notepadx_single_instance_port(self.app_dir)
         self.single_instance_server = None
@@ -721,6 +728,8 @@ class NotepadX:
         self.base_font_size = 13
         self.current_font_size = self.base_font_size
         self.font_family = 'Courier New'
+        self.gutter_font = None
+        self.currently_editing_measure_font = None
         self.min_font_size = 6
         self.max_font_size = 32
         self.word_wrap_enabled = tk.BooleanVar(value=True)
@@ -881,8 +890,6 @@ class NotepadX:
                 ctypes.c_void_p,
                 ctypes.c_void_p,
             ]
-            self.shell32.IsUserAnAdmin.restype = wintypes.BOOL
-            self.shell32.IsUserAnAdmin.argtypes = []
         except Exception:
             self.shell32 = None
 
@@ -894,124 +901,23 @@ class NotepadX:
         except tk.TclError:
             pass
 
-    def is_running_as_administrator(self):
-        if not self.is_windows or not self.shell32:
-            return False
-        try:
-            return bool(self.shell32.IsUserAnAdmin())
-        except Exception:
-            return False
+    def begin_doc_load(self, doc):
+        if not doc:
+            return
+        doc['loading_file'] = True
+        doc['suspend_modified_events'] = True
 
-    def is_permission_denied_error(self, exc):
-        if isinstance(exc, PermissionError):
-            return True
-        if not isinstance(exc, OSError):
-            return False
-        return (
-            getattr(exc, 'errno', None) in {errno.EACCES, errno.EPERM}
-            or getattr(exc, 'winerror', None) == 5
-        )
-
-    def build_admin_restart_files(self, target_file):
-        restart_files = []
-        if target_file:
-            restart_files.append(os.path.abspath(target_file))
-        if self.isolated_session:
-            for existing_path in self.get_session_state().get('open_files', []):
-                if not existing_path:
-                    continue
-                normalized_path = os.path.abspath(existing_path)
-                if normalized_path not in restart_files and os.path.exists(normalized_path):
-                    restart_files.append(normalized_path)
-        return restart_files
-
-    def launch_notepadx_as_administrator(self, startup_files=None):
-        if not self.is_windows or not self.shell32:
-            raise OSError("Windows elevation is not available in this build.")
-
-        startup_files = [os.path.abspath(path) for path in (startup_files or []) if path]
-        launch_args = []
-        if getattr(sys, 'frozen', False):
-            executable_path = sys.executable
-        else:
-            executable_path = sys.executable
-            script_path = os.path.abspath(sys.argv[0] or __file__)
-            launch_args.append(script_path)
-        if self.isolated_session:
-            launch_args.append('--isolated')
-        launch_args.extend(startup_files)
-
-        parameters = subprocess.list2cmdline(launch_args) if launch_args else None
-        working_directory = self.app_dir if os.path.isdir(self.app_dir) else None
-
-        ctypes.set_last_error(0)
-        result = self.shell32.ShellExecuteW(
-            None,
-            'runas',
-            executable_path,
-            parameters,
-            working_directory,
-            1,
-        )
-        result_code = int(result)
-        if result_code <= 32:
-            error_code = ctypes.get_last_error() or result_code
-            if error_code == 1223:
-                return False
-            raise OSError(error_code, f"ShellExecuteW failed with code {error_code}")
-        return True
-
-    def maybe_restart_as_administrator_for_file(self, file_path, exc):
-        if not file_path or not self.is_windows or self.is_running_as_administrator():
-            return False
-        if not self.is_permission_denied_error(exc):
-            return False
-
-        normalized_path = os.path.abspath(file_path)
-        wants_restart = messagebox.askyesno(
-            self.tr('file.open_admin_title', 'Administrator Rights Needed'),
-            self.tr(
-                'file.open_admin_message',
-                'Notepad-X needs Administrator rights to open:\n{file_path}\n\nWould you like to restart Notepad-X as Administrator and try again?',
-                file_path=normalized_path
-            ),
-            parent=self.root
-        )
-        if not wants_restart:
-            return True
-        if not self.confirm_exit_app():
-            return True
-
-        self.persist_editor_identity()
-        self.save_session()
-        self.stop_single_instance_server()
-        try:
-            launched = self.launch_notepadx_as_administrator(
-                startup_files=self.build_admin_restart_files(normalized_path)
-            )
-        except OSError as launch_exc:
-            self.log_exception("restart as administrator", launch_exc)
-            if not self.isolated_session:
-                self.start_single_instance_server()
-            messagebox.showerror(
-                self.tr('file.open_admin_title', 'Administrator Rights Needed'),
-                self.tr(
-                    'file.open_admin_launch_failed',
-                    'Notepad-X could not restart with Administrator rights.\n\n{error_detail}',
-                    error_detail=launch_exc
-                ),
-                parent=self.root
-            )
-            return True
-
-        if not launched:
-            if not self.isolated_session:
-                self.start_single_instance_server()
-            return True
-
-        self.finalize_exit_app()
-        self.request_app_shutdown()
-        return True
+    def end_doc_load(self, doc):
+        if not doc:
+            return
+        doc['loading_file'] = False
+        doc['suspend_modified_events'] = False
+        text_widget = doc.get('text')
+        if text_widget:
+            try:
+                text_widget.edit_modified(False)
+            except tk.TclError:
+                pass
 
     def get_resource_dir(self):
         if getattr(sys, 'frozen', False):
@@ -2056,13 +1962,14 @@ class NotepadX:
         directory = os.path.dirname(file_path) or '.'
         os.makedirs(directory, exist_ok=True)
         target_mode = None
+        temp_path = None
         if not self.is_windows:
             try:
                 target_mode = stat.S_IMODE(os.stat(file_path).st_mode) | 0o664
             except OSError:
                 target_mode = 0o664
-        fd, temp_path = tempfile.mkstemp(prefix=prefix, suffix='.tmp', dir=directory)
         try:
+            fd, temp_path = tempfile.mkstemp(prefix=prefix, suffix='.tmp', dir=directory)
             with os.fdopen(fd, 'w', encoding='utf-8') as temp_file:
                 json.dump(payload, temp_file, indent=2)
                 temp_file.flush()
@@ -2085,7 +1992,7 @@ class NotepadX:
                 self.log_exception(f"{context_name} direct fallback", direct_exc)
                 return False
         finally:
-            if os.path.exists(temp_path):
+            if temp_path and os.path.exists(temp_path):
                 try:
                     os.remove(temp_path)
                 except OSError:
@@ -2095,13 +2002,14 @@ class NotepadX:
         directory = os.path.dirname(file_path) or '.'
         os.makedirs(directory, exist_ok=True)
         target_mode = None
+        temp_path = None
         if not self.is_windows:
             try:
                 target_mode = stat.S_IMODE(os.stat(file_path).st_mode)
             except OSError:
                 target_mode = 0o664
-        fd, temp_path = tempfile.mkstemp(prefix=prefix, suffix='.tmp', dir=directory)
         try:
+            fd, temp_path = tempfile.mkstemp(prefix=prefix, suffix='.tmp', dir=directory)
             with os.fdopen(fd, 'wb') as temp_file:
                 temp_file.write(payload_bytes)
                 temp_file.flush()
@@ -2114,7 +2022,7 @@ class NotepadX:
             self.log_exception(context_name, exc)
             return False
         finally:
-            if os.path.exists(temp_path):
+            if temp_path and os.path.exists(temp_path):
                 try:
                     os.remove(temp_path)
                 except OSError:
@@ -2463,7 +2371,7 @@ class NotepadX:
         text = doc['text']
         text.configure(state='normal')
         text.delete('1.0', tk.END)
-        text.insert('1.0', "Loading large file...\n")
+        text.insert('1.0', f"{self.tr('large_file.loading', 'Loading large file...')}\n")
         text.edit_modified(False)
         frame_id = str(doc['frame'])
 
@@ -2471,11 +2379,16 @@ class NotepadX:
             try:
                 with open(file_path, 'r', encoding='utf-8', errors='replace') as f:
                     content = f.read()
+                try:
+                    file_size = os.path.getsize(file_path)
+                except OSError:
+                    file_size = len(content.encode('utf-8'))
                 self.queue_background_file_result({
                     'kind': 'text',
                     'tab_id': frame_id,
                     'file_path': file_path,
                     'content': content,
+                    'file_size_bytes': file_size,
                 })
             except Exception as exc:
                 self.queue_background_file_result({
@@ -2494,7 +2407,7 @@ class NotepadX:
         text = doc['text']
         text.configure(state='normal')
         text.delete('1.0', tk.END)
-        text.insert('1.0', "Indexing large file...\n")
+        text.insert('1.0', f"{self.tr('large_file.indexing', 'Indexing large file...')}\n")
         text.edit_modified(False)
         frame_id = str(doc['frame'])
 
@@ -2554,6 +2467,7 @@ class NotepadX:
         doc['background_loading'] = False
         doc['background_load_kind'] = None
         doc['background_load_file_path'] = None
+        self.end_doc_load(doc)
         self.update_doc_file_signature(doc)
         self.configure_syntax_highlighting(doc['frame'])
         self.restore_doc_notes(doc)
@@ -2570,10 +2484,8 @@ class NotepadX:
         doc['background_load_file_path'] = None
         doc.pop('pending_insert_content', None)
         doc.pop('pending_insert_offset', None)
+        self.end_doc_load(doc)
         file_path = doc.get('file_path')
-        if self.maybe_restart_as_administrator_for_file(file_path, exc):
-            self.cleanup_failed_file_open(doc)
-            return
         messagebox.showerror(
             self.tr('file.open_failed_title', 'Open Failed'),
             self.tr(
@@ -2618,6 +2530,7 @@ class NotepadX:
             doc['background_load_file_path'] = None
             doc['window_start_line'] = 1
             doc['window_end_line'] = 1
+            self.end_doc_load(doc)
             self.load_virtual_window(doc, 1)
             self.refresh_tab_title(doc['frame'])
             if str(doc['frame']) == self.notebook.select():
@@ -2625,6 +2538,10 @@ class NotepadX:
             doc['background_open_new_tab'] = False
             return
         if result.get('kind') == 'text':
+            try:
+                doc['file_size_bytes'] = int(result.get('file_size_bytes') or 0)
+            except (TypeError, ValueError):
+                doc['file_size_bytes'] = 0
             self.begin_background_text_insert(doc, result.get('content') or '')
             doc['background_open_new_tab'] = False
 
@@ -3709,6 +3626,29 @@ class NotepadX:
             gutter.bind('<Button-1>', lambda e, target=doc: self.copy_line_from_gutter(e, target_doc=target))
         return gutter
 
+    def get_gutter_font(self):
+        gutter_size = max(9, self.current_font_size - 1)
+        gutter_font = getattr(self, 'gutter_font', None)
+        if gutter_font is not None:
+            try:
+                current_family = str(gutter_font.actual('family') or '')
+                current_size = int(gutter_font.actual('size') or gutter_size)
+                if current_family == self.font_family and current_size == gutter_size:
+                    return gutter_font
+                gutter_font.configure(
+                    family=self.font_family,
+                    size=gutter_size,
+                    weight='normal',
+                    slant='roman',
+                    underline=0,
+                    overstrike=0
+                )
+                return gutter_font
+            except Exception:
+                pass
+        self.gutter_font = tkfont.Font(family=self.font_family, size=gutter_size)
+        return self.gutter_font
+
     def get_display_line_number(self, doc, local_line):
         if doc.get('virtual_mode'):
             return doc.get('window_start_line', 1) + local_line - 1
@@ -3721,8 +3661,10 @@ class NotepadX:
         text = doc.get('text')
         if not gutter or not text:
             return
+        if not self.numbered_lines_enabled.get():
+            return
         try:
-            if not gutter.winfo_exists() or not text.winfo_exists():
+            if not gutter.winfo_exists() or not text.winfo_exists() or not gutter.winfo_ismapped():
                 return
         except tk.TclError:
             return
@@ -3735,27 +3677,27 @@ class NotepadX:
         except (tk.TclError, TypeError, ValueError):
             max_line_number = 1
 
-        gutter_font = tkfont.Font(family=self.font_family, size=max(9, self.current_font_size - 1))
-        desired_gutter_width = max(56, gutter_font.measure('9' * len(str(max_line_number))) + 24)
-        current_gutter_width = int(gutter.cget('width'))
-        if current_gutter_width != desired_gutter_width:
-            gutter.configure(width=desired_gutter_width)
-
-        surface = self.get_syntax_surface_palette()
-        gutter.configure(bg=surface['gutter_bg'])
-        gutter.delete('all')
-        gutter_height = max(gutter.winfo_height(), text.winfo_height(), 1)
-        gutter_width = int(gutter.cget('width'))
-        current_line = 1
         try:
-            current_line = int(text.index(tk.INSERT).split('.')[0])
-        except tk.TclError:
-            pass
+            gutter_font = self.get_gutter_font()
+            desired_gutter_width = max(56, gutter_font.measure('9' * len(str(max_line_number))) + 24)
+            current_gutter_width = int(gutter.cget('width'))
+            if current_gutter_width != desired_gutter_width:
+                gutter.configure(width=desired_gutter_width)
 
-        gutter.create_rectangle(0, 0, gutter_width - 1, gutter_height, fill=surface['gutter_bg'], outline='')
-        gutter.create_rectangle(gutter_width - 1, 0, gutter_width, gutter_height, fill=surface['gutter_divider'], outline='')
+            surface = self.get_syntax_surface_palette()
+            gutter.configure(bg=surface['gutter_bg'])
+            gutter.delete('all')
+            gutter_height = max(gutter.winfo_height(), text.winfo_height(), 1)
+            gutter_width = int(gutter.cget('width'))
+            current_line = 1
+            try:
+                current_line = int(text.index(tk.INSERT).split('.')[0])
+            except tk.TclError:
+                pass
 
-        try:
+            gutter.create_rectangle(0, 0, gutter_width - 1, gutter_height, fill=surface['gutter_bg'], outline='')
+            gutter.create_rectangle(gutter_width - 1, 0, gutter_width, gutter_height, fill=surface['gutter_divider'], outline='')
+
             index = text.index('@0,0')
             while True:
                 info = text.dlineinfo(index)
@@ -5961,7 +5903,7 @@ class NotepadX:
         if self.markdown_preview_enabled.get():
             if self.compare_active:
                 self.close_compare_panel(persist=False, restore_focus=False)
-            self.schedule_markdown_preview_refresh()
+            self.schedule_markdown_preview_refresh(immediate=True)
         else:
             self.close_markdown_preview(persist=False, restore_focus=False)
         self.save_session()
@@ -6872,6 +6814,7 @@ class NotepadX:
             'note_last_heartbeat_at': 0.0,
             'last_unread_count': 0,
             'notes_registered': False,
+            'loading_file': False,
             'last_note_cycle_tag': None,
             'theme_effect_job': None,
             'syntax_job': None,
@@ -10040,7 +9983,7 @@ class NotepadX:
         }
 
     def persist_doc_notes(self, doc):
-        if not doc.get('file_path') or doc.get('virtual_mode') or doc.get('preview_mode'):
+        if not doc or not doc.get('file_path') or doc.get('virtual_mode') or doc.get('preview_mode'):
             return
 
         exported = self.export_doc_notes(doc)
@@ -10201,38 +10144,30 @@ class NotepadX:
                 self.log_exception("reschedule poll shared notes", exc)
 
     def load_content_into_doc(self, doc, file_path):
+        keep_loading_state = False
+        self.begin_doc_load(doc)
         try:
+            doc['encrypted_file'] = False
+            doc['encryption_header'] = None
+            doc['encryption_key'] = None
+            doc['file_size_bytes'] = 0
+            doc['background_loading'] = False
+            doc['background_load_kind'] = None
+            doc['background_load_file_path'] = None
+            doc.pop('pending_insert_content', None)
+            doc['pending_insert_offset'] = 0
+            doc['line_starts'] = None
+            doc['total_file_lines'] = 1
+            doc['window_start_line'] = 1
+            doc['window_end_line'] = 1
+
+            text = doc['text']
+            text.configure(state='normal')
+            text.delete('1.0', tk.END)
+
             file_size = os.path.getsize(file_path)
-        except OSError as exc:
-            self.log_exception("load content into doc", exc)
-            if self.maybe_restart_as_administrator_for_file(file_path, exc):
-                return False
-            messagebox.showerror(
-                self.tr('file.open_failed_title', 'Open Failed'),
-                self.tr(
-                    'file.open_failed_message',
-                    'Notepad-X could not open:\n{file_path}\n\n{error_detail}',
-                    file_path=file_path,
-                    error_detail=exc
-                ),
-                parent=self.root
-            )
-            return False
-        doc['encrypted_file'] = False
-        doc['encryption_header'] = None
-        doc['encryption_key'] = None
-        doc['file_size_bytes'] = file_size
-        doc['background_loading'] = False
-        doc['background_load_kind'] = None
-        doc['background_load_file_path'] = None
-        doc.pop('pending_insert_content', None)
-        doc['pending_insert_offset'] = 0
+            doc['file_size_bytes'] = file_size
 
-        text = doc['text']
-        text.configure(state='normal')
-        text.delete('1.0', tk.END)
-
-        try:
             encrypted_result = self.read_encrypted_text_file(file_path) if self.file_looks_encrypted(file_path) else None
             if encrypted_result is not None:
                 plaintext, encryption_header, encryption_key = encrypted_result
@@ -10267,6 +10202,7 @@ class NotepadX:
                 self.refresh_tab_title(doc['frame'])
                 if str(doc['frame']) == self.notebook.select():
                     self.update_status()
+                keep_loading_state = True
                 return True
             else:
                 if not doc['encrypted_file'] and file_size >= self.large_file_threshold_bytes:
@@ -10274,6 +10210,7 @@ class NotepadX:
                     self.refresh_tab_title(doc['frame'])
                     if str(doc['frame']) == self.notebook.select():
                         self.update_status()
+                    keep_loading_state = True
                     return True
                 if not doc['encrypted_file']:
                     self.insert_text_content(doc, '')
@@ -10288,14 +10225,32 @@ class NotepadX:
                                 self.root.update_idletasks()
                     doc['total_file_lines'] = max(1, int(text.index('end-1c').split('.')[0]))
                     doc['window_end_line'] = doc['total_file_lines']
+
+            text.edit_modified(False)
+            text.mark_set(tk.INSERT, '1.0')
+            text.tag_remove('sel', '1.0', tk.END)
+            text.see('1.0')
+            doc['last_insert_index'] = '1.0'
+            doc['last_yview'] = 0.0
+            doc['last_xview'] = 0.0
+            self.update_doc_file_signature(doc)
+            self.configure_syntax_highlighting(doc['frame'])
+            self.restore_doc_notes(doc)
+            self.register_doc_for_shared_notes(doc)
+            self.refresh_tab_title(doc['frame'])
+            if self.compare_active and self.compare_source_tab == str(doc['frame']):
+                self.refresh_compare_panel()
+            if self.markdown_preview_enabled.get() and str(doc['frame']) == self.notebook.select():
+                self.schedule_markdown_preview_refresh()
+            if str(doc['frame']) == self.notebook.select():
+                self.update_status()
+            return True
         except RuntimeError as exc:
             self.log_exception("load content into doc", exc)
             messagebox.showerror(self.tr('file.open_failed_title', 'Open Failed'), str(exc), parent=self.root)
             return False
         except (OSError, UnicodeDecodeError, ValueError) as exc:
             self.log_exception("load content into doc", exc)
-            if self.maybe_restart_as_administrator_for_file(file_path, exc):
-                return False
             messagebox.showerror(
                 self.tr('file.open_failed_title', 'Open Failed'),
                 self.tr(
@@ -10307,26 +10262,9 @@ class NotepadX:
                 parent=self.root
             )
             return False
-
-        text.edit_modified(False)
-        text.mark_set(tk.INSERT, '1.0')
-        text.tag_remove('sel', '1.0', tk.END)
-        text.see('1.0')
-        doc['last_insert_index'] = '1.0'
-        doc['last_yview'] = 0.0
-        doc['last_xview'] = 0.0
-        self.update_doc_file_signature(doc)
-        self.configure_syntax_highlighting(doc['frame'])
-        self.restore_doc_notes(doc)
-        self.register_doc_for_shared_notes(doc)
-        self.refresh_tab_title(doc['frame'])
-        if self.compare_active and self.compare_source_tab == str(doc['frame']):
-            self.refresh_compare_panel()
-        if self.markdown_preview_enabled.get() and str(doc['frame']) == self.notebook.select():
-            self.schedule_markdown_preview_refresh()
-        if str(doc['frame']) == self.notebook.select():
-            self.update_status()
-        return True
+        finally:
+            if not keep_loading_state:
+                self.end_doc_load(doc)
 
     def get_session_state(self):
         current_doc = self.get_current_doc()
@@ -10674,7 +10612,7 @@ class NotepadX:
         if self._shutdown_requested:
             return
         if self.markdown_preview_enabled.get():
-            self.schedule_markdown_preview_refresh()
+            self.schedule_markdown_preview_refresh(immediate=True)
 
         compare_tab = restored_tabs.get(compare_file) if isinstance(compare_file, str) else None
         if compare_tab is not None and compare_tab != selected_tab:
@@ -10774,7 +10712,7 @@ class NotepadX:
         self.update_window_title()
         if self.markdown_preview_enabled.get():
             self.markdown_preview_source_tab = str(tab_id)
-            self.schedule_markdown_preview_refresh()
+            self.schedule_markdown_preview_refresh(immediate=True)
         self.update_status()
 
     def on_tab_changed(self, event=None):
@@ -10836,7 +10774,7 @@ class NotepadX:
         if str(tab_id) not in self.documents:
             return
         doc = self.documents[str(tab_id)]
-        if doc.get('suspend_modified_events'):
+        if doc.get('loading_file') or doc.get('suspend_modified_events'):
             doc['text'].edit_modified(False)
             return
         self.remember_doc_view_state(doc)
@@ -11254,7 +11192,7 @@ class NotepadX:
                 pass
         self.compare_refresh_job = self.root.after(120, self.refresh_compare_panel)
 
-    def schedule_markdown_preview_refresh(self):
+    def schedule_markdown_preview_refresh(self, immediate=False):
         if not self.markdown_preview_enabled.get():
             return
         if self.markdown_preview_refresh_job:
@@ -11262,15 +11200,14 @@ class NotepadX:
                 self.root.after_cancel(self.markdown_preview_refresh_job)
             except tk.TclError:
                 pass
-        self.markdown_preview_refresh_job = self.root.after(self.markdown_preview_delay_ms, self.refresh_markdown_preview)
+        if immediate:
+            self.markdown_preview_refresh_job = self.root.after_idle(self.refresh_markdown_preview)
+        else:
+            self.markdown_preview_refresh_job = self.root.after(self.markdown_preview_delay_ms, self.refresh_markdown_preview)
 
     def configure_markdown_preview_tags(self, text_widget):
-        try:
-            base_font = tkfont.Font(font=text_widget.cget('font'))
-        except Exception:
-            base_font = tkfont.Font(family=self.font_family, size=self.current_font_size)
-        family = base_font.actual('family') or self.font_family
-        size = int(base_font.actual('size') or self.current_font_size)
+        family = self.font_family
+        size = int(self.current_font_size)
         code_family = 'Consolas' if self.is_windows else 'DejaVu Sans Mono'
 
         text_widget.tag_config('md_heading_1', font=(family, size + 9, 'bold'), spacing1=12, spacing3=6)
@@ -11298,17 +11235,12 @@ class NotepadX:
                 text_widget.tag_add(tag, start_index, end_index)
 
     def render_markdown_inline(self, text_widget, line_text, base_tags=()):
-        source = re.sub(r'\[([^\]]+)\]\(([^)]+)\)', r'\1 (\2)', line_text)
-        token_patterns = (
-            ('md_code_inline', re.compile(r'`([^`]+)`')),
-            ('md_bold', re.compile(r'(\*\*|__)(.+?)\1')),
-            ('md_italic', re.compile(r'(?<!\*)\*([^*\n]+)\*(?!\*)|(?<!_)_([^_\n]+)_(?!_)')),
-        )
+        source = self.markdown_link_pattern.sub(r'\1 (\2)', line_text)
         position = 0
         while position < len(source):
             best_match = None
             best_tag = None
-            for tag_name, pattern in token_patterns:
+            for tag_name, pattern in self.markdown_inline_patterns:
                 match = pattern.search(source, position)
                 if match is None:
                     continue
@@ -11348,25 +11280,25 @@ class NotepadX:
             if len(compact_rule) >= 3 and set(compact_rule) <= {'-', '*', '_'}:
                 self.insert_markdown_segment(text_widget, '-' * 32 + '\n', ('md_rule',))
                 continue
-            heading_match = re.match(r'^(#{1,6})\s+(.*)$', line)
+            heading_match = self.markdown_heading_pattern.match(line)
             if heading_match:
                 level = len(heading_match.group(1))
                 self.render_markdown_inline(text_widget, heading_match.group(2).strip(), (f'md_heading_{level}',))
                 text_widget.insert(tk.END, '\n')
                 continue
-            quote_match = re.match(r'^\s*>\s?(.*)$', line)
+            quote_match = self.markdown_quote_pattern.match(line)
             if quote_match:
                 self.render_markdown_inline(text_widget, quote_match.group(1), ('md_quote',))
                 text_widget.insert(tk.END, '\n')
                 continue
-            list_match = re.match(r'^(\s*)([-*+])\s+(.*)$', line)
+            list_match = self.markdown_list_pattern.match(line)
             if list_match:
                 indent = ' ' * (len(list_match.group(1)) // 2)
                 self.insert_markdown_segment(text_widget, f"{indent}- ", ('md_list',))
                 self.render_markdown_inline(text_widget, list_match.group(3), ('md_list',))
                 text_widget.insert(tk.END, '\n')
                 continue
-            ordered_match = re.match(r'^(\s*)(\d+)[.)]\s+(.*)$', line)
+            ordered_match = self.markdown_ordered_list_pattern.match(line)
             if ordered_match:
                 indent = ' ' * (len(ordered_match.group(1)) // 2)
                 self.insert_markdown_segment(text_widget, f"{indent}{ordered_match.group(2)}. ", ('md_list',))
@@ -11386,7 +11318,13 @@ class NotepadX:
             return
 
         self.markdown_preview_source_tab = str(doc['frame'])
-        self.rebuild_editor_panes()
+        compare_container_visible = False
+        try:
+            compare_container_visible = bool(self.compare_container.winfo_ismapped())
+        except tk.TclError:
+            compare_container_visible = False
+        if not compare_container_visible:
+            self.rebuild_editor_panes()
         self.compare_title.config(text=self.tr('markdown.preview.header', 'Markdown Preview: {title}', title=self.get_doc_title(doc['frame'])))
 
         compare_doc = self.compare_view
@@ -11429,7 +11367,8 @@ class NotepadX:
         compare_doc['total_file_lines'] = max(1, int(compare_text.index('end-1c').split('.')[0]))
         compare_doc['window_end_line'] = compare_doc['total_file_lines']
         self.update_line_number_gutter(compare_doc)
-        self.schedule_compare_layout_refresh()
+        if not compare_container_visible:
+            self.schedule_compare_layout_refresh()
         self.update_status()
 
     def close_markdown_preview(self, event=None, persist=True, restore_focus=True):
@@ -11545,11 +11484,10 @@ class NotepadX:
             pass
 
     def get_currently_editing_sidebar_width(self):
-        try:
-            font_spec = self.currently_editing_content_label.cget('font')
-            font = tkfont.Font(font=font_spec)
-        except Exception:
-            font = tkfont.Font(family='Consolas', size=10)
+        font = getattr(self, 'currently_editing_measure_font', None)
+        if font is None:
+            self.currently_editing_measure_font = tkfont.Font(family='Consolas', size=10)
+            font = self.currently_editing_measure_font
         # One full 32-char MD5 plus a trailing space, with tight sidebar padding.
         return max(160, font.measure(('0' * 32) + ' ') + 12)
 
@@ -12489,13 +12427,14 @@ class NotepadX:
     def write_file_atomically(self, file_path, content):
         directory = os.path.dirname(file_path) or '.'
         target_mode = None
+        temp_path = None
         if not self.is_windows:
             try:
                 target_mode = stat.S_IMODE(os.stat(file_path).st_mode)
             except OSError:
                 target_mode = 0o664
-        fd, temp_path = tempfile.mkstemp(prefix='notepadx-save-', suffix='.tmp', dir=directory)
         try:
+            fd, temp_path = tempfile.mkstemp(prefix='notepadx-save-', suffix='.tmp', dir=directory)
             with os.fdopen(fd, 'w', encoding='utf-8') as temp_file:
                 temp_file.write(content)
                 temp_file.flush()
@@ -12518,7 +12457,7 @@ class NotepadX:
                 self.log_exception("write file direct fallback", direct_exc)
                 raise
         finally:
-            if os.path.exists(temp_path):
+            if temp_path and os.path.exists(temp_path):
                 try:
                     os.remove(temp_path)
                 except OSError as exc:
