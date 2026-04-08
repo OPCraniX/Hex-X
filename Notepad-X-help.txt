@@ -1,296 +1,231 @@
 Notepad-X Help
 
 Overview
-Notepad-X is a tabbed desktop text editor focused on fast editing, search, side-by-side comparison, shared notes, and safer handling of large files. The app keeps a familiar single-window editor layout while adding session restore, Markdown preview, syntax-aware themes, language switching, encrypted saves, recovery tools, and bundled locale files.
+Notepad-X is a tabbed desktop text editor for Windows focused on fast editing, code navigation, compare/preview workflows, shared notes, safer saves, and responsive handling of large files.
 
 Quick Start
 - `Ctrl+W` opens a file.
-- `Ctrl+T` opens a new untitled tab.
+- `Ctrl+T` opens a new tab.
 - `Ctrl+S` saves the current tab.
-- `Ctrl+F` opens the Find panel.
-- `Ctrl+R` opens the Replace panel.
+- `Ctrl+F` opens Find.
 - `Ctrl+Q` opens compare mode.
 - `Ctrl+Shift+P` opens Markdown Preview.
-- `Ctrl+Shift+X` closes Help, About, Markdown Preview, compare mode, Find, or Replace before exiting the app.
+- `Ctrl+Shift+K` opens the command panel.
+- `Ctrl+Shift+X` closes compare, preview, Find, Replace, Help, or About before exiting the app.
 
 Main Window
-- The title bar shows Notepad-X and the active document name.
-- The menu bar contains File, Edit, View, and Help.
-- The tab strip holds every open document.
 - The center editor shows the active tab.
-- The optional right pane shows compare output or Markdown preview.
-- The optional far-right sidebar shows `Currently Editing` information for the active saved file.
-- The bottom status bar shows document position and state on the left and a live clock on the right.
-
-Status Bar
-- Position is shown as line and column.
-- Character counts show the total document length and selection length when text is selected.
-- UTF-8 is shown as the active encoding indicator.
-- Zoom shows `Normal` at default size and a percentage when zoomed.
-- File-backed tabs can show:
-  ID: the editor identity for the current file
-  Notes Synced
-  unread note count with the `F3` hint
-  active editor count
-- Compare mode adds a status readout for the right-side compared document.
-- Large-file tabs can show `Virtual` or `Preview`.
-- Memory usage is shown in MB.
-- The far-right clock shows day, time, and date.
+- The optional right pane shows compare content or Markdown preview.
+- The optional far-right sidebar shows `Currently Editing` details for shared files.
+- The status bar shows line/column, character counts, zoom, mode, CPU, memory, and clock.
+- The line-number gutter can also show fold controls.
+- The minimap shows a compressed overview of the current file.
 
 Tabs
-- Every document opens in its own tab.
-- Untitled tabs are named `Untitled 1`, `Untitled 2`, and so on.
-- Untitled numbering reuses the lowest available untitled name still open.
-- Modified tabs show an asterisk after the tab name.
-- Opening an already open file switches to the existing tab instead of opening a duplicate.
+- Every file opens in its own tab.
+- Tabs remember caret position and scroll position.
+- Reopening the same file selects the existing tab instead of duplicating it.
 - Tabs can be reordered with drag and drop.
-- Tabs remember caret position and scroll position when switching away and back.
-- File-backed tabs are restored from the saved session on launch.
-- The app keeps at least one tab open while it is running.
+- Modified tabs show `*`.
+- Session restore reopens file-backed tabs on launch.
 
-Line Numbers
-- The editor includes a GitHub-style line number gutter.
+Line Numbers and Folding
 - `View > Numbered Lines` shows or hides the gutter.
 - Clicking a line number copies that full line to the clipboard.
-- A small in-window notification appears beside the copied line.
-- The gutter stays in sync during typing, scrolling, compare mode, and large-file virtual mode.
-
-File Menu
-- Open: Opens a single file.
-- Open Project: Opens a chosen file and then other related files from the same folder.
-- Grab Git: Downloads a public GitHub repository from a `username/project` entry and then opens selected files from the downloaded project.
-- Recent: Reopens recently used files or clears the recent list.
-- New Tab: Opens a fresh untitled tab.
-- Close Tab: Closes the current tab and prompts to save if needed.
-- Save: Saves the current tab.
-- Save all: Saves every normal editable tab and skips large virtual or read-only tabs.
-- Save As: Saves the current tab to a new path and updates the tab to the new file.
-- Save Copy As: Saves a copy of the current tab to a new path without changing the current tab.
-- Save and Run: Saves the current tab and launches supported script or HTML files.
-- Save As Encrypted: Saves a passphrase-protected `.npxe` copy.
-- Print: Sends the current saved file to the Windows print action.
-- Export Notes: Exports the current tab's notes to JSON or Markdown.
-- Exit: Closes the app. Open panels are closed first by `Ctrl+Shift+X`.
-
-Edit Menu
-- Undo and Redo reverse or reapply edits.
-- Cut, Copy, Paste, and Select All provide standard clipboard actions.
-- Find opens the live Find panel.
-- Find Next moves to the next match, or to the next unread note when Find and Replace are closed.
-- Find Previous moves to the previous match while Find or Replace is open.
-- Replace opens the Find/Replace panel.
-- Date inserts the current date.
-- Time/Date inserts the current time and date.
-- Font opens the editor font picker.
-- Edit with Notepad-X toggles the Windows Explorer context-menu entry for supported text files.
-- Sound toggles note sounds.
-- Language switches the visible UI language.
+- Foldable sections show a boxed `+` or `-` in the gutter.
+- Clicking the fold box collapses or expands that section.
+- `F9` toggles the fold at the caret.
+- `Shift+F9` collapses all folds.
+- `Ctrl+F9` expands all folds.
 
 Editing Helpers
-- Pressing `Enter` carries the current line indentation forward.
-- If the text before the caret ends in `(`, `[`, `{`, or `:`, one extra indent level is added on the new line.
-- Bracket matching highlights the nearest matching `()`, `[]`, or `{}` pair around the caret.
-- These helpers work in the main editor and in the editable compare pane.
+- Auto-indent carries indentation to the next line.
+- Extra indentation is added after `(`, `[`, `{`, or `:`.
+- Auto-pair can insert matching quotes and brackets.
+- Backspace removes paired characters when appropriate.
+- Matching bracket highlight marks the nearest matching pair.
+- These helpers work in the main editor and editable compare pane.
 
-Autocomplete
+Autocomplete and Symbols
 - Autocomplete is enabled by default for normal editable tabs.
-- Suggestions are built from words already present in the current tab.
-- The suggestion list opens below the caret while typing.
-- `Up` and `Down` move through suggestions.
-- `Tab` or `Enter` accepts the selected suggestion.
-- `Esc` closes the suggestion list.
-- `View > Autocomplete` shows or hides autocomplete.
+- Suggestions can come from:
+  current-file symbols
+  words already in the file
+  other open tabs
+  syntax keywords
+  Python builtins and keywords
+  nearby project/module names
+- `Ctrl+Shift+O` opens symbol navigation for the current file.
+- `Ctrl+Alt+P` opens project symbol navigation.
 
-Spell Check
-- Spell Check can underline misspelled words in normal editable text-oriented tabs.
-- Right-clicking a marked word can show replacements and `Add to Dictionary`.
-- `View > Spell Check` or `F7` toggles the checker.
-- Spell Check stays out of buffered large-file tabs, preview tabs, and most syntax-highlighted code tabs.
+Diagnostics
+- Diagnostics highlight warnings and errors in normal editable files.
+- Current warning types include:
+  trailing whitespace
+  long lines over 140 characters
+- Current syntax/error checks include:
+  Python syntax errors
+  JSON parse errors
+  XML parse errors
+- Hover the mouse over a highlighted warning/error line to see the issue bubble.
+- `View > Diagnostics` toggles diagnostics on or off.
 
 Find, Replace, and Find In Files
-- Find highlights matches live while typing.
-- Live find does not move the caret during typing.
-- Pressing `Enter` in the Find or Replace query box jumps to the first match from the top of the active editor pane.
-- After that jump, the caret lands at the end of the found match.
-- The Find panel's `Find` button and `F3` continue forward through matches.
-- `Shift+F3` moves backward through matches.
-- Replace uses the same live highlighting in its Find field.
-- Find and `Find In:` remember recent search strings and show them in a suggestion list while you type or refocus the field.
-- `Up` and `Down` move through saved suggestions, `Tab` accepts one, and `Esc` closes the list.
-- Forward and backward search continue across open tabs by default.
-- The Find panel also includes a `Find In:` query field and a `Browse` button.
-- Type the folder-search text into `Find In:`.
-- Match highlighting follows the visible query across open tabs, including after switching tabs.
-- `Browse` chooses the folder for Find In Files without replacing the text in the `Find In:` box.
-- Pressing `Enter` in `Find In:` searches the most recently selected folder or prompts for one if none has been chosen yet.
-- Find In Files searches supported files in the selected folder and shows a results window with match counts and an `Open Selected` action.
-- In compare mode, search commands follow the editor pane clicked most recently.
-- Find is not available in buffered large-file virtual mode.
-- Replace is not available in buffered large-file virtual mode.
-
-Markdown Preview
-- `View > Preview Markdown` or `Ctrl+Shift+P` opens a live rendered Markdown preview in the right pane.
-- The preview updates while the source tab changes.
-- Headings, lists, quotes, divider rules, fenced code blocks, bold, italic, inline code, and links are rendered.
-- Opening Markdown Preview closes compare mode first.
+- Find highlights matches live while you type.
+- Replace uses the same live highlighting.
+- `F3` moves forward through matches.
+- `Shift+F3` moves backward.
+- `Find In Files` searches inside a chosen folder and opens a results window.
+- Search history suggestions appear in popup lists for Find and Find In.
+- Search follows the editor pane clicked most recently while comparing.
 
 Compare Mode
-- `View > Compare Tabs` or `Ctrl+Q` opens compare mode.
-- The active tab stays on the left and the selected comparison tab opens on the right.
-- Normal tabs remain editable in both panes.
-- The compared file shows its own bottom status readout.
-- `Currently Editing` remains on the far right if that sidebar is open.
-- Opening or closing the sidebar re-centers the compare split.
-- Search commands follow the compare pane clicked most recently.
+- `Ctrl+Q` opens compare mode.
+- The source tab stays on the left and the selected comparison tab opens on the right.
+- Compare mode uses the main window instead of a separate compare app.
+- Normal text tabs remain editable in both panes.
+- `View > Compare Multi-Edit` can mirror edits between both panes while comparing.
+- The right pane has its own status readout and minimap.
 - `Ctrl+Shift+X` closes compare mode.
-- If compare mode is open when the app closes, the same pair can be restored on the next launch when both files still exist.
+
+Markdown Preview
+- `Ctrl+Shift+P` opens live Markdown Preview in the right pane.
+- Preview and compare share the same right-side workspace.
+- Headings, lists, quotes, rules, fenced code blocks, emphasis, inline code, and links are rendered.
+- `View > Sync PgUp/PgDn in Compare/Preview` keeps page navigation moving together between panes.
+
+Minimap and Breadcrumbs
+- `View > Minimap` shows or hides the minimap.
+- Click or drag in the minimap to jump through the document.
+- Diagnostic markers also appear in the minimap.
+- `View > Breadcrumbs` shows file/location context above the editor.
+- Breadcrumbs can include the nearest symbol while editing code.
+
+Command Panel
+- `Ctrl+Shift+K` opens the docked command panel at the bottom of the app.
+- It supports built-in commands and one-shot shell commands.
+- Built-in commands include:
+  `:help`
+  `:symbols`
+  `:project-symbols`
+  `:fold`
+  `:fold-all`
+  `:unfold-all`
+  `:lint`
+  `:preview`
+  `:compare`
+  `:remote user@host:/absolute/path`
+  `:autosave on|off`
+  `:minimap on|off`
+  `:diagnostics on|off`
+- The command panel is a quick runner, not a full interactive terminal emulator.
+
+Remote Files
+- `File > Open Remote (SSH)` or `Ctrl+Alt+O` opens a remote file.
+- Use the format:
+  `user@host:/absolute/path/to/file`
+- Notepad-X fetches the file with `scp`, edits a local shadow copy, and pushes it back on save.
+- Remote open/save is supported, but full remote project browsing is not.
+
+Shared Notes
+- Notes attach to selected text from the context menu.
+- Notes support colors, replies, unread tracking, and export.
+- `F3` jumps unread notes when Find and Replace are closed.
+- `F4` cycles notes using the current note filter.
+- Clicking a note marker opens its note popup.
 
 Currently Editing
-- `View > Currently Editing` opens a right-side sidebar for saved files.
-- The sidebar shows editors currently tracked on the active file.
-- The sidebar remains separate from compare mode and Markdown preview.
+- `Ctrl+Shift+C` toggles the `Currently Editing` sidebar.
+- It shows tracked editors for the active saved file.
+- This sidebar can stay visible beside compare mode or preview.
 
-Notes
-- Notes attach to selected text through the context menu.
-- Add note is unavailable when no text is selected.
-- Notes include:
-  author name
-  note text
-  note color
-- Available note colors are Yellow, Green, Red, and Light Blue.
-- Clicking a highlighted note opens the note popup.
-- The popup shows note details, timestamps, and responses.
-- Existing notes support `Respond` and `Remove note`.
-- The latest response color becomes the current highlight color.
-- Note data is stored beside the document so multiple editors can share it.
+Spell Check
+- Spell Check underlines misspelled words in supported text-oriented modes.
+- Right-click can show replacement suggestions and `Add to Dictionary`.
+- `F7` toggles Spell Check.
+- Spell Check stays out of preview tabs, virtual large-file tabs, and most code modes.
 
-Unread Notes and Navigation
-- `F3` jumps to the oldest unread note when Find and Replace are closed.
-- Each `F3` press continues through unread notes from oldest to newest.
-- `F4` cycles all notes in the current tab and wraps at the end.
-- `View > Filter Notes` limits note cycling to All, Unread, Yellow, Green, Red, or Light Blue.
-- Opening a note by clicking it clears its unread state for the current editor identity.
-
-Note Export
-- Export Notes writes the current tab's notes to:
-  JSON for machine-readable export
-  Markdown for a readable report
-
-Audio
-- A sound can play when a new unread note arrives for the active file.
-- A second sound can play when a note is removed.
-- `Edit > Sound` toggles sound playback.
-
-Themes and Syntax
-- Built-in themes are available from `View > Syntax Theme`.
-- `Create Theme` opens a color-picker workflow for building a new theme.
-- Newly created themes appear in the theme list immediately.
-- `View > Syntax Mode` overrides automatic syntax detection for the active tab.
-- Available syntax overrides include Auto, Plain Text, Python, C, C++, Rust, Java, JavaScript, HTML, PHP, XML, and SQL.
-
-Language Support
-- `Edit > Language` lists available UI languages.
-- Friendly native language names are shown when available.
-- The selected language is saved in the session and restored on launch.
-- Bundled locale files currently include `en_us`, `ar`, `ar_AE`, `ar_EG`, `ar_MA`, `ar_SA`, `bn_BD`, `de_DE`, `es_419`, `es_ES`, `fr_CA`, `he_IL`, `hi_IN`, `id_ID`, `it_IT`, `ja_JP`, `nl_NL`, `pt_BR`, `ru_RU`, `uk_UA`, and `zh_CN`.
-- Arabic and Hebrew switch the visible UI text direction to right-to-left.
-- Locale changes can also switch the editor font to a better installed script-friendly fallback automatically for Arabic, Bengali, Hebrew, Hindi, Japanese, Chinese, and Russian UI text.
-- Translation files live in `cfg/language`.
-- `en_us.yml` is the source key set used to keep the shipped locale files aligned.
+Themes, Syntax, and Language
+- `View > Syntax Theme` switches themes.
+- `Create Theme` builds custom themes.
+- `View > Syntax Mode` overrides automatic syntax detection for the current tab.
+- `Edit > Language` changes the visible UI language.
+- Arabic and Hebrew can switch the UI flow to right-to-left automatically.
 
 Save and Run
-- Save and Run saves the current tab before launching it.
-- Supported launch targets include Python, JavaScript, PHP, batch, PowerShell, shell, and HTML.
+- `Ctrl+Shift+R` saves the current tab and launches supported script or HTML files.
+- Supported targets include Python, JavaScript, PHP, batch, PowerShell, shell, and HTML.
 - HTML opens in the default browser.
-- Script files launch in a new console window when a matching runtime is available.
-- Save and Run can also use the current Syntax Mode for Python, JavaScript, PHP, and HTML tabs without the usual file extension.
-- Save and Run is unavailable in buffered large-file or preview tabs.
 
 Encrypted Files
-- `Save As Encrypted` creates `.npxe` encrypted copies.
-- Encrypted saves suggest a `.npxe` file name automatically.
+- `Save As Encrypted` writes a passphrase-protected `.npxe` copy.
 - Opening an encrypted file prompts for the passphrase.
-- Normal `Save` and `Save As` remain plain-text save flows.
+- Normal Save and Save As stay plain text.
+
+Autosave, Backups, Session Restore, and Recovery
+- `View > Auto Save` toggles autosave.
+- Manual saves use atomic replace behavior.
+- Backup snapshots are created on save.
+- Session restore remembers open files and major editor toggles.
+- Crash recovery can restore untitled work and modified tabs after a crash.
+- Save conflict checks warn before overwriting a newer disk version.
 
 Large Files
-- Large files load in the background to keep the UI responsive.
-- Large text files remain editable up to a practical limit.
-- Extremely large files can fall back to buffered virtual mode.
-- Binary-like files are treated more cautiously and can open in a safer preview-style mode.
-- In virtual mode:
-  editing is disabled
-  direct saving is disabled
-  Find and Replace are disabled
-  Go To Line still works against the full file
-  scrolling and selection are limited to the loaded buffer window
-- `Save Copy As` remains available for copying the source file elsewhere.
+- Large files can load in the background.
+- Extremely large text files can open in virtual mode.
+- Virtual mode keeps navigation available while limiting direct editing.
+- Binary-like files open in preview-style mode instead of normal editing mode.
 
-Saving and File Safety
-- Normal saves use an atomic temp-file replacement pattern.
-- Session and note support files are also written atomically.
-- Save all keeps the previously active tab selected when it finishes.
-- A warning appears before overwriting a file that changed on disk after it was opened.
-- Recovery restores content into tabs instead of overwriting existing user files directly.
-- Permissions problems are shown to the user instead of failing silently.
-
-Session Restore and Recovery
-- File-backed tabs are written to the session and restored on startup.
-- The last active tab is restored when possible.
-- Compare mode can be restored when both files still exist.
-- Recent file lists and saved Find / Find In histories are restored with the session.
-- Sound, status bar, numbered lines, autocomplete, spell check, Markdown Preview, compare/preview page-sync, and theme settings are restored.
-- Unsaved untitled tabs are not part of normal session restore, but they can be recovered after a crash.
-- Modified file-backed tabs can also be restored after a crash without overwriting the on-disk file automatically.
-- If recovery data is found after a previous crash, the app offers to restore it.
-
-Zoom
-- `Ctrl+Mouse Wheel` zooms in and out.
-- `Ctrl++` zooms in.
-- `Ctrl+-` zooms out.
-- Zoom affects the editor font size within the configured limits.
-
-Printing
-- Print uses the Windows file print action on the saved file path.
-- If the current tab has never been saved, the app prompts for a save first.
+File Menu
+- Open: Open a file.
+- Open Project: Open a file plus related files from the same folder.
+- Open Remote (SSH): Open a remote file through `scp`.
+- Grab Git: Download a public GitHub repository and open chosen files.
+- Recent: Reopen recent files.
+- New Tab: Open a new untitled tab.
+- Close Tab: Close the current tab.
+- Save / Save All / Save As / Save Copy As: Standard save workflows.
+- Save As Encrypted: Save an encrypted `.npxe` copy.
+- Save and Run: Save and launch the current file.
+- Print: Print the current saved file through the Windows print action.
+- Export Notes: Export notes as JSON or Markdown.
 
 Keyboard Shortcuts
 - `Ctrl+W`: Open
 - `Ctrl+Shift+W`: Open Project
+- `Ctrl+Alt+O`: Open Remote (SSH)
 - `Ctrl+Shift+G`: Grab Git
 - `Ctrl+T`: New Tab
 - `Ctrl+Shift+T`: Close Tab
 - `Ctrl+S`: Save
-- `Ctrl+Shift+S`: Save all
+- `Ctrl+Shift+S`: Save All
 - `Ctrl+Shift+Q`: Save As
-- `Ctrl+Shift+R`: Save and Run
 - `Ctrl+Shift+E`: Save As Encrypted
-- `Ctrl+E`: Export Notes
+- `Ctrl+Shift+R`: Save and Run
 - `Ctrl+P`: Print
-- `Ctrl+Shift+X`: Close Help/About, Markdown Preview, compare mode, or Find/Replace if open, otherwise exit
-- `Ctrl+Z`: Undo
-- `Ctrl+Shift+Z`: Redo
-- `Ctrl+X`: Cut
-- `Ctrl+C`: Copy
-- `Ctrl+V`: Paste
-- `Ctrl+A`: Select All
+- `Ctrl+E`: Export Notes
 - `Ctrl+F`: Find
 - `Ctrl+R`: Replace
+- `Ctrl+Shift+K`: Command Panel
+- `Ctrl+Shift+O`: Jump to Symbol
+- `Ctrl+Alt+P`: Project Symbols
+- `Ctrl+G`: Go To Line
+- `Ctrl+Shift+F`: Font
+- `F3`: Find Next or next unread note
 - `Shift+F3`: Find Previous
-- `F3`: Find Next, or next unread note when Find and Replace are closed
 - `F4`: Cycle Notes
 - `F7`: Toggle Spell Check
-- `Ctrl+G`: Go To Line
-- `Ctrl+D`: Date
-- `Ctrl+Shift+D`: Time/Date
-- `Ctrl+Shift+F`: Font
-- `Ctrl+Shift+P`: Toggle Preview Markdown
-- `Ctrl+Shift+C`: Toggle Currently Editing
+- `F9`: Toggle Fold
+- `Shift+F9`: Collapse All Folds
+- `Ctrl+F9`: Expand All Folds
+- `Ctrl+Shift+P`: Preview Markdown
+- `Ctrl+Shift+C`: Currently Editing
 - `Ctrl+Q`: Compare Tabs
 - `Ctrl+B`: Toggle Status Bar
 - `Ctrl+Tab`: Switch Tab
 - `Ctrl+PgUp`: Top of Document
 - `Ctrl+PgDn`: Bottom of Document
-- `Ctrl++`: Zoom in
-- `Ctrl+-`: Zoom out
+- `Ctrl++`: Zoom In
+- `Ctrl+-`: Zoom Out
 - `Ctrl+Mouse Wheel`: Zoom
 - `F11`: Full Screen

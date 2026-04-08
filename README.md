@@ -1,205 +1,174 @@
 # Notepad-X
 
-Notepad-X is a tabbed desktop text editor for Windows focused on fast everyday editing, side-by-side comparison, shared notes, and safer handling of large files.
+Notepad-X is a Windows tabbed text editor built for everyday writing, code editing, side-by-side comparison, shared notes, and safer handling of very large files.
 
-It keeps a familiar desktop editor workflow while adding session restore, live search, folder-wide search, Markdown preview, syntax-aware themes, encrypted saves, note sharing, and crash recovery.
-
-## Benchmark Snapshot
-
-![EXE benchmark comparison](gfx/exe_benchmark.png)
-
-This updated benchmark compares Microsoft Notepad and Notepad-X across launch time, memory use, CPU activity, and disk activity. Each EXE was run 10 times to gather the data, so the chart reflects a steadier average instead of a single pass. In this snapshot, Notepad-X keeps a much lighter memory footprint while trading that for heavier startup CPU and disk activity as it initializes its added editor features.
+It keeps the familiar single-window desktop editor workflow, then layers in compare mode, live Markdown preview, syntax-aware editing, recovery tools, remote file access, and a growing set of coding helpers without turning into a full IDE.
 
 ## Highlights
 
-- Tabbed editing with persistent sessions and caret/scroll restore
-- Live Find, Find/Replace, automatic cross-tab search, and folder-wide Find In Files
-- Side-by-side compare mode inside the main window
-- Shared notes with unread tracking, threaded replies, filters, and export
-- Live Markdown preview in the right pane
-- Syntax themes, syntax mode overrides, autocomplete, and spell check
-- `Save and Run` for supported script and HTML files
-- `Save As Encrypted` for passphrase-protected `.npxe` files
-- Background large-file loading plus buffered virtual mode for very large files
-- Crash recovery, conflict detection, and atomic save behavior
-- Language switching with friendly locale names, bundled locale files, and RTL support for Arabic and Hebrew
-- Built-in Help, About dialog, and Windows shell integration toggle
+- Tabbed editing with session restore, caret/scroll restore, and crash recovery
+- Side-by-side compare mode and live Markdown preview in the shared right pane
+- Compare multi-edit for mirrored editing while comparing normal text tabs
+- Smarter autocomplete with document symbols, keywords, builtins, and nearby project file suggestions
+- Symbol navigation for the current file and project-wide symbol lookup
+- Code folding with gutter `+` / `-` controls plus `F9`, `Shift+F9`, and `Ctrl+F9`
+- Auto-pairing for brackets and quotes with matching-pair highlight
+- Minimap, breadcrumbs, numbered lines, and synced `PgUp` / `PgDn` navigation in compare/preview
+- Real-time diagnostics for warnings and syntax problems, including hover tooltips
+- Docked command panel for quick commands and editor actions
+- SSH-style remote open/save for `user@host:/absolute/path` files using `scp`
+- Autosave, atomic saves, backup snapshots, and large-file virtual mode
+- Shared notes with replies, unread tracking, filters, and export
+- `Save and Run`, encrypted `.npxe` saves, theme support, locale switching, and Windows shell integration
 
-## How It Works
+## What Notepad-X Does Well
 
-### Tabs and Editing
+### Editing and Coding
 
-- Every document opens in its own tab
-- Tabs remember caret position and scroll position when switching away and back
-- Duplicate opens focus the existing tab instead of creating a second copy
-- GitHub-style line numbers can be shown or hidden from `View > Numbered Lines`
-- Auto-indent, bracket matching, autocomplete, and spell check support normal editing workflows
+- Auto-indent keeps line indentation flowing naturally
+- Auto-pair inserts matching brackets and quotes while typing
+- Matching bracket highlight shows paired `()`, `[]`, and `{}`
+- Autocomplete suggests:
+  document words
+  symbols from the current file
+  symbols from other open files
+  syntax keywords
+  Python keywords and builtins
+  nearby module/file names from the working folder
+- Symbol navigation supports:
+  current-file symbol lookup with `Ctrl+Shift+O`
+  project symbol lookup with `Ctrl+Alt+P`
+- Folding supports:
+  gutter fold boxes
+  `F9` to toggle the fold at the caret
+  `Shift+F9` to collapse all folds
+  `Ctrl+F9` to expand all folds
+- Diagnostics can flag:
+  trailing whitespace
+  long lines over 140 characters
+  Python syntax errors
+  JSON parse errors
+  XML parse errors
+- Hovering a highlighted diagnostic line shows the issue in a small info bubble
 
-### Search and Navigation
+### Navigation and Search
 
-- `Ctrl+F` opens the Find panel
-- The `Find` button and `F3` move forward through matches
-- `Shift+F3` moves backward through matches
-- The Replace panel uses the same live highlighting as Find
-- Find and `Find In:` remember recent search strings and suggest them in a popup while you type
-- `Up` and `Down` move through saved search suggestions, `Tab` accepts one, and `Enter` searches the current text
-- Search continues across open tabs by default
-- `Find In:` accepts a folder-search query, and `Browse` chooses the folder to search
-- Pressing `Enter` in `Find In:` searches the most recently selected folder or prompts for one if none has been chosen yet
+- `Ctrl+F` opens live Find
+- `Ctrl+R` opens Replace
+- `Find In Files` searches across folders and opens results in a dedicated window
+- `Ctrl+G` jumps to a line
+- Minimap provides a compressed file overview and click-to-jump navigation
+- Breadcrumbs show the current file/path context and nearest symbol
+- `Ctrl+PgUp` and `Ctrl+PgDn` jump to the top and bottom of the current document
+- Optional synced `PgUp` / `PgDn` keeps the left editor and right compare/preview pane moving together
 
-### Compare and Preview
+### Compare, Preview, and Collaboration
 
-- `View > Compare Tabs` opens two tabs side by side in the main window
-- The right pane can also show live Markdown preview
-- Compare mode and Markdown preview share the same right-side workspace
-- `View > Currently Editing` adds a far-right sidebar for active-editor visibility on shared files
+- `Ctrl+Q` opens compare mode
+- Compare mode keeps the source tab on the left and the selected comparison tab on the right
+- Compare multi-edit can mirror typing, delete, paste, tab, and newline edits across both panes
+- `Ctrl+Shift+P` opens live Markdown preview in the same right-side workspace
+- `Ctrl+Shift+C` toggles the `Currently Editing` sidebar for shared file visibility
+- Shared notes support:
+  colored note markers
+  threaded replies
+  unread tracking
+  note cycling
+  JSON and Markdown export
 
-### Notes and Collaboration
+### Files, Safety, and Recovery
 
-- Notes attach to selected text through the context menu
-- Notes support color tags, threaded replies, unread tracking, and per-editor state
-- `F3` jumps unread notes when Find and Replace are closed
-- `F4` cycles note markers using the current note filter
-- Notes export to JSON or Markdown
+- Normal saves use atomic replace behavior
+- Autosave can write changes back automatically
+- Backup snapshots are created on save
+- Session restore remembers open files, view state, and major editor toggles
+- Crash recovery can restore untitled work and modified tabs
+- External-file conflict detection warns before overwriting newer disk content
+- Large files can load in the background
+- Extremely large files can fall back to virtual mode for responsive navigation
+- `Save As Encrypted` creates passphrase-protected `.npxe` files
+- `Open Remote (SSH)` fetches and saves remote files through `scp`
 
-### File Handling and Safety
+## Command Panel
 
-- Normal saves use an atomic temp-file replace pattern
-- Save conflict checks warn before overwriting a file that changed on disk
-- Recovery restores into tabs instead of overwriting existing files
-- Large files stay responsive by loading in the background
-- Very large files can open in buffered virtual mode with limited editing features
+Press `Ctrl+Shift+K` to open the bottom command panel.
 
-## Feature Guide
+It supports quick built-in commands like:
 
-### Grab Git
+- `:help`
+- `:symbols`
+- `:project-symbols`
+- `:fold`
+- `:fold-all`
+- `:unfold-all`
+- `:lint`
+- `:preview`
+- `:compare`
+- `:remote user@host:/absolute/path`
+- `:autosave on|off`
+- `:minimap on|off`
+- `:diagnostics on|off`
 
-`File > Grab Git` downloads a public GitHub repository from a `username/project` entry, lets a folder be chosen for the download, and then opens one or more selected files from the downloaded project.
+It can also run shell commands from the current document directory. It is a docked command runner, not a full interactive terminal emulator.
 
-### Compare Mode
+## Remote Files
 
-- `View > Compare Tabs` or `Ctrl+Q` opens compare mode
-- The active tab stays on the left and the compared file appears on the right
-- Both panes remain editable for normal tabs
-- Compare mode has its own bottom status readout for the right pane
-- Search commands follow whichever compare pane was clicked most recently
-- `Ctrl+Shift+X` closes compare mode
+- Use `File > Open Remote (SSH)` or `Ctrl+Alt+O`
+- Remote paths use this format:
+  `user@host:/absolute/path/to/file`
+- Notepad-X pulls the file locally through `scp`, edits it normally, and pushes changes back on save
+- This is a file open/save workflow, not a full remote workspace explorer
 
-<p align="center">
-  <img src="gfx/compairing_files.png" alt="Compare mode screenshot in Notepad-X" width="900">
-</p>
+## Large Files
 
-### Search, Replace, and Find In Files
-
-- Live search highlights matches while typing without moving the caret
-- Pressing `Enter` in the Find or Replace query box jumps to the first match from the top
-- The Find panel includes a `Find In:` query field and `Browse`
-- Recent search strings are stored for both `Find` and `Find In:` and appear in an autocomplete-style suggestion list
-- `Up` and `Down` step through saved suggestions, `Tab` accepts one, and `Esc` closes the list
-- Match highlighting follows the visible query across open tabs, including after switching tabs
-- `Browse` chooses the folder for Find In Files without replacing the query text in the box
-- Find In Files searches supported files under the selected folder and shows match counts in an `Open Selected` results window
-- In compare mode, search follows the active pane
-
-### Shared Notes
-
-- Notes attach to selected text from the context menu
-- Available note colors are Yellow, Green, Red, and Light Blue
-- Notes show author, machine name, LAN IP, and local timestamp information
-- Notes support threaded replies and unread tracking
-- `View > Filter Notes` controls which notes are included when cycling with `F4`
-
-<p align="center">
-  <img src="gfx/codenotes.png" alt="Shared notes screenshot in Notepad-X" width="760">
-</p>
-
-### Markdown Preview
-
-- `View > Preview Markdown` or `Ctrl+Shift+P` opens a live rendered preview in the right pane
-- The preview updates while the source tab changes
-- `View > Sync PgUp/PgDn in Compare/Preview` keeps the left editor and right preview moving together
-- Headings, lists, quotes, rules, fenced code blocks, emphasis, inline code, and links are rendered
-- Opening preview closes compare mode first
-
-### Themes, Syntax, and Language
-
-- Built-in themes are included out of the box
-- `View > Syntax Theme > Create Theme` builds new custom themes
-- `View > Syntax Mode` overrides automatic syntax detection for the active tab
-- `Edit > Language` switches the visible UI language
-- Locale entries use friendly native names when available
-- Bundled locale files currently include `en_us`, `ar`, `ar_AE`, `ar_EG`, `ar_MA`, `ar_SA`, `bn_BD`, `de_DE`, `es_419`, `es_ES`, `fr_CA`, `he_IL`, `hi_IN`, `id_ID`, `it_IT`, `ja_JP`, `nl_NL`, `pt_BR`, `ru_RU`, `uk_UA`, and `zh_CN`
-- Arabic and Hebrew switch the visible UI flow to right-to-left automatically
-- Locale-aware font fallback helps Arabic, Bengali, Hebrew, Hindi, Japanese, Chinese, and Russian UI text render more cleanly when matching fonts are installed
-- Translation files live under `cfg/language`, and `en_us.yml` is the source key set used to keep the shipped locale files aligned
-
-<p align="center">
-  <img src="gfx/create_syntax_theme.png" alt="Create theme dialog in Notepad-X" width="420">
-</p>
-
-<p align="center">
-  <img src="gfx/languages.png" alt="Language menu screenshot in Notepad-X" width="520">
-</p>
-
-### Save and Run
-
-- `File > Save and Run` or `Ctrl+Shift+R` saves first, then launches the current file
-- Supported launch targets include Python, JavaScript, PHP, batch, PowerShell, shell, and HTML
-- HTML opens in the default browser
-- Buffered large-file tabs and preview tabs cannot use Save and Run
-
-### Encrypted Files
-
-- `Save As Encrypted` creates `.npxe` encrypted copies
-- Encrypted save suggests `file.ext.npxe` automatically
-- Opening an `.npxe` file prompts for the passphrase
-- Normal `Save` and `Save As` remain plain-text workflows
-
-### Large Files
-
-- Large files load in the background to keep the UI responsive
-- Extremely large files can fall back to buffered virtual mode
-- Virtual mode keeps navigation available while disabling direct editing and normal save operations
-- `Save Copy As` remains available for copying the source file elsewhere
-- Binary-like files open in a safer preview-style mode instead of being treated as normal editable text
-
-### File Safety
-
-- Atomic saves reduce the risk of partial writes
-- Conflict detection warns before overwriting newer on-disk content
-- Recovery can restore untitled work and modified file-backed tabs after a crash
-- Session and note support files are also written atomically
+- Large files can load asynchronously to keep the UI responsive
+- Very large files can open in virtual mode
+- Virtual mode keeps navigation available while limiting direct editing features
+- Binary-like content opens in preview-style mode instead of normal editing mode
 
 ## Main Shortcuts
 
 - `Ctrl+W` Open
 - `Ctrl+Shift+W` Open Project
+- `Ctrl+Alt+O` Open Remote (SSH)
 - `Ctrl+Shift+G` Grab Git
 - `Ctrl+T` New Tab
 - `Ctrl+Shift+T` Close Tab
 - `Ctrl+S` Save
-- `Ctrl+Shift+S` Save all
+- `Ctrl+Shift+S` Save All
 - `Ctrl+Shift+Q` Save As
-- `Ctrl+Shift+R` Save and Run
 - `Ctrl+Shift+E` Save As Encrypted
+- `Ctrl+Shift+R` Save and Run
 - `Ctrl+E` Export Notes
 - `Ctrl+P` Print
-- `Ctrl+Shift+X` Close Markdown Preview / compare / Find or Replace / exit
 - `Ctrl+F` Find
 - `Ctrl+R` Replace
-- `F3` Find next or next unread note
-- `Shift+F3` Find previous
-- `F4` Cycle notes
-- `F7` Spell Check
+- `Ctrl+Shift+K` Command Panel
+- `Ctrl+Shift+O` Jump to Symbol
+- `Ctrl+Alt+P` Project Symbols
 - `Ctrl+G` Go To Line
-- `Ctrl+Shift+F` Font
+- `F3` Find Next or next unread note
+- `Shift+F3` Find Previous
+- `F4` Cycle Notes
+- `F7` Toggle Spell Check
+- `F9` Toggle Fold
+- `Shift+F9` Collapse All Folds
+- `Ctrl+F9` Expand All Folds
 - `Ctrl+Shift+P` Preview Markdown
 - `Ctrl+Shift+C` Currently Editing
 - `Ctrl+Q` Compare Tabs
-- `Ctrl+B` Show or hide status bar
-- `Ctrl+Tab` Switch tab
-- `Ctrl+PgUp` Top of document
-- `Ctrl+PgDn` Bottom of document
-- `Ctrl++` Zoom in
-- `Ctrl+-` Zoom out
+- `Ctrl+Shift+X` Close compare/preview/panels or exit
+- `Ctrl+B` Toggle Status Bar
+- `Ctrl+Tab` Switch Tab
+- `Ctrl+PgUp` Top of Document
+- `Ctrl+PgDn` Bottom of Document
+- `Ctrl++` Zoom In
+- `Ctrl+-` Zoom Out
+- `Ctrl+Mouse Wheel` Zoom
 - `F11` Full Screen
+
+## Benchmark Snapshot
+
+![EXE benchmark comparison](gfx/exe_benchmark.png)
+
+This benchmark compares Microsoft Notepad and Notepad-X across launch time, memory use, CPU activity, and disk activity over repeated runs. Notepad-X trades a bit of startup work for a much richer editing feature set once the window is open.

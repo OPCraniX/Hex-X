@@ -1,12 +1,16 @@
 import tkinter as tk
 import tkinter.font as tkfont
-from tkinter import filedialog, messagebox, ttk, simpledialog, colorchooser
+from tkinter import filedialog, messagebox, ttk, colorchooser
 import colorsys
 import os
 import sys
 import ctypes
 import json
+import ast
 import bisect
+import builtins
+import glob
+import keyword
 import re
 import hashlib
 import base64
@@ -21,6 +25,7 @@ import socket
 import threading
 import webbrowser
 import gc
+import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from ctypes import wintypes
 from pathlib import Path
@@ -660,7 +665,7 @@ class NotepadX:
     def init_config(self):
         self.is_windows = os.name == 'nt'
         self.is_linux = sys.platform.startswith('linux')
-        self.app_version = "v1.0.5"
+        self.app_version = "v1.0.6"
         self.resource_dir = self.get_resource_dir()
         self.app_dir = self.get_app_dir()
         self.machine_profile_slug = self.get_machine_profile_slug()
@@ -723,6 +728,10 @@ class NotepadX:
         os.makedirs(self.locale_dir, exist_ok=True)
         self.theme_dir = self.get_theme_dir(config_dir)
         os.makedirs(self.theme_dir, exist_ok=True)
+        self.backup_dir = os.path.join(config_dir, "backups")
+        os.makedirs(self.backup_dir, exist_ok=True)
+        self.remote_cache_dir = os.path.join(config_dir, "remote-cache")
+        os.makedirs(self.remote_cache_dir, exist_ok=True)
         self.migrate_language_files(config_dir=config_dir, locale_dir=self.locale_dir)
         self.ensure_theme_files(self.theme_dir)
         self.theme_definitions = self.load_theme_definitions(self.theme_dir)
@@ -765,6 +774,8 @@ class NotepadX:
         self.live_find_min_chars = 2
         self.live_find_max_matches_per_widget = 1000
         self.live_find_max_matches_typing = 150
+        self.intellisense_max_project_files = 24
+        self.intellisense_max_suggestions = 28
         self.spellcheck_delay_ms = 260
         self.spellcheck_max_chars = 250000
         self.spellcheck_max_words = 8000
@@ -786,6 +797,13 @@ class NotepadX:
         self.note_sync_interval_ms = 100
         self.note_editor_heartbeat_interval_ms = 1500
         self.markdown_preview_delay_ms = 45
+        self.command_output_max_chars = 50000
+        self.minimap_width = 64
+        self.minimap_max_segments = 240
+        self.diagnostics_delay_ms = 500
+        self.diagnostic_tooltip_delay_ms = 350
+        self.autosave_delay_ms = 12000
+        self.max_backup_versions_per_doc = 20
         self.markdown_link_pattern = re.compile(r'\[([^\]]+)\]\(([^)]+)\)')
         self.markdown_inline_patterns = (
             ('md_code_inline', re.compile(r'`([^`]+)`')),
@@ -822,6 +840,13 @@ class NotepadX:
         self.autocomplete_enabled = tk.BooleanVar(value=True)
         self.spell_check_enabled = tk.BooleanVar(value=SpellChecker is not None)
         self.edit_with_shell_enabled = tk.BooleanVar(value=False)
+        self.auto_pair_enabled = tk.BooleanVar(value=True)
+        self.compare_multi_edit_enabled = tk.BooleanVar(value=False)
+        self.command_panel_enabled = tk.BooleanVar(value=True)
+        self.minimap_enabled = tk.BooleanVar(value=True)
+        self.breadcrumbs_enabled = tk.BooleanVar(value=True)
+        self.diagnostics_enabled = tk.BooleanVar(value=True)
+        self.autosave_enabled = tk.BooleanVar(value=True)
         self.find_in_selected_directory = ""
         self.note_filter = tk.StringVar(value='all')
         self.syntax_theme = tk.StringVar(value='Default')
@@ -851,9 +876,19 @@ class NotepadX:
         self.search_history_entry = None
         self.search_history_items = []
         self.search_history_hide_job = None
+        self.command_panel_visible = False
+        self.command_history = []
+        self.command_history_index = None
+        self.command_runner_thread = None
+        self.command_runner_active = False
+        self.command_output_buffer = []
         self.active_context_menu = None
         self.context_menu_posted_at = 0.0
         self.hovered_editor_widget = None
+        self.diagnostic_tooltip_popup = None
+        self.diagnostic_tooltip_job = None
+        self.diagnostic_tooltip_doc = None
+        self.diagnostic_tooltip_signature = None
         self.sync_page_navigation_enabled = tk.BooleanVar(value=False)
         self.find_panel_visible = False
         self.replace_panel_visible = False
@@ -1025,6 +1060,11 @@ class NotepadX:
                 return
             except tk.TclError:
                 pass
+
+    def create_toplevel(self, parent=None):
+        window = tk.Toplevel(parent or self.root)
+        self.apply_window_icon(window)
+        return window
 
     def create_about_display_image(self):
         if os.path.exists(self.splash_path):
@@ -1462,12 +1502,11 @@ class NotepadX:
 
     def show_create_theme_dialog(self):
         t = self.tr
-        dialog = tk.Toplevel(self.root)
+        dialog = self.create_toplevel(self.root)
         dialog.title(t('theme.create.title', 'Create Theme'))
         dialog.transient(self.root)
         dialog.resizable(False, False)
         dialog.configure(bg=self.bg_color)
-        self.apply_window_icon(dialog)
 
         current_theme = (getattr(self, 'theme_definitions', None) or {}).get(self.syntax_theme.get())
         if current_theme is None:
@@ -2247,12 +2286,11 @@ class NotepadX:
 
     def prompt_encryption_options(self, default_encrypt=False, parent=None):
         parent = parent or self.root
-        dialog = tk.Toplevel(parent)
+        dialog = self.create_toplevel(parent)
         dialog.title(self.tr('encryption.save_title', 'Save Encrypted Copy As'))
         dialog.transient(parent)
         dialog.resizable(False, False)
         dialog.configure(bg='#f0f0f0', padx=14, pady=12)
-        self.apply_window_icon(dialog)
 
         result = {'value': None}
         encrypt_var = tk.BooleanVar(value=bool(default_encrypt))
@@ -2357,12 +2395,11 @@ class NotepadX:
             f"prompt_open_passphrase create file={file_path} "
             f"mainloop={self.main_loop_started} viewable={self.root_is_ready_for_dialogs()}"
         )
-        dialog = tk.Toplevel(parent)
+        dialog = self.create_toplevel(parent)
         dialog.title(self.tr('encryption.open_title', 'Open Encrypted File'))
         dialog.transient(parent)
         dialog.resizable(False, False)
         dialog.configure(bg='#f0f0f0', padx=14, pady=12)
-        self.apply_window_icon(dialog)
 
         result = {'value': None}
         show_var = tk.BooleanVar(value=False)
@@ -2631,6 +2668,7 @@ class NotepadX:
             self.documents.pop(str(doc['frame']), None)
         else:
             doc['file_path'] = None
+            self.clear_remote_metadata(doc)
             doc['encrypted_file'] = False
             doc['encryption_header'] = None
             doc['encryption_key'] = None
@@ -2768,6 +2806,8 @@ class NotepadX:
         return signature
 
     def confirm_external_file_change(self, doc):
+        if doc and doc.get('is_remote'):
+            return True
         file_path = doc.get('file_path') if doc else None
         if not file_path or not os.path.exists(file_path):
             return True
@@ -2811,6 +2851,289 @@ class NotepadX:
             parent=self.root
         )
 
+    def slugify_storage_name(self, value):
+        slug = re.sub(r'[^a-z0-9._-]+', '-', str(value or '').strip().lower()).strip('-')
+        return slug or 'doc'
+
+    def get_doc_persistence_path(self, doc):
+        if not doc:
+            return None
+        return doc.get('remote_shadow_path') or doc.get('file_path')
+
+    def clear_remote_metadata(self, doc):
+        if not doc:
+            return
+        previous_spec = doc.get('remote_spec')
+        doc['is_remote'] = False
+        doc['remote_spec'] = None
+        doc['remote_host'] = None
+        doc['remote_path'] = None
+        doc['remote_shadow_path'] = None
+        if doc.get('display_name') and doc.get('display_name') == previous_spec:
+            doc['display_name'] = None
+
+    def remote_tools_available(self, notify=False):
+        scp_path = shutil.which('scp')
+        if scp_path:
+            return True
+        if notify:
+            messagebox.showerror(
+                self.tr('menu.file.open', 'Open'),
+                'OpenSSH scp was not found on this system. Remote editing needs scp in PATH.',
+                parent=self.root
+            )
+        return False
+
+    def parse_remote_spec(self, spec_text):
+        spec = str(spec_text or '').strip()
+        match = re.match(r'^(?P<host>[^:]+):(?P<path>/.*)$', spec)
+        if not match:
+            raise ValueError('Remote files must use the format user@host:/absolute/path/to/file')
+        host = match.group('host').strip()
+        path = match.group('path').strip()
+        if not host or not path or path == '/':
+            raise ValueError('Remote files must include both a host and an absolute file path')
+        return {'spec': f'{host}:{path}', 'host': host, 'path': path}
+
+    def build_remote_shadow_path(self, remote_spec):
+        parsed = self.parse_remote_spec(remote_spec)
+        remote_name = os.path.basename(parsed['path']) or 'remote.txt'
+        host_slug = self.slugify_storage_name(parsed['host'])
+        path_hash = hashlib.sha1(parsed['spec'].encode('utf-8', errors='replace')).hexdigest()[:12]
+        shadow_dir = os.path.join(self.remote_cache_dir, host_slug)
+        os.makedirs(shadow_dir, exist_ok=True)
+        return os.path.join(shadow_dir, f'{path_hash}-{remote_name}')
+
+    def fetch_remote_file_to_shadow(self, remote_spec, shadow_path):
+        if not self.remote_tools_available(notify=True):
+            raise OSError('scp is unavailable')
+        os.makedirs(os.path.dirname(shadow_path), exist_ok=True)
+        completed = subprocess.run(
+            ['scp', '-q', remote_spec, shadow_path],
+            capture_output=True,
+            text=True,
+            creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0)
+        )
+        if completed.returncode != 0:
+            error_detail = (completed.stderr or completed.stdout or 'Unknown scp failure').strip()
+            raise OSError(error_detail)
+        return shadow_path
+
+    def open_remote_file_dialog(self, event=None):
+        remote_spec = self.prompt_text_input(
+            self.tr('menu.file.open', 'Open'),
+            'Remote file (user@host:/absolute/path):',
+            parent=self.root
+        )
+        if remote_spec:
+            self.open_remote_file(remote_spec)
+        return "break"
+
+    def open_remote_file(self, remote_spec):
+        try:
+            parsed = self.parse_remote_spec(remote_spec)
+        except ValueError as exc:
+            messagebox.showerror(self.tr('menu.file.open', 'Open'), str(exc), parent=self.root)
+            return False
+
+        for doc in self.documents.values():
+            if doc.get('is_remote') and doc.get('remote_spec') == parsed['spec']:
+                self.notebook.select(doc['frame'])
+                self.set_active_document(doc['frame'])
+                return True
+
+        shadow_path = self.build_remote_shadow_path(parsed['spec'])
+        try:
+            self.fetch_remote_file_to_shadow(parsed['spec'], shadow_path)
+        except OSError as exc:
+            self.log_exception('open remote file', exc)
+            messagebox.showerror(
+                self.tr('menu.file.open', 'Open'),
+                f'Notepad-X could not fetch the remote file.\n\n{exc}',
+                parent=self.root
+            )
+            return False
+
+        current_doc = self.get_current_doc()
+        if current_doc and not current_doc['file_path'] and not current_doc['text'].edit_modified():
+            target_doc = current_doc
+            target_doc['file_path'] = shadow_path
+            target_doc['background_open_new_tab'] = False
+            if not self.load_content_into_doc(target_doc, shadow_path):
+                self.cleanup_failed_file_open(target_doc)
+                return False
+        else:
+            tab_id = self.create_tab(file_path=shadow_path, select=True)
+            target_doc = self.documents[str(tab_id)]
+            target_doc['background_open_new_tab'] = False
+            if not self.load_content_into_doc(target_doc, shadow_path):
+                try:
+                    self.notebook.forget(target_doc['frame'])
+                except tk.TclError:
+                    pass
+                self.documents.pop(str(target_doc['frame']), None)
+                return False
+
+        target_doc['is_remote'] = True
+        target_doc['remote_spec'] = parsed['spec']
+        target_doc['remote_host'] = parsed['host']
+        target_doc['remote_path'] = parsed['path']
+        target_doc['remote_shadow_path'] = shadow_path
+        target_doc['display_name'] = parsed['spec']
+        target_doc['untitled_name'] = None
+        self.refresh_tab_title(target_doc['frame'])
+        self.set_active_document(target_doc['frame'])
+        self.save_session()
+        return True
+
+    def get_doc_backup_prefix(self, doc):
+        source_name = self.get_doc_display_path(doc) or doc.get('untitled_name') or 'untitled'
+        return self.slugify_storage_name(source_name)
+
+    def trim_backup_history(self, backup_prefix):
+        pattern = os.path.join(self.backup_dir, f'{backup_prefix}-*.bak')
+        backups = sorted(glob.glob(pattern), key=lambda path: os.path.getmtime(path))
+        while len(backups) > self.max_backup_versions_per_doc:
+            old_path = backups.pop(0)
+            try:
+                os.remove(old_path)
+            except OSError:
+                continue
+
+    def create_backup_snapshot(self, doc):
+        if not doc:
+            return None
+        source_path = self.get_doc_persistence_path(doc)
+        if not source_path or not os.path.exists(source_path):
+            return None
+        backup_prefix = self.get_doc_backup_prefix(doc)
+        timestamp = datetime.now().strftime('%Y%m%d-%H%M%S')
+        backup_path = os.path.join(self.backup_dir, f'{backup_prefix}-{timestamp}.bak')
+        try:
+            shutil.copy2(source_path, backup_path)
+        except OSError as exc:
+            self.log_exception('create backup snapshot', exc)
+            return None
+        self.trim_backup_history(backup_prefix)
+        return backup_path
+
+    def save_remote_document(self, doc, text_content):
+        remote_spec = doc.get('remote_spec')
+        shadow_path = doc.get('remote_shadow_path') or doc.get('file_path')
+        if not remote_spec or not shadow_path:
+            raise OSError('Remote document metadata is incomplete')
+        self.write_file_atomically(shadow_path, text_content)
+        completed = subprocess.run(
+            ['scp', '-q', shadow_path, remote_spec],
+            capture_output=True,
+            text=True,
+            creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0)
+        )
+        if completed.returncode != 0:
+            error_detail = (completed.stderr or completed.stdout or 'Unknown scp failure').strip()
+            raise OSError(error_detail)
+        return True
+
+    def save_document_content(self, doc, autosave=False, show_errors=True, update_recent=True):
+        if not doc:
+            return False
+        if doc.get('preview_mode') or doc.get('virtual_mode'):
+            if show_errors:
+                messagebox.showinfo(
+                    self.tr('large_file.title', 'Large File Mode'),
+                    self.tr(
+                        'large_file.save_disabled',
+                        'This tab is opened in buffered large-file mode. Editing and saving are disabled for the full file view.'
+                    ),
+                    parent=self.root
+                )
+            return False
+
+        if not doc.get('file_path'):
+            if autosave:
+                return False
+            return self.save_as()
+
+        if not autosave and not doc.get('is_remote'):
+            if not self.confirm_external_file_change(doc):
+                return False
+
+        try:
+            text_content = doc['text'].get('1.0', tk.END).rstrip('\n')
+            if doc.get('is_remote'):
+                if not autosave:
+                    self.create_backup_snapshot(doc)
+                self.save_remote_document(doc, text_content)
+            elif doc.get('encrypted_file'):
+                if not autosave:
+                    self.create_backup_snapshot(doc)
+                self.write_encrypted_text_file(
+                    doc['file_path'],
+                    text_content,
+                    header=doc.get('encryption_header'),
+                    key=doc.get('encryption_key'),
+                    original_name=doc.get('file_path')
+                )
+            else:
+                if not autosave:
+                    self.create_backup_snapshot(doc)
+                self.write_file_atomically(doc['file_path'], text_content)
+        except (PermissionError, RuntimeError, ValueError, OSError) as exc:
+            if show_errors:
+                if isinstance(exc, PermissionError):
+                    self.show_filesystem_error(self.tr('save.failed_title', 'Save Failed'), doc.get('file_path'), exc)
+                elif isinstance(exc, (RuntimeError, ValueError)):
+                    messagebox.showerror(self.tr('save.failed_title', 'Save Failed'), str(exc), parent=self.root)
+                else:
+                    self.log_exception('save document content', exc)
+                    self.show_filesystem_error(self.tr('save.failed_title', 'Save Failed'), doc.get('file_path'), exc)
+            return False
+
+        doc['text'].edit_modified(False)
+        self.update_doc_file_signature(doc)
+        if update_recent and not doc.get('is_remote'):
+            self.add_recent_file(doc['file_path'])
+        self.refresh_tab_title(doc['frame'])
+        self.update_status()
+        self.save_session()
+        return True
+
+    def cancel_doc_autosave(self, doc):
+        if not doc:
+            return
+        autosave_job = doc.get('autosave_job')
+        if autosave_job:
+            try:
+                self.root.after_cancel(autosave_job)
+            except tk.TclError:
+                pass
+            doc['autosave_job'] = None
+
+    def schedule_doc_autosave(self, doc):
+        if not doc:
+            return
+        self.cancel_doc_autosave(doc)
+        if not self.autosave_enabled.get():
+            return
+        if not doc['text'].edit_modified():
+            return
+        if not doc.get('file_path'):
+            return
+        try:
+            doc['autosave_job'] = self.root.after(self.autosave_delay_ms, lambda current=doc: self.run_doc_autosave(current))
+        except tk.TclError:
+            doc['autosave_job'] = None
+
+    def run_doc_autosave(self, doc):
+        if not doc:
+            return
+        doc['autosave_job'] = None
+        if not self.autosave_enabled.get():
+            return
+        if not doc['text'].edit_modified():
+            return
+        self.save_document_content(doc, autosave=True, show_errors=False, update_recent=False)
+
     def confirm_exit_app(self):
         for doc in list(self.documents.values()):
             if not self.confirm_close_tab(doc):
@@ -2820,6 +3143,7 @@ class NotepadX:
     def finalize_exit_app(self):
         for doc in list(self.documents.values()):
             self.unregister_doc_from_shared_notes(doc)
+            self.cancel_doc_autosave(doc)
         self.stop_single_instance_server()
         if self.recovery_job:
             try:
@@ -2909,9 +3233,15 @@ class NotepadX:
             'numbered_lines_enabled': bool(session.get('numbered_lines_enabled', True)),
             'autocomplete_enabled': bool(session.get('autocomplete_enabled', True)),
             'spell_check_enabled': bool(session.get('spell_check_enabled', SpellChecker is not None)),
+            'auto_pair_enabled': bool(session.get('auto_pair_enabled', True)),
+            'compare_multi_edit_enabled': bool(session.get('compare_multi_edit_enabled', False)),
             'markdown_preview_enabled': bool(session.get('markdown_preview_enabled', False)),
             'sync_page_navigation_enabled': bool(session.get('sync_page_navigation_enabled', False)),
             'edit_with_shell_enabled': bool(session.get('edit_with_shell_enabled', False)),
+            'minimap_enabled': bool(session.get('minimap_enabled', True)),
+            'breadcrumbs_enabled': bool(session.get('breadcrumbs_enabled', True)),
+            'diagnostics_enabled': bool(session.get('diagnostics_enabled', True)),
+            'autosave_enabled': bool(session.get('autosave_enabled', True)),
             'current_font_size': current_font_size,
             'syntax_theme': syntax_theme,
             'locale_code': locale_code,
@@ -3301,9 +3631,11 @@ class NotepadX:
         for doc in self.documents.values():
             doc['text'].configure(font=font_tuple)
             self.update_line_number_gutter(doc)
+            self.schedule_minimap_refresh(doc)
         if self.compare_view:
             self.compare_view['text'].configure(font=font_tuple)
             self.update_line_number_gutter(self.compare_view)
+            self.schedule_minimap_refresh(self.compare_view)
         if self.markdown_preview_enabled.get():
             self.schedule_markdown_preview_refresh()
 
@@ -3333,8 +3665,10 @@ class NotepadX:
         wrap_mode = tk.WORD if self.word_wrap_enabled.get() else tk.NONE
         for doc in self.documents.values():
             doc['text'].configure(wrap=wrap_mode)
+            self.schedule_minimap_refresh(doc)
         if self.compare_view:
             self.compare_view['text'].configure(wrap=wrap_mode)
+            self.schedule_minimap_refresh(self.compare_view)
         if self.markdown_preview_enabled.get():
             self.schedule_markdown_preview_refresh()
 
@@ -3765,6 +4099,7 @@ class NotepadX:
 
         if self.currently_editing_panel_visible:
             self.refresh_currently_editing_panel()
+        self.update_breadcrumbs()
 
     def is_side_panel_visible(self):
         return bool(self.compare_active or self.markdown_preview_enabled.get())
@@ -3831,9 +4166,12 @@ class NotepadX:
             relief='flat'
         )
         if tab_id is not None:
-            gutter.bind('<Button-1>', lambda e, frame=tab_id: self.copy_line_from_gutter(e, frame))
+            gutter.bind('<Button-1>', lambda e, frame=tab_id: self.handle_gutter_click(e, tab_id=frame))
+            gutter.bind('<Motion>', lambda e, frame=tab_id: self.update_gutter_cursor(e, tab_id=frame))
         elif doc is not None:
-            gutter.bind('<Button-1>', lambda e, target=doc: self.copy_line_from_gutter(e, target_doc=target))
+            gutter.bind('<Button-1>', lambda e, target=doc: self.handle_gutter_click(e, target_doc=target))
+            gutter.bind('<Motion>', lambda e, target=doc: self.update_gutter_cursor(e, target_doc=target))
+        gutter.bind('<Leave>', self.clear_gutter_cursor)
         return gutter
 
     def get_gutter_font(self):
@@ -3864,6 +4202,56 @@ class NotepadX:
             return doc.get('window_start_line', 1) + local_line - 1
         return local_line
 
+    def get_gutter_doc(self, tab_id=None, target_doc=None):
+        if target_doc is not None:
+            return target_doc
+        if tab_id is None:
+            return None
+        return self.documents.get(str(tab_id))
+
+    def get_gutter_fold_hitbox(self, doc, x, y):
+        if not doc:
+            return None
+        for hitbox in doc.get('gutter_fold_hitboxes') or []:
+            if hitbox['x1'] <= x <= hitbox['x2'] and hitbox['y1'] <= y <= hitbox['y2']:
+                return hitbox
+        return None
+
+    def handle_gutter_click(self, event, tab_id=None, target_doc=None):
+        doc = self.get_gutter_doc(tab_id=tab_id, target_doc=target_doc)
+        if not doc:
+            return "break"
+        hitbox = self.get_gutter_fold_hitbox(doc, event.x, event.y)
+        if hitbox:
+            text_widget = doc.get('text')
+            start_line = int(hitbox.get('start', 1))
+            if text_widget:
+                try:
+                    text_widget.mark_set(tk.INSERT, f'{start_line}.0')
+                    text_widget.see(f'{start_line}.0')
+                    text_widget.focus_set()
+                except tk.TclError:
+                    pass
+            self.toggle_fold_region(doc, hitbox.get('region'))
+            return "break"
+        return self.copy_line_from_gutter(event, tab_id=tab_id, target_doc=doc)
+
+    def update_gutter_cursor(self, event, tab_id=None, target_doc=None):
+        doc = self.get_gutter_doc(tab_id=tab_id, target_doc=target_doc)
+        cursor_name = 'hand2' if self.get_gutter_fold_hitbox(doc, event.x, event.y) else 'arrow'
+        try:
+            event.widget.configure(cursor=cursor_name)
+        except tk.TclError:
+            pass
+
+    def clear_gutter_cursor(self, event=None):
+        if event is None:
+            return
+        try:
+            event.widget.configure(cursor='arrow')
+        except tk.TclError:
+            pass
+
     def update_line_number_gutter(self, doc):
         if not doc:
             return
@@ -3889,7 +4277,7 @@ class NotepadX:
 
         try:
             gutter_font = self.get_gutter_font()
-            desired_gutter_width = max(56, gutter_font.measure('9' * len(str(max_line_number))) + 24)
+            desired_gutter_width = max(72, gutter_font.measure('9' * len(str(max_line_number))) + 48)
             current_gutter_width = int(gutter.cget('width'))
             if current_gutter_width != desired_gutter_width:
                 gutter.configure(width=desired_gutter_width)
@@ -3897,9 +4285,19 @@ class NotepadX:
             surface = self.get_syntax_surface_palette()
             gutter.configure(bg=surface['gutter_bg'])
             gutter.delete('all')
+            doc['gutter_fold_hitboxes'] = []
             gutter_height = max(gutter.winfo_height(), text.winfo_height(), 1)
             gutter_width = int(gutter.cget('width'))
             current_line = 1
+            fold_regions = {
+                int(region['start']): dict(region)
+                for region in self.get_cached_fold_regions(doc)
+            }
+            collapsed_regions = self.get_collapsed_fold_regions(doc)
+            collapsed_ranges = [
+                (int(region.get('start', 1)), int(region.get('end', 1)))
+                for region in collapsed_regions.values()
+            ]
             try:
                 current_line = int(text.index(tk.INSERT).split('.')[0])
             except tk.TclError:
@@ -3914,14 +4312,64 @@ class NotepadX:
                 if info is None:
                     break
                 local_line = int(index.split('.')[0])
+                if any(start_line < local_line <= end_line for start_line, end_line in collapsed_ranges):
+                    index = text.index(f"{local_line + 1}.0")
+                    continue
                 display_line = self.get_display_line_number(doc, local_line)
-                y = info[1]
-                line_height = info[3]
+                y = int(round(info[1]))
+                line_height = int(round(info[3]))
                 if local_line == current_line:
                     gutter.create_rectangle(0, y, gutter_width - 1, y + line_height, fill=surface['gutter_current_bg'], outline='')
                     line_fg = surface['gutter_current_fg']
                 else:
                     line_fg = surface['gutter_fg']
+                marker_region = collapsed_regions.get(local_line) or fold_regions.get(local_line)
+                if marker_region:
+                    marker_size = max(10, min(13, line_height - 4))
+                    x1 = 6
+                    y1 = int(round(y + max(1, (line_height - marker_size) / 2)))
+                    x2 = x1 + marker_size
+                    y2 = y1 + marker_size
+                    gutter.create_rectangle(
+                        x1,
+                        y1,
+                        x2,
+                        y2,
+                        fill=surface['text_bg'],
+                        outline=surface['gutter_divider'],
+                        width=1
+                    )
+                    mid_x = int(round((x1 + x2) / 2))
+                    mid_y = int(round((y1 + y2) / 2))
+                    horizontal_inset = max(3, marker_size // 4)
+                    vertical_inset = max(3, marker_size // 4)
+                    gutter.create_line(
+                        x1 + horizontal_inset,
+                        mid_y,
+                        x2 - horizontal_inset,
+                        mid_y,
+                        fill=line_fg,
+                        width=1
+                    )
+                    if local_line in collapsed_regions:
+                        gutter.create_line(
+                            mid_x,
+                            y1 + vertical_inset,
+                            mid_x,
+                            y2 - vertical_inset,
+                            fill=line_fg,
+                            width=1
+                        )
+                    doc['gutter_fold_hitboxes'].append(
+                        {
+                            'x1': x1,
+                            'y1': y1,
+                            'x2': x2,
+                            'y2': y2,
+                            'start': int(marker_region.get('start', local_line)),
+                            'region': dict(marker_region),
+                        }
+                    )
                 gutter.create_text(
                     gutter_width - 10,
                     y + (line_height / 2),
@@ -4047,16 +4495,469 @@ class NotepadX:
         self.replace_find_entry.bind('<ButtonRelease-1>', self.on_search_history_entry_focus)
         self.replace_entry.bind('<Escape>', lambda e: self.show_replace_panel())       # ← added
 
+        # Command panel
+        self.command_frame = tk.Frame(self.bottom_frame, bg=self.panel_bg)
+        self.command_frame.grid_columnconfigure(1, weight=1)
+        self.command_frame.grid_rowconfigure(1, weight=1)
+        tk.Label(
+            self.command_frame,
+            text='Cmd:',
+            bg=self.panel_bg,
+            fg=self.fg_color
+        ).grid(row=0, column=0, sticky='w', padx=(8, 4), pady=6)
+        self.command_entry = tk.Entry(self.command_frame)
+        self.command_entry.grid(row=0, column=1, sticky='ew', padx=4, pady=6)
+        tk.Button(
+            self.command_frame,
+            text='Run',
+            command=self.run_command_panel
+        ).grid(row=0, column=2, padx=4, pady=6)
+        tk.Button(
+            self.command_frame,
+            text='Clear',
+            command=self.clear_command_output
+        ).grid(row=0, column=3, padx=(4, 8), pady=6)
+        self.command_output = tk.Text(
+            self.command_frame,
+            height=8,
+            wrap='word',
+            bg=self.text_bg,
+            fg=self.text_fg,
+            insertbackground=self.cursor_color,
+            font=('Consolas', 10),
+            padx=8,
+            pady=6,
+            borderwidth=0,
+            highlightthickness=0,
+            relief='flat'
+        )
+        self.command_output.grid(row=1, column=0, columnspan=3, sticky='nsew', padx=(8, 0), pady=(0, 8))
+        self.command_output.configure(state='disabled')
+        self.command_output_scroll = ttk.Scrollbar(self.command_frame, orient='vertical', command=self.command_output.yview)
+        self.command_output_scroll.grid(row=1, column=3, sticky='ns', padx=(0, 8), pady=(0, 8))
+        self.command_output.configure(yscrollcommand=self.command_output_scroll.set)
+        self.command_entry.bind('<Return>', lambda e: self.run_command_panel())
+        self.command_entry.bind('<Escape>', lambda e: self.show_command_panel())
+        self.command_entry.bind('<Up>', self.handle_command_history_keypress)
+        self.command_entry.bind('<Down>', self.handle_command_history_keypress)
+
         # Hide both initially
         self.find_frame.grid_remove()
         self.replace_frame.grid_remove()
+        self.command_frame.grid_remove()
         self.bottom_frame.grid_remove()
 
     def update_bottom_panel_visibility(self):
-        if self.find_panel_visible or self.replace_panel_visible:
+        if self.find_panel_visible or self.replace_panel_visible or self.command_panel_visible:
             self.bottom_frame.grid()
         else:
             self.bottom_frame.grid_remove()
+
+    def get_doc_display_path(self, doc):
+        if not doc:
+            return None
+        if doc.get('is_remote') and doc.get('remote_spec'):
+            return doc.get('remote_spec')
+        if doc.get('display_name'):
+            return doc.get('display_name')
+        return doc.get('file_path')
+
+    def get_doc_working_directory(self, doc=None):
+        doc = doc or self.get_current_doc()
+        if not doc:
+            return self.app_dir
+        candidate_path = doc.get('remote_shadow_path') or doc.get('file_path')
+        if candidate_path:
+            try:
+                return os.path.dirname(os.path.abspath(candidate_path)) or self.app_dir
+            except OSError:
+                pass
+        return self.app_dir
+
+    def show_command_panel(self, event=None):
+        self.hide_search_history_popup()
+        self.hide_autocomplete_popup()
+        if self.find_panel_visible:
+            self.find_frame.grid_remove()
+            self.find_panel_visible = False
+            self.clear_find_highlights()
+        if self.replace_panel_visible:
+            self.replace_frame.grid_remove()
+            self.replace_panel_visible = False
+            self.clear_find_highlights()
+
+        if not self.command_panel_visible:
+            self.bottom_frame.grid()
+            self.command_frame.grid(sticky='nsew')
+            self.command_panel_visible = True
+            self.command_entry.focus_set()
+        else:
+            self.command_frame.grid_remove()
+            self.command_panel_visible = False
+            self.focus_last_active_editor()
+        self.update_bottom_panel_visibility()
+        return "break"
+
+    def handle_command_history_keypress(self, event=None):
+        if not self.command_history:
+            return "break"
+        if self.command_history_index is None:
+            self.command_history_index = len(self.command_history)
+        if getattr(event, 'keysym', '') == 'Up':
+            self.command_history_index = max(0, self.command_history_index - 1)
+        else:
+            self.command_history_index = min(len(self.command_history), self.command_history_index + 1)
+        if self.command_history_index >= len(self.command_history):
+            value = ''
+        else:
+            value = self.command_history[self.command_history_index]
+        self.command_entry.delete(0, tk.END)
+        self.command_entry.insert(0, value)
+        return "break"
+
+    def append_command_output(self, text):
+        if not hasattr(self, 'command_output') or not self.command_output:
+            return
+        output_widget = self.command_output
+        try:
+            output_widget.configure(state='normal')
+            output_widget.insert(tk.END, str(text))
+            current_text = output_widget.get('1.0', 'end-1c')
+            if len(current_text) > self.command_output_max_chars:
+                trim_chars = len(current_text) - self.command_output_max_chars
+                output_widget.delete('1.0', f'1.0+{trim_chars}c')
+            output_widget.see(tk.END)
+            output_widget.configure(state='disabled')
+        except tk.TclError:
+            return
+
+    def clear_command_output(self):
+        if not hasattr(self, 'command_output') or not self.command_output:
+            return "break"
+        try:
+            self.command_output.configure(state='normal')
+            self.command_output.delete('1.0', tk.END)
+            self.command_output.configure(state='disabled')
+        except tk.TclError:
+            pass
+        return "break"
+
+    def set_feature_toggle_from_text(self, variable, value_text):
+        normalized = str(value_text or '').strip().lower()
+        if normalized in {'on', 'true', '1', 'yes'}:
+            variable.set(True)
+            return True
+        if normalized in {'off', 'false', '0', 'no'}:
+            variable.set(False)
+            return True
+        return False
+
+    def run_named_command(self, command_text):
+        normalized = str(command_text or '').strip()
+        command_name, _, argument_text = normalized.partition(' ')
+        command_name = command_name.lstrip(':').strip().lower()
+        argument_text = argument_text.strip()
+
+        if command_name in {'help', '?'}:
+            return (
+                "Built-in commands:\n"
+                ":help\n:symbols\n:project-symbols\n:fold\n:fold-all\n:unfold-all\n"
+                ":lint\n:preview\n:compare\n:remote user@host:/path/file\n"
+                ":autosave on|off\n:minimap on|off\n:diagnostics on|off\n"
+            )
+        if command_name == 'symbols':
+            self.show_symbol_navigator()
+            return "Opened symbol navigator.\n"
+        if command_name == 'project-symbols':
+            self.show_symbol_navigator(project_scope=True)
+            return "Opened project symbol navigator.\n"
+        if command_name == 'fold':
+            self.toggle_fold_at_cursor()
+            return "Toggled fold at cursor.\n"
+        if command_name in {'fold-all', 'collapse-all'}:
+            self.collapse_all_folds()
+            return "Collapsed foldable blocks.\n"
+        if command_name in {'unfold-all', 'expand-all'}:
+            self.expand_all_folds()
+            return "Expanded all folded blocks.\n"
+        if command_name == 'lint':
+            doc = self.get_current_doc()
+            if doc:
+                self.run_diagnostics_for_doc(doc, force=True)
+                diagnostics = doc.get('diagnostics', [])
+                if not diagnostics:
+                    return "No diagnostics.\n"
+                return "".join(
+                    f"{item.get('severity', 'info').upper()}: line {item.get('line', '?')} - {item.get('message', '')}\n"
+                    for item in diagnostics[:25]
+                )
+            return "No active document.\n"
+        if command_name == 'preview':
+            self.toggle_markdown_preview()
+            return "Toggled markdown preview.\n"
+        if command_name == 'compare':
+            self.show_split_compare()
+            return "Opened compare picker.\n"
+        if command_name == 'autosave':
+            if self.set_feature_toggle_from_text(self.autosave_enabled, argument_text):
+                self.save_session()
+                return f"Autosave {'enabled' if self.autosave_enabled.get() else 'disabled'}.\n"
+            return "Usage: :autosave on|off\n"
+        if command_name == 'minimap':
+            if self.set_feature_toggle_from_text(self.minimap_enabled, argument_text):
+                self.toggle_minimap()
+                return f"Minimap {'enabled' if self.minimap_enabled.get() else 'disabled'}.\n"
+            return "Usage: :minimap on|off\n"
+        if command_name == 'diagnostics':
+            if self.set_feature_toggle_from_text(self.diagnostics_enabled, argument_text):
+                self.toggle_diagnostics()
+                return f"Diagnostics {'enabled' if self.diagnostics_enabled.get() else 'disabled'}.\n"
+            return "Usage: :diagnostics on|off\n"
+        if command_name == 'remote':
+            if not argument_text:
+                return "Usage: :remote user@host:/path/file\n"
+            if self.open_remote_file(argument_text):
+                return f"Opened remote file: {argument_text}\n"
+            return f"Remote open failed: {argument_text}\n"
+        return None
+
+    def finish_shell_command(self, command_text, result):
+        self.command_runner_active = False
+        self.command_runner_thread = None
+        if not result:
+            self.append_command_output(f"$ {command_text}\nNo output.\n\n")
+            return
+        output_parts = [f"$ {command_text}\n"]
+        stdout_text = str(result.get('stdout') or '')
+        stderr_text = str(result.get('stderr') or '')
+        if stdout_text:
+            output_parts.append(stdout_text.rstrip() + '\n')
+        if stderr_text:
+            output_parts.append(stderr_text.rstrip() + '\n')
+        output_parts.append(f"[exit {result.get('returncode', 0)}]\n\n")
+        self.append_command_output("".join(output_parts))
+
+    def run_command_panel(self):
+        if not hasattr(self, 'command_entry') or not self.command_entry:
+            return "break"
+        command_text = self.command_entry.get().strip()
+        if not command_text:
+            return "break"
+        if not self.command_history or self.command_history[-1] != command_text:
+            self.command_history.append(command_text)
+        self.command_history = self.command_history[-50:]
+        self.command_history_index = None
+        self.command_entry.selection_range(0, tk.END)
+
+        named_result = None
+        if command_text.startswith(':'):
+            named_result = self.run_named_command(command_text)
+        if named_result is not None:
+            self.append_command_output(named_result if named_result.endswith('\n') else f"{named_result}\n")
+            return "break"
+
+        if self.command_runner_active:
+            self.append_command_output("A command is already running.\n")
+            return "break"
+
+        cwd = self.get_doc_working_directory()
+        self.command_runner_active = True
+
+        def worker():
+            result = {'returncode': -1, 'stdout': '', 'stderr': ''}
+            try:
+                completed = subprocess.run(
+                    command_text,
+                    shell=True,
+                    cwd=cwd,
+                    capture_output=True,
+                    text=True,
+                    creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0)
+                )
+                result['returncode'] = completed.returncode
+                result['stdout'] = completed.stdout or ''
+                result['stderr'] = completed.stderr or ''
+            except Exception as exc:
+                result['stderr'] = str(exc)
+            self.root.after(0, lambda current=command_text, payload=result: self.finish_shell_command(current, payload))
+
+        self.command_runner_thread = threading.Thread(target=worker, name='NotepadXCommandPanel', daemon=True)
+        self.command_runner_thread.start()
+        self.append_command_output(f"$ {command_text}\n[running in {cwd}]\n")
+        return "break"
+
+    def toggle_minimap(self):
+        show_minimap = self.minimap_enabled.get()
+        for doc in self.documents.values():
+            minimap = doc.get('minimap')
+            if not minimap:
+                continue
+            if show_minimap:
+                minimap.grid()
+                self.schedule_minimap_refresh(doc)
+            else:
+                minimap.grid_remove()
+        if self.compare_view:
+            minimap = self.compare_view.get('minimap')
+            if minimap:
+                if show_minimap:
+                    minimap.grid()
+                    self.schedule_minimap_refresh(self.compare_view)
+                else:
+                    minimap.grid_remove()
+        self.save_session()
+        return "break"
+
+    def schedule_minimap_refresh(self, doc):
+        if not doc:
+            return
+        existing_job = doc.get('minimap_job')
+        if existing_job:
+            try:
+                self.root.after_cancel(existing_job)
+            except tk.TclError:
+                pass
+        try:
+            doc['minimap_job'] = self.root.after(80, lambda current=doc: self.refresh_minimap(current))
+        except tk.TclError:
+            doc['minimap_job'] = None
+
+    def refresh_minimap(self, doc):
+        if not doc:
+            return
+        doc['minimap_job'] = None
+        if not self.minimap_enabled.get():
+            return
+        minimap = doc.get('minimap')
+        text = doc.get('text')
+        if not minimap or not text:
+            return
+        try:
+            if not minimap.winfo_exists() or not text.winfo_exists() or not minimap.winfo_ismapped():
+                return
+        except tk.TclError:
+            return
+
+        minimap.delete('all')
+        try:
+            content = text.get('1.0', 'end-1c')
+            total_lines = max(1, int(text.index('end-1c').split('.')[0]))
+        except tk.TclError:
+            return
+
+        width = max(1, minimap.winfo_width())
+        height = max(1, minimap.winfo_height())
+        if height <= 2:
+            height = max(120, minimap.winfo_reqheight())
+        line_lengths = [0]
+        line_lengths.extend(len(line) for line in content.splitlines())
+        if len(line_lengths) < total_lines + 1:
+            line_lengths.extend([0] * ((total_lines + 1) - len(line_lengths)))
+        max_length = max(1, max(line_lengths))
+        sample_step = max(1, total_lines // self.minimap_max_segments)
+
+        for line_number in range(1, total_lines + 1, sample_step):
+            end_line = min(total_lines, line_number + sample_step - 1)
+            segment_length = max(line_lengths[line_number:end_line + 1] or [0])
+            y0 = int((line_number - 1) / total_lines * height)
+            y1 = max(y0 + 1, int(end_line / total_lines * height))
+            bar_width = max(2, int((segment_length / max_length) * max(4, width - 6)))
+            minimap.create_rectangle(2, y0, min(width - 2, 2 + bar_width), y1, fill='#4f708f', outline='')
+
+        diagnostics = doc.get('diagnostics', [])
+        for diagnostic in diagnostics:
+            line_number = max(1, int(diagnostic.get('line', 1)))
+            y = int((line_number - 1) / total_lines * height)
+            marker_color = '#ff6b6b' if diagnostic.get('severity') == 'error' else '#ffcc66'
+            minimap.create_rectangle(width - 4, y, width - 1, min(height, y + 3), fill=marker_color, outline='')
+
+        try:
+            top_line = int(text.index('@0,0').split('.')[0])
+            bottom_line = int(text.index(f'@0,{max(1, text.winfo_height())}').split('.')[0])
+        except (tk.TclError, ValueError):
+            top_line = 1
+            bottom_line = min(total_lines, max(1, total_lines // 5))
+        view_y0 = int((top_line - 1) / total_lines * height)
+        view_y1 = max(view_y0 + 6, int(bottom_line / total_lines * height))
+        minimap.create_rectangle(0, view_y0, width, view_y1, outline='#9ecbff', width=1)
+
+    def on_minimap_click(self, event, doc):
+        if not self.minimap_enabled.get() or not doc:
+            return "break"
+        text = doc.get('text')
+        minimap = doc.get('minimap')
+        if not text or not minimap:
+            return "break"
+        try:
+            total_lines = max(1, int(text.index('end-1c').split('.')[0]))
+            height = max(1, minimap.winfo_height())
+            target_ratio = min(1.0, max(0.0, float(event.y) / float(height)))
+            target_line = max(1, min(total_lines, int(target_ratio * total_lines) + 1))
+            text.mark_set(tk.INSERT, f'{target_line}.0')
+            text.see(f'{target_line}.0')
+            self.set_last_active_editor_widget(text)
+        except (tk.TclError, ValueError, ZeroDivisionError):
+            return "break"
+        target_doc = self.get_doc_for_text_widget(text)
+        if target_doc:
+            self.remember_doc_view_state(target_doc)
+            self.update_line_number_gutter(target_doc)
+        elif doc is self.compare_view:
+            self.update_line_number_gutter(doc)
+        self.schedule_minimap_refresh(doc)
+        self.update_status()
+        return "break"
+
+    def build_breadcrumb_text(self, doc, text_widget=None):
+        if not doc:
+            return ""
+        frame = doc.get('frame')
+        if frame is not None and str(frame) in self.documents:
+            primary_name = self.get_doc_name(frame)
+        else:
+            display_path = self.get_doc_display_path(doc) or doc.get('untitled_name') or 'Untitled'
+            primary_name = os.path.basename(str(display_path))
+        parts = [primary_name]
+        display_path = self.get_doc_display_path(doc)
+        if display_path and display_path != parts[0]:
+            parts.append(display_path)
+        text_widget = text_widget or doc.get('text')
+        if text_widget:
+            try:
+                current_line = int(text_widget.index(tk.INSERT).split('.')[0])
+            except (tk.TclError, ValueError):
+                current_line = 1
+            symbol = self.get_symbol_at_line(doc, current_line)
+            if symbol:
+                parts.append(symbol.get('name', ''))
+        return "  >  ".join(part for part in parts if part)
+
+    def update_breadcrumbs(self):
+        current_doc = self.get_current_doc()
+        label_text = ""
+        if self.breadcrumbs_enabled.get():
+            label_text = self.build_breadcrumb_text(current_doc, self.get_active_search_widget())
+        try:
+            if self.breadcrumbs_enabled.get():
+                self.breadcrumbs_bar.grid()
+            else:
+                self.breadcrumbs_bar.grid_remove()
+            self.breadcrumbs_label.config(text=label_text)
+        except tk.TclError:
+            pass
+
+        compare_text = ""
+        if self.is_side_panel_visible() and self.compare_view:
+            compare_text = self.build_breadcrumb_text(self.compare_view, self.compare_view.get('text'))
+        try:
+            self.compare_breadcrumbs.config(text=compare_text)
+        except tk.TclError:
+            pass
+
+    def toggle_breadcrumbs(self):
+        self.update_breadcrumbs()
+        self.save_session()
+        return "break"
 
     def sanitize_search_history_entries(self, entries):
         cleaned_entries = []
@@ -4191,7 +5092,7 @@ class NotepadX:
 
         popup = self.search_history_popup
         if not self.search_history_popup_visible():
-            popup = tk.Toplevel(self.root)
+            popup = self.create_toplevel(self.root)
             popup.wm_overrideredirect(True)
             popup.configure(bg='#2d2d2d')
             listbox = tk.Listbox(
@@ -4514,6 +5415,9 @@ class NotepadX:
 
         self.cancel_find_change_job()
         self.hide_search_history_popup()
+        if self.command_panel_visible:
+            self.command_frame.grid_remove()
+            self.command_panel_visible = False
         if self.replace_panel_visible:
             self.replace_frame.grid_remove()
             self.replace_panel_visible = False
@@ -4550,6 +5454,9 @@ class NotepadX:
 
         self.cancel_find_change_job()
         self.hide_search_history_popup()
+        if self.command_panel_visible:
+            self.command_frame.grid_remove()
+            self.command_panel_visible = False
         if self.find_panel_visible:
             self.find_frame.grid_remove()
             self.find_panel_visible = False
@@ -4656,12 +5563,11 @@ class NotepadX:
                 self.set_last_active_editor_widget(widget)
             except tk.TclError:
                 continue
-            doc = self.get_doc_for_text_widget(widget)
-            if widget == self.get_side_panel_text_widget():
-                self.update_line_number_gutter(self.compare_view)
-            elif doc:
+            doc = self.get_navigation_doc_for_widget(widget)
+            if doc:
                 self.remember_doc_view_state(doc)
                 self.update_line_number_gutter(doc)
+                self.schedule_minimap_refresh(doc)
         self.update_status()
         return "break"
 
@@ -4679,12 +5585,11 @@ class NotepadX:
                 self.set_last_active_editor_widget(widget)
             except tk.TclError:
                 continue
-            doc = self.get_doc_for_text_widget(widget)
-            if widget == self.get_side_panel_text_widget():
-                self.update_line_number_gutter(self.compare_view)
-            elif doc:
+            doc = self.get_navigation_doc_for_widget(widget)
+            if doc:
                 self.remember_doc_view_state(doc)
                 self.update_line_number_gutter(doc)
+                self.schedule_minimap_refresh(doc)
         self.update_status()
         return "break"
 
@@ -4712,6 +5617,158 @@ class NotepadX:
         for doc in self.documents.values():
             if doc.get('text') == widget:
                 return widget
+        return None
+
+    def get_diagnostic_doc_for_widget(self, widget):
+        if not isinstance(widget, tk.Text):
+            return None
+        compare_widget = self.get_compare_text_widget()
+        if compare_widget is not None and widget == compare_widget:
+            return self.compare_view
+        for doc in self.documents.values():
+            if doc.get('text') == widget:
+                return doc
+        return None
+
+    def get_diagnostics_for_line(self, doc, line_number):
+        if not doc:
+            return []
+        line_number = max(1, int(line_number))
+        diagnostics = [item for item in (doc.get('diagnostics') or []) if int(item.get('line', 0) or 0) == line_number]
+        diagnostics.sort(key=lambda item: (0 if item.get('severity') == 'error' else 1, int(item.get('column', 0) or 0)))
+        return diagnostics
+
+    def format_diagnostic_tooltip_lines(self, diagnostics):
+        lines = []
+        for item in diagnostics:
+            severity = 'Error' if item.get('severity') == 'error' else 'Warning'
+            message = str(item.get('message') or '').strip() or severity
+            column_number = item.get('column')
+            if column_number not in (None, '', 0):
+                lines.append(f"{severity}: {message} (col {column_number})")
+            else:
+                lines.append(f"{severity}: {message}")
+        return lines
+
+    def hide_diagnostic_tooltip(self, event=None):
+        job = getattr(self, 'diagnostic_tooltip_job', None)
+        if job:
+            try:
+                self.root.after_cancel(job)
+            except tk.TclError:
+                pass
+        self.diagnostic_tooltip_job = None
+        popup = getattr(self, 'diagnostic_tooltip_popup', None)
+        if popup is not None:
+            try:
+                popup.destroy()
+            except tk.TclError:
+                pass
+        self.diagnostic_tooltip_popup = None
+        self.diagnostic_tooltip_doc = None
+        self.diagnostic_tooltip_signature = None
+        return None
+
+    def show_diagnostic_tooltip(self, doc, widget, x_root, y_root, line_number, diagnostics, signature):
+        self.diagnostic_tooltip_job = None
+        if signature != self.diagnostic_tooltip_signature:
+            return
+        if not doc or not diagnostics or widget is None:
+            return
+        try:
+            if not widget.winfo_exists():
+                return
+        except tk.TclError:
+            return
+
+        self.hide_diagnostic_tooltip()
+        self.diagnostic_tooltip_signature = signature
+
+        popup = self.create_toplevel(self.root)
+        popup.wm_overrideredirect(True)
+        popup.configure(bg='#1f2430')
+        try:
+            popup.attributes('-topmost', True)
+        except tk.TclError:
+            pass
+
+        accent_color = '#ff6b6b' if any(item.get('severity') == 'error' for item in diagnostics) else '#ffcc66'
+        frame = tk.Frame(popup, bg='#1f2430', highlightthickness=1, highlightbackground=accent_color)
+        frame.pack(fill='both', expand=True)
+
+        header_text = f"Line {line_number} issue" if len(diagnostics) == 1 else f"Line {line_number} issues"
+        tk.Label(
+            frame,
+            text=header_text,
+            bg='#1f2430',
+            fg=accent_color,
+            font=('Segoe UI', 9, 'bold'),
+            anchor=self.ui_anchor_start()
+        ).pack(fill='x', padx=10, pady=(8, 2))
+
+        tk.Label(
+            frame,
+            text="\n".join(self.format_diagnostic_tooltip_lines(diagnostics)),
+            bg='#1f2430',
+            fg='#f5f5f5',
+            font=('Segoe UI', 9),
+            justify=self.ui_justify(),
+            wraplength=360,
+            anchor=self.ui_anchor_start()
+        ).pack(fill='both', expand=True, padx=10, pady=(0, 8))
+
+        popup.update_idletasks()
+        screen_width = self.root.winfo_screenwidth()
+        screen_height = self.root.winfo_screenheight()
+        popup_width = popup.winfo_reqwidth()
+        popup_height = popup.winfo_reqheight()
+        x = min(max(0, x_root + 16), max(0, screen_width - popup_width - 12))
+        y = min(max(0, y_root + 20), max(0, screen_height - popup_height - 12))
+        popup.geometry(f'+{int(x)}+{int(y)}')
+        self.diagnostic_tooltip_popup = popup
+        self.diagnostic_tooltip_doc = doc
+
+    def handle_diagnostic_hover(self, event=None):
+        widget = getattr(event, 'widget', None)
+        if not isinstance(widget, tk.Text):
+            self.hide_diagnostic_tooltip()
+            return None
+        doc = self.get_diagnostic_doc_for_widget(widget)
+        if not doc or not self.diagnostics_enabled.get():
+            self.hide_diagnostic_tooltip()
+            return None
+        try:
+            index = widget.index(f"@{event.x},{event.y}")
+            line_number = int(str(index).split('.')[0])
+        except (tk.TclError, ValueError, AttributeError):
+            self.hide_diagnostic_tooltip()
+            return None
+
+        diagnostics = self.get_diagnostics_for_line(doc, line_number)
+        if not diagnostics:
+            self.hide_diagnostic_tooltip()
+            return None
+
+        signature = (
+            str(widget),
+            int(line_number),
+            tuple((item.get('severity'), item.get('message'), item.get('column')) for item in diagnostics),
+        )
+        if signature == self.diagnostic_tooltip_signature and (
+            self.diagnostic_tooltip_popup is not None or self.diagnostic_tooltip_job is not None
+        ):
+            return None
+
+        self.hide_diagnostic_tooltip()
+        self.diagnostic_tooltip_signature = signature
+        try:
+            self.diagnostic_tooltip_job = self.root.after(
+                self.diagnostic_tooltip_delay_ms,
+                lambda current_doc=doc, current_widget=widget, x=event.x_root, y=event.y_root, line=line_number, items=tuple(diagnostics), current_signature=signature:
+                    self.show_diagnostic_tooltip(current_doc, current_widget, x, y, line, list(items), current_signature)
+            )
+        except tk.TclError:
+            self.diagnostic_tooltip_job = None
         return None
 
     def get_page_navigation_source_widget(self, event=None):
@@ -4859,12 +5916,11 @@ class NotepadX:
             if not self.scroll_widget_page_by_visible_lines(widget, -1):
                 continue
             self.set_last_active_editor_widget(widget)
-            doc = self.get_doc_for_text_widget(widget)
-            if widget == self.get_side_panel_text_widget():
-                self.update_line_number_gutter(self.compare_view)
-            elif doc:
+            doc = self.get_navigation_doc_for_widget(widget)
+            if doc:
                 self.remember_doc_view_state(doc)
                 self.update_line_number_gutter(doc)
+                self.schedule_minimap_refresh(doc)
         self.update_status()
         return "break"
 
@@ -4876,12 +5932,11 @@ class NotepadX:
             if not self.scroll_widget_page_by_visible_lines(widget, 1):
                 continue
             self.set_last_active_editor_widget(widget)
-            doc = self.get_doc_for_text_widget(widget)
-            if widget == self.get_side_panel_text_widget():
-                self.update_line_number_gutter(self.compare_view)
-            elif doc:
+            doc = self.get_navigation_doc_for_widget(widget)
+            if doc:
                 self.remember_doc_view_state(doc)
                 self.update_line_number_gutter(doc)
+                self.schedule_minimap_refresh(doc)
         self.update_status()
         return "break"
 
@@ -5471,12 +6526,11 @@ class NotepadX:
         return results, scanned_files, total_matches
 
     def show_find_in_results_dialog(self, directory, query, results, scanned_files, total_matches):
-        dialog = tk.Toplevel(self.root)
+        dialog = self.create_toplevel(self.root)
         dialog.title(self.tr('find.in.title', 'Find In Files'))
         dialog.transient(self.root)
         dialog.configure(bg=self.bg_color, padx=12, pady=12)
         dialog.minsize(760, 420)
-        self.apply_window_icon(dialog)
 
         instance_word = self.tr('find.panel.instance_singular', 'instance') if total_matches == 1 else self.tr('find.panel.instance_plural', 'instances')
         summary = self.tr(
@@ -5578,12 +6632,11 @@ class NotepadX:
     def start_find_in_directory_search(self, directory, query):
         directory = os.path.abspath(directory)
         safe_query = str(query or '').replace('{', '{{').replace('}', '}}')
-        progress_dialog = tk.Toplevel(self.root)
+        progress_dialog = self.create_toplevel(self.root)
         progress_dialog.title(self.tr('find.in.title', 'Find In Files'))
         progress_dialog.transient(self.root)
         progress_dialog.resizable(False, False)
         progress_dialog.configure(bg=self.bg_color, padx=14, pady=12)
-        self.apply_window_icon(progress_dialog)
 
         tk.Label(
             progress_dialog,
@@ -5980,6 +7033,8 @@ class NotepadX:
         self.root.bind('<Control-Shift-R>', self.save_and_run)
         self.root.bind('<Control-Shift-p>', self.toggle_markdown_preview)
         self.root.bind('<Control-Shift-P>', self.toggle_markdown_preview)
+        self.root.bind('<Control-Alt-o>', self.open_remote_file_dialog)
+        self.root.bind('<Control-Alt-O>', self.open_remote_file_dialog)
         self.root.bind('<F7>', self.toggle_spell_check)
         self.root.bind_all('<KeyPress>', self.handle_global_ctrl_shift_shortcuts, add='+')
         self.root.bind_all('<Control-Shift-x>', self.ctrl_shift_x)
@@ -6012,9 +7067,18 @@ class NotepadX:
         self.root.bind('<Control-F>', lambda e: self.show_find_panel())
         self.root.bind('<Control-r>', lambda e: self.show_replace_panel())
         self.root.bind('<Control-R>', lambda e: self.show_replace_panel())
+        self.root.bind('<Control-Shift-k>', self.show_command_panel)
+        self.root.bind('<Control-Shift-K>', self.show_command_panel)
+        self.root.bind('<Control-Shift-o>', self.show_symbol_navigator)
+        self.root.bind('<Control-Shift-O>', self.show_symbol_navigator)
+        self.root.bind('<Control-Alt-p>', lambda e: self.show_symbol_navigator(project_scope=True))
+        self.root.bind('<Control-Alt-P>', lambda e: self.show_symbol_navigator(project_scope=True))
         self.root.bind('<F3>', self.find_next)
         self.root.bind('<Shift-F3>', self.find_previous)
         self.root.bind('<F4>', self.goto_next_note)
+        self.root.bind('<F9>', self.toggle_fold_at_cursor)
+        self.root.bind('<Shift-F9>', self.collapse_all_folds)
+        self.root.bind('<Control-F9>', self.expand_all_folds)
         self.root.bind('<Control-g>', self.goto_line_dialog)
         self.root.bind('<Control-G>', self.goto_line_dialog)
         self.root.bind_all('<Prior>', self.page_up)
@@ -6063,6 +7127,8 @@ class NotepadX:
                 self.show_replace_panel()
             self.focus_last_active_editor()
             return "break"
+        if self.command_panel_visible:
+            return self.show_command_panel()
         return self.exit_app(event)
 
     def close_help_or_about_window(self):
@@ -6548,6 +7614,86 @@ class NotepadX:
         }
         return keyword_sets.get(syntax_mode or '', [])
 
+    def get_python_module_suggestions(self, doc, prefix):
+        suggestions = []
+        if not doc or not prefix:
+            return suggestions
+        doc_path = doc.get('file_path')
+        if not doc_path:
+            return suggestions
+        project_dir = os.path.dirname(os.path.abspath(doc_path))
+        try:
+            entries = sorted(os.scandir(project_dir), key=lambda entry: entry.name.lower())
+        except OSError:
+            return suggestions
+        for entry in entries:
+            if not entry.is_file():
+                continue
+            stem, extension = os.path.splitext(entry.name)
+            if extension.lower() not in {'.py', '.pyw', '.js', '.ts', '.json'}:
+                continue
+            if not stem or stem == prefix or not stem.lower().startswith(prefix.lower()):
+                continue
+            suggestions.append(stem)
+            if len(suggestions) >= 12:
+                break
+        return suggestions
+
+    def collect_autocomplete_suggestions(self, doc, prefix):
+        syntax_mode = self.get_syntax_mode(doc)
+        suggestions = []
+        seen = set()
+
+        def add_suggestion(candidate, priority=50):
+            candidate_text = str(candidate or '').strip()
+            if len(candidate_text) < len(prefix) or candidate_text == prefix:
+                return
+            if not candidate_text.lower().startswith(prefix.lower()):
+                return
+            lowered = candidate_text.lower()
+            if lowered in seen:
+                return
+            seen.add(lowered)
+            suggestions.append((priority, candidate_text))
+
+        if syntax_mode == 'python':
+            for builtin_name in dir(builtins):
+                add_suggestion(builtin_name, priority=5)
+            for keyword_name in keyword.kwlist:
+                add_suggestion(keyword_name, priority=8)
+
+        for keyword_name in self.get_autocomplete_keywords(syntax_mode):
+            add_suggestion(keyword_name, priority=10)
+
+        for symbol in self.get_doc_symbols(doc):
+            add_suggestion(symbol.get('name'), priority=15)
+
+        for other_doc in self.documents.values():
+            if other_doc is doc:
+                continue
+            for symbol in self.get_doc_symbols(other_doc):
+                add_suggestion(symbol.get('name'), priority=20)
+            if len(suggestions) >= self.intellisense_max_suggestions:
+                break
+
+        if syntax_mode == 'python':
+            for module_name in self.get_python_module_suggestions(doc, prefix):
+                add_suggestion(module_name, priority=18)
+
+        text = doc.get('text')
+        if text:
+            try:
+                content = text.get('1.0', 'end-1c')
+            except tk.TclError:
+                content = ''
+            for word in re.findall(r'\b[A-Za-z_][A-Za-z0-9_]*\b', content):
+                add_suggestion(word, priority=25)
+                if len(suggestions) >= self.intellisense_max_suggestions:
+                    break
+
+        suggestions.sort(key=lambda item: (item[0], len(item[1]), item[1].lower()))
+        return [item[1] for item in suggestions[:self.intellisense_max_suggestions]]
+
     def text_has_selection(self, text_widget):
         if not text_widget:
             return False
@@ -6594,35 +7740,7 @@ class NotepadX:
             return
 
         syntax_mode = self.get_syntax_mode(doc)
-        suggestions = []
-        seen = set()
-
-        try:
-            content = text.get('1.0', 'end-1c')
-        except tk.TclError:
-            content = ''
-
-        for word in re.findall(r'\b[A-Za-z_][A-Za-z0-9_]*\b', content):
-            if len(word) < len(prefix) or word == prefix or not word.lower().startswith(prefix.lower()):
-                continue
-            lowered = word.lower()
-            if lowered in seen:
-                continue
-            seen.add(lowered)
-            suggestions.append(word)
-            if len(suggestions) >= 24:
-                break
-
-        for word in self.get_autocomplete_keywords(syntax_mode):
-            if len(word) < len(prefix) or word == prefix or not word.lower().startswith(prefix.lower()):
-                continue
-            lowered = word.lower()
-            if lowered in seen:
-                continue
-            seen.add(lowered)
-            suggestions.append(word)
-            if len(suggestions) >= 24:
-                break
+        suggestions = self.collect_autocomplete_suggestions(doc, prefix)
 
         if not suggestions:
             self.hide_autocomplete_popup()
@@ -6639,7 +7757,7 @@ class NotepadX:
         x, y, width, height = bbox
         popup = self.autocomplete_popup
         if not self.autocomplete_popup_visible():
-            popup = tk.Toplevel(self.root)
+            popup = self.create_toplevel(self.root)
             popup.wm_overrideredirect(True)
             popup.configure(bg='#2d2d2d')
             listbox = tk.Listbox(
@@ -6655,14 +7773,14 @@ class NotepadX:
                 borderwidth=0,
                 font=('Segoe UI', 10),
                 width=max(18, min(42, max(len(word) for word in suggestions) + 2)),
-                height=min(8, len(suggestions))
+                height=min(10, len(suggestions))
             )
             listbox.pack(fill='both', expand=True)
             self.autocomplete_popup = popup
             self.autocomplete_listbox = listbox
         else:
             listbox = self.autocomplete_listbox
-            listbox.configure(width=max(18, min(42, max(len(word) for word in suggestions) + 2)), height=min(8, len(suggestions)))
+            listbox.configure(width=max(18, min(42, max(len(word) for word in suggestions) + 2)), height=min(10, len(suggestions)))
 
         listbox.delete(0, tk.END)
         for suggestion in suggestions:
@@ -6760,12 +7878,27 @@ class NotepadX:
         self.editor_paned.bind('<Configure>', lambda e: self.on_editor_paned_configure(), add='+')
 
         self.primary_editor_container = tk.Frame(self.editor_paned, bg=self.bg_color)
-        self.primary_editor_container.grid_rowconfigure(0, weight=1)
+        self.primary_editor_container.grid_rowconfigure(1, weight=1)
         self.primary_editor_container.grid_columnconfigure(0, weight=1)
         self.editor_paned.add(self.primary_editor_container, stretch='always')
 
+        self.breadcrumbs_bar = tk.Frame(self.primary_editor_container, bg='#161b22', height=28)
+        self.breadcrumbs_bar.grid(row=0, column=0, sticky='ew')
+        self.breadcrumbs_bar.grid_columnconfigure(0, weight=1)
+        self.breadcrumbs_label = tk.Label(
+            self.breadcrumbs_bar,
+            text="",
+            bg='#161b22',
+            fg='#aab6c6',
+            anchor='w',
+            padx=10,
+            pady=6,
+            font=('Segoe UI', 9)
+        )
+        self.breadcrumbs_label.grid(row=0, column=0, sticky='ew')
+
         self.notebook = ttk.Notebook(self.primary_editor_container, style='EditorTabs.TNotebook')
-        self.notebook.grid(row=0, column=0, sticky='nsew')
+        self.notebook.grid(row=1, column=0, sticky='nsew')
         self.notebook.bind('<<NotebookTabChanged>>', self.on_tab_changed)
         self.notebook.bind('<ButtonPress-1>', self.on_tab_drag_start, add='+')
         self.notebook.bind('<B1-Motion>', self.on_tab_drag_motion, add='+')
@@ -6778,6 +7911,7 @@ class NotepadX:
         compare_header = tk.Frame(self.compare_container, bg='#161b22')
         compare_header.grid(row=0, column=0, sticky='ew')
         compare_header.grid_columnconfigure(0, weight=1)
+        compare_header.grid_rowconfigure(1, weight=0)
 
         self.compare_title = tk.Label(
             compare_header,
@@ -6790,6 +7924,18 @@ class NotepadX:
             pady=8
         )
         self.compare_title.grid(row=0, column=0, sticky='ew')
+
+        self.compare_breadcrumbs = tk.Label(
+            compare_header,
+            text="",
+            bg='#161b22',
+            fg='#8b949e',
+            anchor='w',
+            padx=10,
+            pady=4,
+            font=('Segoe UI', 9)
+        )
+        self.compare_breadcrumbs.grid(row=1, column=0, sticky='ew')
 
         compare_body = tk.Frame(self.compare_container, bg=self.bg_color)
         compare_body.grid(row=1, column=0, sticky='nsew')
@@ -6822,8 +7968,21 @@ class NotepadX:
         )
         self.compare_text.grid(row=0, column=1, sticky='nsew')
 
+        self.compare_minimap = tk.Canvas(
+            compare_body,
+            width=self.minimap_width,
+            bg='#11161d',
+            highlightthickness=0,
+            borderwidth=0,
+            relief='flat',
+            cursor='hand2'
+        )
+        self.compare_minimap.grid(row=0, column=2, sticky='ns')
+        if not self.minimap_enabled.get():
+            self.compare_minimap.grid_remove()
+
         compare_v_scroll = ttk.Scrollbar(compare_body, orient='vertical', command=self.on_compare_vertical_scroll)
-        compare_v_scroll.grid(row=0, column=2, sticky='ns')
+        compare_v_scroll.grid(row=0, column=3, sticky='ns')
         compare_h_scroll = ttk.Scrollbar(compare_body, orient='horizontal', command=self.compare_text.xview)
         compare_h_scroll.grid(row=1, column=1, sticky='ew')
         self.compare_text.config(
@@ -6852,6 +8011,9 @@ class NotepadX:
         self.compare_text.bind('<FocusIn>', self.remember_compare_focus, add='+')
         self.compare_text.bind('<Enter>', self.remember_hovered_editor, add='+')
         self.compare_text.bind('<Motion>', self.remember_hovered_editor, add='+')
+        self.compare_text.bind('<Enter>', self.handle_diagnostic_hover, add='+')
+        self.compare_text.bind('<Motion>', self.handle_diagnostic_hover, add='+')
+        self.compare_text.bind('<Leave>', self.hide_diagnostic_tooltip, add='+')
         self.compare_text.bind('<Button-1>', self.remember_compare_focus, add='+')
         self.compare_text.bind('<ButtonRelease-1>', self.remember_compare_focus, add='+')
         self.compare_text.bind('<Button-3>', self.show_compare_context_menu)
@@ -6867,6 +8029,7 @@ class NotepadX:
             'frame': self.compare_container,
             'text': self.compare_text,
             'line_numbers': self.compare_line_numbers,
+            'minimap': self.compare_minimap,
             'notes': {},
             'percolator': None,
             'colorizer': None,
@@ -6882,11 +8045,33 @@ class NotepadX:
             'window_end_line': 1,
             'total_file_lines': 1,
             'suspend_modified_events': False,
+            'fold_ranges': [],
+            'fold_ranges_dirty': True,
+            'folded_tags': set(),
+            'gutter_fold_hitboxes': [],
+            'diagnostic_job': None,
+            'diagnostics': [],
+            'minimap_job': None,
+            'symbol_cache': None,
+            'symbol_cache_signature': None,
+            'mirror_guard': False,
+            'display_name': None,
+            'is_remote': False,
+            'remote_spec': None,
+            'remote_host': None,
+            'remote_path': None,
+            'remote_shadow_path': None,
         }
-        self.compare_line_numbers.bind('<Button-1>', lambda e: self.copy_line_from_gutter(e, target_doc=self.compare_view))
+        self.compare_minimap.bind('<Button-1>', lambda e: self.on_minimap_click(e, self.compare_view))
+        self.compare_minimap.bind('<B1-Motion>', lambda e: self.on_minimap_click(e, self.compare_view))
+        self.compare_line_numbers.bind('<Button-1>', lambda e: self.handle_gutter_click(e, target_doc=self.compare_view))
+        self.compare_line_numbers.bind('<Motion>', lambda e: self.update_gutter_cursor(e, target_doc=self.compare_view))
+        self.compare_line_numbers.bind('<Leave>', self.clear_gutter_cursor)
         self.compare_text.tag_config(self.find_matches_tag, background=self.match_bg, foreground='black')
         self.compare_text.tag_config(self.find_current_tag, background='#ff8c42', foreground='black')
         self.compare_text.tag_config(self.bracket_match_tag, background='#2f81f7', foreground='white')
+        self.compare_text.tag_config('diagnostic_error', background='#51202a', foreground='#ffb3ba')
+        self.compare_text.tag_config('diagnostic_warning', background='#4b3a14', foreground='#ffd479')
         self.apply_syntax_tag_colors(self.compare_text)
         self.raise_find_tags(self.compare_text)
         self.create_text_context_menu(self.compare_container, doc_override=self.compare_view, action_tab_id='__compare__')
@@ -6952,6 +8137,8 @@ class NotepadX:
         tab_frame = tk.Frame(self.notebook, bg=self.bg_color)
         tab_frame.grid_rowconfigure(0, weight=1)
         tab_frame.grid_columnconfigure(1, weight=1)
+        tab_frame.grid_columnconfigure(2, weight=0)
+        tab_frame.grid_columnconfigure(3, weight=0)
 
         line_numbers = self.create_line_number_gutter(tab_frame, tab_id=tab_frame)
         line_numbers.grid(row=0, column=0, sticky='ns')
@@ -6971,8 +8158,23 @@ class NotepadX:
         )
         text.grid(row=0, column=1, sticky='nsew')
 
+        minimap = tk.Canvas(
+            tab_frame,
+            width=self.minimap_width,
+            bg='#11161d',
+            highlightthickness=0,
+            borderwidth=0,
+            relief='flat',
+            cursor='hand2'
+        )
+        minimap.grid(row=0, column=2, sticky='ns')
+        minimap.bind('<Button-1>', lambda e, frame=tab_frame: self.on_minimap_click(e, self.documents.get(str(frame))))
+        minimap.bind('<B1-Motion>', lambda e, frame=tab_frame: self.on_minimap_click(e, self.documents.get(str(frame))))
+        if not self.minimap_enabled.get():
+            minimap.grid_remove()
+
         v_scroll = ttk.Scrollbar(tab_frame, orient='vertical')
-        v_scroll.grid(row=0, column=2, sticky='ns')
+        v_scroll.grid(row=0, column=3, sticky='ns')
         h_scroll = ttk.Scrollbar(tab_frame, orient='horizontal', command=text.xview)
         h_scroll.grid(row=1, column=1, sticky='ew')
         v_scroll.configure(command=lambda *args, frame=tab_frame: self.on_vertical_scroll(frame, *args))
@@ -7010,6 +8212,9 @@ class NotepadX:
         text.bind('<FocusIn>', lambda e, frame=tab_frame: self.remember_doc_focus(frame), add='+')
         text.bind('<Enter>', self.remember_hovered_editor, add='+')
         text.bind('<Motion>', self.remember_hovered_editor, add='+')
+        text.bind('<Enter>', self.handle_diagnostic_hover, add='+')
+        text.bind('<Motion>', self.handle_diagnostic_hover, add='+')
+        text.bind('<Leave>', self.hide_diagnostic_tooltip, add='+')
         text.bind('<KeyPress>', lambda e, frame=tab_frame: self.handle_text_keypress(e, frame))
         text.bind('<ButtonRelease-1>', lambda e, frame=tab_frame: self.on_text_click_release(e, frame), add='+')
         text.bind('<Button-3>', lambda e, frame=tab_frame: self.show_text_context_menu(e, frame))
@@ -7030,6 +8235,7 @@ class NotepadX:
             'frame': tab_frame,
             'text': text,
             'line_numbers': line_numbers,
+            'minimap': minimap,
             'v_scroll': v_scroll,
             'file_path': file_path,
             'untitled_name': self.next_untitled_name(),
@@ -7078,8 +8284,27 @@ class NotepadX:
             'background_open_new_tab': False,
             'pending_insert_content': None,
             'pending_insert_offset': 0,
+            'fold_ranges': [],
+            'fold_ranges_dirty': True,
+            'folded_tags': set(),
+            'gutter_fold_hitboxes': [],
+            'diagnostic_job': None,
+            'diagnostics': [],
+            'minimap_job': None,
+            'autosave_job': None,
+            'symbol_cache': None,
+            'symbol_cache_signature': None,
+            'mirror_guard': False,
+            'is_remote': False,
+            'remote_spec': None,
+            'remote_host': None,
+            'remote_path': None,
+            'remote_shadow_path': None,
+            'display_name': None,
         }
         self.apply_syntax_tag_colors(text)
+        text.tag_config('diagnostic_error', background='#51202a', foreground='#ffb3ba')
+        text.tag_config('diagnostic_warning', background='#4b3a14', foreground='#ffd479')
         self.configure_syntax_highlighting(tab_frame)
         self.create_text_context_menu(tab_frame)
 
@@ -7274,6 +8499,693 @@ class NotepadX:
             return 'assembly'
         return None
 
+    def infer_syntax_mode_from_path(self, file_path, content=""):
+        file_name = os.path.basename(str(file_path or '')).lower()
+        extension = os.path.splitext(file_name)[1].lower()
+        extension_modes = {
+            '.py': 'python',
+            '.pyw': 'python',
+            '.rs': 'rust',
+            '.c': 'c',
+            '.h': 'cpp',
+            '.cpp': 'cpp',
+            '.cc': 'cpp',
+            '.cxx': 'cpp',
+            '.hpp': 'cpp',
+            '.hh': 'cpp',
+            '.hxx': 'cpp',
+            '.java': 'java',
+            '.js': 'javascript',
+            '.jsx': 'javascript',
+            '.ts': 'javascript',
+            '.tsx': 'javascript',
+            '.html': 'html',
+            '.htm': 'html',
+            '.php': 'php',
+            '.xml': 'xml',
+            '.json': 'json',
+            '.sql': 'sql',
+            '.css': 'css',
+            '.md': 'markdown',
+            '.yml': 'yaml',
+            '.yaml': 'yaml',
+            '.sh': 'bash',
+            '.bat': 'batch',
+            '.cmd': 'batch',
+        }
+        if file_name in {'makefile', 'gnumakefile'}:
+            return 'makefile'
+        return extension_modes.get(extension) or self.detect_syntax_mode_from_content(content)
+
+    def build_doc_symbol_cache_signature(self, content):
+        text = str(content or '')
+        if len(text) <= 5000:
+            return hashlib.sha1(text.encode('utf-8', errors='replace')).hexdigest()
+        preview = text[:2500] + '\n...\n' + text[-2500:]
+        return f"{len(text)}:{hashlib.sha1(preview.encode('utf-8', errors='replace')).hexdigest()}"
+
+    def extract_symbols_from_content(self, content, syntax_mode=None, file_path=None):
+        text = str(content or '')
+        mode = syntax_mode or self.infer_syntax_mode_from_path(file_path, text)
+        symbols = []
+        seen = set()
+
+        def add_symbol(name, line_number, kind='symbol'):
+            clean_name = str(name or '').strip()
+            if not clean_name:
+                return
+            try:
+                clean_line = max(1, int(line_number))
+            except (TypeError, ValueError):
+                clean_line = 1
+            key = (clean_name, clean_line, kind)
+            if key in seen:
+                return
+            seen.add(key)
+            symbols.append({'name': clean_name, 'line': clean_line, 'kind': kind, 'file_path': file_path})
+
+        if mode == 'python':
+            try:
+                tree = ast.parse(text or '\n')
+            except SyntaxError:
+                tree = None
+            if tree is not None:
+                for node in ast.walk(tree):
+                    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                        add_symbol(node.name, getattr(node, 'lineno', 1), 'function')
+                    elif isinstance(node, ast.ClassDef):
+                        add_symbol(node.name, getattr(node, 'lineno', 1), 'class')
+                    elif isinstance(node, ast.Import):
+                        for alias in node.names:
+                            add_symbol(alias.asname or alias.name.split('.')[0], getattr(node, 'lineno', 1), 'import')
+                    elif isinstance(node, ast.ImportFrom):
+                        for alias in node.names:
+                            add_symbol(alias.asname or alias.name, getattr(node, 'lineno', 1), 'import')
+                    elif isinstance(node, ast.Assign):
+                        for target in node.targets:
+                            if isinstance(target, ast.Name):
+                                add_symbol(target.id, getattr(target, 'lineno', 1), 'variable')
+            else:
+                for match in re.finditer(r'^\s*(def|class)\s+([A-Za-z_]\w*)', text, re.MULTILINE):
+                    add_symbol(match.group(2), text.count('\n', 0, match.start()) + 1, match.group(1))
+        elif mode == 'markdown':
+            for line_number, line in enumerate(text.splitlines(), start=1):
+                heading_match = re.match(r'^\s{0,3}(#{1,6})\s+(.+?)\s*$', line)
+                if heading_match:
+                    add_symbol(heading_match.group(2), line_number, f'h{len(heading_match.group(1))}')
+        else:
+            patterns = (
+                ('class', r'^\s*(?:export\s+)?class\s+([A-Za-z_]\w*)'),
+                ('function', r'^\s*(?:export\s+)?(?:async\s+)?function\s+([A-Za-z_]\w*)'),
+                ('function', r'^\s*(?:def|fn)\s+([A-Za-z_]\w*)'),
+                ('method', r'^\s*([A-Za-z_]\w*)\s*\([^)]*\)\s*\{'),
+                ('variable', r'^\s*(?:const|let|var|final|static|pub|private|protected)\s+([A-Za-z_]\w*)'),
+                ('type', r'^\s*(?:struct|enum|interface|trait)\s+([A-Za-z_]\w*)'),
+                ('import', r'^\s*(?:from|import|use|include)\s+([A-Za-z_][\w./-]*)'),
+            )
+            lines = text.splitlines()
+            for line_number, line in enumerate(lines, start=1):
+                for kind, pattern in patterns:
+                    match = re.search(pattern, line)
+                    if match:
+                        add_symbol(match.group(1), line_number, kind)
+                        break
+
+        symbols.sort(key=lambda item: (item.get('line', 0), item.get('name', '').lower()))
+        return symbols
+
+    def get_doc_symbols(self, doc):
+        if not doc:
+            return []
+        text_widget = doc.get('text')
+        if not text_widget:
+            return []
+        try:
+            content = text_widget.get('1.0', 'end-1c')
+        except tk.TclError:
+            return []
+        signature = self.build_doc_symbol_cache_signature(content)
+        if doc.get('symbol_cache_signature') == signature:
+            return list(doc.get('symbol_cache') or [])
+        symbols = self.extract_symbols_from_content(content, self.get_syntax_mode(doc), self.get_doc_display_path(doc))
+        doc['symbol_cache_signature'] = signature
+        doc['symbol_cache'] = list(symbols)
+        return symbols
+
+    def get_symbol_at_line(self, doc, line_number):
+        symbols = self.get_doc_symbols(doc)
+        active_symbol = None
+        for symbol in symbols:
+            if int(symbol.get('line', 1)) <= int(line_number):
+                active_symbol = symbol
+            else:
+                break
+        return active_symbol
+
+    def get_symbols_for_scope(self, doc, project_scope=False):
+        if not doc:
+            return []
+        symbols = []
+        seen = set()
+
+        def add_scoped_symbol(symbol, source_path=None):
+            item = dict(symbol or {})
+            item['source_path'] = source_path or doc.get('file_path')
+            item['source_display'] = os.path.basename(source_path) if source_path else self.get_doc_name(doc['frame'])
+            key = (item.get('source_path'), item.get('line'), item.get('name'))
+            if key in seen:
+                return
+            seen.add(key)
+            symbols.append(item)
+
+        for symbol in self.get_doc_symbols(doc):
+            add_scoped_symbol(symbol, doc.get('file_path'))
+
+        if project_scope and doc.get('file_path'):
+            for candidate_path in self.get_project_source_files(doc['file_path'])[:self.intellisense_max_project_files]:
+                if candidate_path == doc.get('file_path'):
+                    continue
+                try:
+                    with open(candidate_path, 'r', encoding='utf-8', errors='replace') as source_file:
+                        content = source_file.read()
+                except OSError:
+                    continue
+                mode = self.infer_syntax_mode_from_path(candidate_path, content)
+                for symbol in self.extract_symbols_from_content(content, mode, candidate_path):
+                    add_scoped_symbol(symbol, candidate_path)
+
+        symbols.sort(key=lambda item: (
+            os.path.basename(str(item.get('source_path') or '')).lower(),
+            int(item.get('line', 1)),
+            str(item.get('name') or '').lower()
+        ))
+        return symbols
+
+    def goto_symbol_entry(self, symbol):
+        if not symbol:
+            return
+        source_path = symbol.get('source_path')
+        current_doc = self.get_current_doc()
+        target_doc = current_doc
+        if source_path:
+            for doc in self.documents.values():
+                if doc.get('file_path') and os.path.abspath(doc['file_path']) == os.path.abspath(source_path):
+                    target_doc = doc
+                    break
+            else:
+                if not self.open_file_path(source_path):
+                    return
+                target_doc = self.get_current_doc()
+        if not target_doc:
+            return
+        frame = target_doc.get('frame')
+        if frame:
+            self.notebook.select(frame)
+            self.set_active_document(frame)
+        text_widget = target_doc.get('text')
+        if not text_widget:
+            return
+        try:
+            line_number = max(1, int(symbol.get('line', 1)))
+            text_widget.mark_set(tk.INSERT, f'{line_number}.0')
+            text_widget.tag_remove('sel', '1.0', tk.END)
+            text_widget.see(f'{line_number}.0')
+            text_widget.focus_set()
+        except (tk.TclError, ValueError):
+            return
+        self.set_last_active_editor_widget(text_widget)
+        self.update_breadcrumbs()
+        self.update_status()
+
+    def show_symbol_navigator(self, event=None, project_scope=False):
+        doc = self.get_current_doc()
+        if not doc:
+            return "break"
+        symbols = self.get_symbols_for_scope(doc, project_scope=project_scope)
+        if not symbols:
+            messagebox.showinfo(
+                self.tr('app.name', 'Notepad-X'),
+                'No symbols were found for this scope.',
+                parent=self.root
+            )
+            return "break"
+
+        dialog = self.create_toplevel(self.root)
+        dialog.title('Project Symbols' if project_scope else 'Symbols')
+        dialog.transient(self.root)
+        dialog.configure(bg=self.bg_color)
+        dialog.geometry('720x480')
+
+        container = tk.Frame(dialog, bg=self.bg_color)
+        container.pack(fill='both', expand=True, padx=10, pady=10)
+        container.grid_rowconfigure(1, weight=1)
+        container.grid_columnconfigure(0, weight=1)
+
+        filter_entry = tk.Entry(container)
+        filter_entry.grid(row=0, column=0, sticky='ew', pady=(0, 8))
+        listbox = tk.Listbox(
+            container,
+            bg=self.text_bg,
+            fg=self.text_fg,
+            selectbackground='#264f78',
+            selectforeground='white',
+            font=('Consolas', 10),
+            activestyle='none'
+        )
+        listbox.grid(row=1, column=0, sticky='nsew')
+        scrollbar = ttk.Scrollbar(container, orient='vertical', command=listbox.yview)
+        scrollbar.grid(row=1, column=1, sticky='ns')
+        listbox.configure(yscrollcommand=scrollbar.set)
+
+        visible_symbols = list(symbols)
+
+        def refresh_list(*_args):
+            query = filter_entry.get().strip().lower()
+            visible_symbols.clear()
+            listbox.delete(0, tk.END)
+            for symbol in symbols:
+                haystack = f"{symbol.get('name', '')} {symbol.get('kind', '')} {symbol.get('source_display', '')}".lower()
+                if query and query not in haystack:
+                    continue
+                visible_symbols.append(symbol)
+                display_name = symbol.get('name', '')
+                display_source = symbol.get('source_display', '')
+                display_line = symbol.get('line', 1)
+                listbox.insert(tk.END, f"{display_name:<36} {display_source:<20} L{display_line}")
+            if visible_symbols:
+                listbox.selection_set(0)
+                listbox.activate(0)
+
+        def open_selected(event=None):
+            selection = listbox.curselection()
+            if not selection:
+                return "break"
+            symbol = visible_symbols[selection[0]]
+            dialog.destroy()
+            self.goto_symbol_entry(symbol)
+            return "break"
+
+        filter_entry.bind('<KeyRelease>', refresh_list)
+        filter_entry.bind('<Return>', open_selected)
+        listbox.bind('<Double-Button-1>', open_selected)
+        dialog.bind('<Escape>', lambda e: dialog.destroy())
+
+        refresh_list()
+        filter_entry.focus_set()
+        self.center_window(dialog, self.root)
+        dialog.after(1, lambda current=dialog: self.center_window_after_show(current, self.root))
+        return "break"
+
+    def get_indent_fold_regions(self, lines):
+        regions = []
+        stack = []
+
+        def line_indent(line_text):
+            expanded = line_text.expandtabs(4)
+            return len(expanded) - len(expanded.lstrip(' '))
+
+        for line_number, raw_line in enumerate(lines, start=1):
+            stripped = raw_line.strip()
+            if not stripped:
+                continue
+            indent = line_indent(raw_line)
+            while stack and indent <= stack[-1]['indent']:
+                start_info = stack.pop()
+                end_line = line_number - 1
+                if end_line > start_info['line']:
+                    regions.append({'start': start_info['line'], 'end': end_line})
+            next_indent_candidate = None
+            for future_line in lines[line_number:]:
+                future_stripped = future_line.strip()
+                if not future_stripped:
+                    continue
+                next_indent_candidate = line_indent(future_line)
+                break
+            if next_indent_candidate is not None and next_indent_candidate > indent:
+                stack.append({'line': line_number, 'indent': indent})
+        last_line = len(lines)
+        while stack:
+            start_info = stack.pop()
+            if last_line > start_info['line']:
+                regions.append({'start': start_info['line'], 'end': last_line})
+        return regions
+
+    def get_brace_fold_regions(self, lines):
+        regions = []
+        stack = []
+        for line_number, raw_line in enumerate(lines, start=1):
+            in_string = False
+            string_char = ''
+            escape = False
+            for char in raw_line:
+                if escape:
+                    escape = False
+                    continue
+                if in_string:
+                    if char == '\\':
+                        escape = True
+                    elif char == string_char:
+                        in_string = False
+                    continue
+                if char in {'"', "'"}:
+                    in_string = True
+                    string_char = char
+                    continue
+                if char == '{':
+                    stack.append(line_number)
+                elif char == '}' and stack:
+                    start_line = stack.pop()
+                    if line_number > start_line:
+                        regions.append({'start': start_line, 'end': line_number})
+        return regions
+
+    def get_markdown_fold_regions(self, lines):
+        regions = []
+        heading_stack = []
+        for line_number, line in enumerate(lines, start=1):
+            match = re.match(r'^\s{0,3}(#{1,6})\s+.+$', line)
+            if not match:
+                continue
+            level = len(match.group(1))
+            while heading_stack and level <= heading_stack[-1]['level']:
+                previous = heading_stack.pop()
+                end_line = line_number - 1
+                if end_line > previous['line']:
+                    regions.append({'start': previous['line'], 'end': end_line})
+            heading_stack.append({'line': line_number, 'level': level})
+        last_line = len(lines)
+        while heading_stack:
+            previous = heading_stack.pop()
+            if last_line > previous['line']:
+                regions.append({'start': previous['line'], 'end': last_line})
+        return regions
+
+    def get_fold_regions(self, doc):
+        if not doc or doc.get('preview_mode') or doc.get('virtual_mode'):
+            return []
+        text_widget = doc.get('text')
+        if not text_widget:
+            return []
+        try:
+            content = text_widget.get('1.0', 'end-1c')
+        except tk.TclError:
+            return []
+        lines = content.splitlines()
+        if len(lines) <= 1:
+            return []
+        mode = self.get_syntax_mode(doc)
+        if mode == 'markdown':
+            regions = self.get_markdown_fold_regions(lines)
+        elif mode in {'c', 'cpp', 'csharp', 'java', 'javascript', 'rust', 'php'}:
+            regions = self.get_brace_fold_regions(lines)
+            regions.extend(self.get_indent_fold_regions(lines))
+        else:
+            regions = self.get_indent_fold_regions(lines)
+        deduped = {}
+        for region in regions:
+            start_line = int(region.get('start', 1))
+            end_line = int(region.get('end', start_line))
+            if end_line <= start_line:
+                continue
+            deduped[(start_line, end_line)] = {'start': start_line, 'end': end_line}
+        return sorted(deduped.values(), key=lambda item: (item['start'], item['end']))
+
+    def invalidate_fold_regions(self, doc):
+        if not doc:
+            return
+        doc['fold_ranges_dirty'] = True
+        if doc.get('preview_mode') or doc.get('virtual_mode'):
+            doc['fold_ranges'] = []
+
+    def get_cached_fold_regions(self, doc, force=False):
+        if not doc:
+            return []
+        if doc.get('preview_mode') or doc.get('virtual_mode'):
+            doc['fold_ranges'] = []
+            doc['fold_ranges_dirty'] = False
+            return []
+        if force or doc.get('fold_ranges_dirty', True):
+            doc['fold_ranges'] = list(self.get_fold_regions(doc))
+            doc['fold_ranges_dirty'] = False
+        return list(doc.get('fold_ranges') or [])
+
+    def make_fold_tag_name(self, start_line, end_line):
+        return f"fold_{start_line}_{end_line}"
+
+    def get_collapsed_fold_regions(self, doc):
+        collapsed = {}
+        if not doc:
+            return collapsed
+        text_widget = doc.get('text')
+        if not text_widget:
+            return collapsed
+        for tag_name in list(doc.get('folded_tags') or []):
+            try:
+                ranges = text_widget.tag_ranges(tag_name)
+            except tk.TclError:
+                continue
+            if len(ranges) < 2:
+                continue
+            try:
+                start_line = max(1, int(str(ranges[0]).split('.')[0]) - 1)
+                end_index = text_widget.index(f'{ranges[1]} -1c')
+                end_line = int(str(end_index).split('.')[0])
+            except (tk.TclError, ValueError):
+                continue
+            collapsed[start_line] = {
+                'start': start_line,
+                'end': max(start_line + 1, end_line),
+                'tag_name': tag_name,
+            }
+        return collapsed
+
+    def clear_fold_tags(self, doc):
+        if not doc:
+            return
+        text_widget = doc.get('text')
+        if not text_widget:
+            return
+        for tag_name in list(doc.get('folded_tags') or []):
+            try:
+                text_widget.tag_remove(tag_name, '1.0', tk.END)
+                text_widget.tag_delete(tag_name)
+            except tk.TclError:
+                pass
+        doc['folded_tags'] = set()
+
+    def apply_fold_region(self, doc, region):
+        if not doc or not region:
+            return
+        text_widget = doc.get('text')
+        if not text_widget:
+            return
+        start_line = int(region.get('start', 1))
+        end_line = int(region.get('end', start_line))
+        if end_line <= start_line:
+            return
+        tag_name = self.make_fold_tag_name(start_line, end_line)
+        try:
+            text_widget.tag_config(tag_name, elide=True)
+            text_widget.tag_add(tag_name, f'{start_line + 1}.0', f'{end_line}.0 lineend +1c')
+            doc.setdefault('folded_tags', set()).add(tag_name)
+        except tk.TclError:
+            return
+
+    def toggle_fold_region(self, doc, region):
+        if not doc or not region:
+            return False
+        text_widget = doc.get('text')
+        if not text_widget:
+            return False
+        start_line = int(region.get('start', 1))
+        collapsed_region = self.get_collapsed_fold_regions(doc).get(start_line)
+        if collapsed_region:
+            tag_name = collapsed_region.get('tag_name')
+            if tag_name:
+                try:
+                    text_widget.tag_remove(tag_name, '1.0', tk.END)
+                    text_widget.tag_delete(tag_name)
+                except tk.TclError:
+                    pass
+                doc.setdefault('folded_tags', set()).discard(tag_name)
+        else:
+            self.apply_fold_region(doc, region)
+        self.update_line_number_gutter(doc)
+        self.schedule_minimap_refresh(doc)
+        self.update_status()
+        return True
+
+    def expand_all_folds(self, event=None, doc=None):
+        target_doc = doc or self.get_navigation_doc_for_widget(self.get_active_search_widget()) or self.get_current_doc()
+        if not target_doc:
+            return "break"
+        self.clear_fold_tags(target_doc)
+        self.update_line_number_gutter(target_doc)
+        self.schedule_minimap_refresh(target_doc)
+        return "break"
+
+    def collapse_all_folds(self, event=None, doc=None):
+        target_doc = doc or self.get_navigation_doc_for_widget(self.get_active_search_widget()) or self.get_current_doc()
+        if not target_doc:
+            return "break"
+        self.clear_fold_tags(target_doc)
+        regions = self.get_cached_fold_regions(target_doc, force=True)
+        for region in regions:
+            self.apply_fold_region(target_doc, region)
+        self.update_line_number_gutter(target_doc)
+        self.schedule_minimap_refresh(target_doc)
+        return "break"
+
+    def toggle_fold_at_cursor(self, event=None):
+        widget = self.get_page_navigation_source_widget(event) or self.get_active_search_widget()
+        target_doc = self.get_navigation_doc_for_widget(widget) if widget else self.get_current_doc()
+        if not target_doc:
+            return "break"
+        text_widget = target_doc.get('text')
+        if not text_widget:
+            return "break"
+        try:
+            current_line = int(text_widget.index(tk.INSERT).split('.')[0])
+        except (tk.TclError, ValueError):
+            current_line = 1
+        regions = self.get_cached_fold_regions(target_doc)
+        collapsed_regions = self.get_collapsed_fold_regions(target_doc)
+        selected_region = None
+        for region in regions:
+            if int(region['start']) == current_line or (int(region['start']) <= current_line <= int(region['end'])):
+                selected_region = region
+                break
+        if selected_region is None:
+            selected_region = collapsed_regions.get(current_line)
+        if not selected_region:
+            return "break"
+        self.toggle_fold_region(target_doc, selected_region)
+        return "break"
+
+    def clear_diagnostics(self, doc):
+        if not doc:
+            return
+        text_widget = doc.get('text')
+        if not text_widget:
+            return
+        if self.diagnostic_tooltip_doc is doc:
+            self.hide_diagnostic_tooltip()
+        try:
+            text_widget.tag_remove('diagnostic_error', '1.0', tk.END)
+            text_widget.tag_remove('diagnostic_warning', '1.0', tk.END)
+        except tk.TclError:
+            return
+        doc['diagnostics'] = []
+        self.schedule_minimap_refresh(doc)
+
+    def toggle_diagnostics(self):
+        if not self.diagnostics_enabled.get():
+            for doc in self.documents.values():
+                self.clear_diagnostics(doc)
+            if self.compare_view:
+                self.clear_diagnostics(self.compare_view)
+        else:
+            for doc in self.documents.values():
+                self.schedule_diagnostics(doc)
+            if self.compare_view:
+                self.schedule_diagnostics(self.compare_view)
+        self.save_session()
+        return "break"
+
+    def schedule_diagnostics(self, doc):
+        if not doc:
+            return
+        existing_job = doc.get('diagnostic_job')
+        if existing_job:
+            try:
+                self.root.after_cancel(existing_job)
+            except tk.TclError:
+                pass
+        try:
+            doc['diagnostic_job'] = self.root.after(self.diagnostics_delay_ms, lambda current=doc: self.run_diagnostics_for_doc(current))
+        except tk.TclError:
+            doc['diagnostic_job'] = None
+
+    def run_diagnostics_for_doc(self, doc, force=False):
+        if not doc:
+            return []
+        doc['diagnostic_job'] = None
+        text_widget = doc.get('text')
+        if not text_widget:
+            return []
+        self.clear_diagnostics(doc)
+        if not self.diagnostics_enabled.get() and not force:
+            self.schedule_minimap_refresh(doc)
+            return []
+        if doc.get('preview_mode') or doc.get('virtual_mode') or doc.get('large_file_mode'):
+            self.schedule_minimap_refresh(doc)
+            return []
+
+        try:
+            content = text_widget.get('1.0', 'end-1c')
+        except tk.TclError:
+            return []
+
+        diagnostics = []
+        syntax_mode = self.get_syntax_mode(doc) or self.infer_syntax_mode_from_path(doc.get('file_path'), content)
+        lines = content.splitlines()
+
+        for line_number, line in enumerate(lines, start=1):
+            if line.rstrip(' \t') != line:
+                diagnostics.append({'severity': 'warning', 'line': line_number, 'message': 'Trailing whitespace'})
+            if len(line) > 140:
+                diagnostics.append({'severity': 'warning', 'line': line_number, 'message': 'Long line (> 140 chars)'})
+            if len(diagnostics) >= 50:
+                break
+
+        try:
+            if syntax_mode == 'python':
+                compile(content or '\n', self.get_doc_display_path(doc) or '<buffer>', 'exec')
+            elif syntax_mode == 'json':
+                json.loads(content or '{}')
+            elif syntax_mode == 'xml':
+                ET.fromstring(content or '<root />')
+        except SyntaxError as exc:
+            diagnostics.insert(0, {
+                'severity': 'error',
+                'line': int(getattr(exc, 'lineno', 1) or 1),
+                'column': int(getattr(exc, 'offset', 1) or 1),
+                'message': str(exc.msg or exc)
+            })
+        except json.JSONDecodeError as exc:
+            diagnostics.insert(0, {
+                'severity': 'error',
+                'line': int(getattr(exc, 'lineno', 1) or 1),
+                'column': int(getattr(exc, 'colno', 1) or 1),
+                'message': str(exc.msg or exc)
+            })
+        except ET.ParseError as exc:
+            error_message = str(exc)
+            line_number = 1
+            column_number = 1
+            position = getattr(exc, 'position', None)
+            if isinstance(position, tuple) and len(position) >= 2:
+                line_number = int(position[0] or 1)
+                column_number = int(position[1] or 1)
+            diagnostics.insert(0, {
+                'severity': 'error',
+                'line': line_number,
+                'column': column_number,
+                'message': error_message
+            })
+
+        doc['diagnostics'] = diagnostics[:50]
+        for diagnostic in doc['diagnostics']:
+            tag_name = 'diagnostic_error' if diagnostic.get('severity') == 'error' else 'diagnostic_warning'
+            line_number = max(1, int(diagnostic.get('line', 1)))
+            try:
+                text_widget.tag_add(tag_name, f'{line_number}.0', f'{line_number}.0 lineend')
+            except tk.TclError:
+                continue
+        self.raise_editor_overlay_tags(text_widget)
+        self.schedule_minimap_refresh(doc)
+        return doc['diagnostics']
+
     def set_large_file_mode(self, doc, enabled):
         doc['large_file_mode'] = enabled
         doc['text'].configure(undo=not enabled, autoseparators=not enabled)
@@ -7422,6 +9334,8 @@ class NotepadX:
             for tag_name in text_widget.tag_names():
                 if str(tag_name).startswith('note_'):
                     text_widget.tag_raise(tag_name)
+            text_widget.tag_raise('diagnostic_warning')
+            text_widget.tag_raise('diagnostic_error')
             text_widget.tag_raise(self.spellcheck_tag)
             text_widget.tag_raise(self.bracket_match_tag)
             self.raise_find_tags(text_widget)
@@ -7777,6 +9691,8 @@ class NotepadX:
         doc['syntax_override'] = syntax_mode
         self.syntax_mode_selection.set(syntax_mode)
         self.configure_syntax_highlighting(doc['frame'])
+        self.invalidate_fold_regions(doc)
+        self.update_line_number_gutter(doc)
         if self.compare_active and self.compare_source_tab == str(doc['frame']):
             self.refresh_compare_panel()
         self.update_status()
@@ -8120,6 +10036,8 @@ class NotepadX:
         self.set_last_active_editor_widget(doc['text'])
         self.remember_doc_view_state(doc)
         event_type = str(getattr(event, 'type', ''))
+        if event_type in {'4', '5', '6', 'Motion', 'ButtonPress', 'ButtonRelease', '35', 'KeyRelease'}:
+            self.hide_diagnostic_tooltip()
         if doc.get('virtual_mode'):
             # Don't rebuffer while the user is actively selecting text.
             if event_type in {'4', '5', '6', 'Motion', 'ButtonPress', 'ButtonRelease'}:
@@ -8145,6 +10063,7 @@ class NotepadX:
             self.schedule_spellcheck(doc)
         self.update_bracket_match_highlight(doc)
         self.update_line_number_gutter(doc)
+        self.schedule_minimap_refresh(doc)
         self.update_status()
 
     def get_auto_indent_unit(self, line_prefix):
@@ -8163,18 +10082,291 @@ class NotepadX:
             return base_indent + self.get_auto_indent_unit(base_indent)
         return base_indent
 
-    def insert_auto_indent_newline(self, text_widget):
+    def build_auto_indent_insert_text(self, text_widget):
         try:
             insert_index = text_widget.index(tk.INSERT)
+            current_line = text_widget.get(f"{insert_index} linestart", f"{insert_index} lineend")
+            before_char = text_widget.get(f"{insert_index} -1c")
+            after_char = text_widget.get(insert_index)
         except tk.TclError:
-            return None
+            return '\n'
+        indent_match = re.match(r'[ \t]*', current_line)
+        base_indent = indent_match.group(0) if indent_match else ''
         indent_prefix = self.build_auto_indent_prefix(text_widget, insert_index)
+        closing_char = self.bracket_pairs.get(before_char)
+        if closing_char and after_char == closing_char:
+            return '\n' + indent_prefix + '\n' + base_indent
+        return '\n' + indent_prefix
+
+    def insert_auto_indent_newline(self, text_widget):
+        newline_text = self.build_auto_indent_insert_text(text_widget)
         if text_widget.tag_ranges('sel'):
             try:
                 text_widget.delete('sel.first', 'sel.last')
             except tk.TclError:
                 pass
-        text_widget.insert(tk.INSERT, '\n' + indent_prefix)
+        try:
+            insert_index = text_widget.index(tk.INSERT)
+        except tk.TclError:
+            insert_index = None
+        text_widget.insert(tk.INSERT, newline_text)
+        if newline_text.count('\n') == 2 and insert_index is not None:
+            try:
+                line_number = int(insert_index.split('.')[0]) + 1
+                prefix = newline_text.split('\n')[1]
+                text_widget.mark_set(tk.INSERT, f'{line_number}.{len(prefix)}')
+            except (tk.TclError, ValueError, IndexError):
+                pass
+        return "break"
+
+    def get_compare_mirror_target(self, source_widget):
+        if not self.compare_active or not self.compare_multi_edit_enabled.get():
+            return None
+        compare_widget = self.get_compare_text_widget()
+        main_widget = self.text if isinstance(self.text, tk.Text) else None
+        if compare_widget is None or main_widget is None:
+            return None
+        if source_widget == compare_widget and main_widget.winfo_exists():
+            return main_widget
+        if source_widget == main_widget and compare_widget.winfo_exists():
+            return compare_widget
+        return None
+
+    def sync_mirror_target_position(self, source_widget, target_widget):
+        if not source_widget or not target_widget:
+            return
+        try:
+            insert_index = source_widget.index(tk.INSERT)
+            target_widget.mark_set(tk.INSERT, insert_index)
+            target_widget.tag_remove('sel', '1.0', tk.END)
+            selection = source_widget.tag_ranges('sel')
+            if len(selection) >= 2:
+                target_widget.tag_add('sel', str(selection[0]), str(selection[1]))
+        except tk.TclError:
+            return
+
+    def notify_text_widget_changed(self, widget):
+        compare_widget = self.get_compare_text_widget()
+        if compare_widget is not None and widget == compare_widget:
+            self.on_compare_modified()
+            return
+        doc = self.get_doc_for_text_widget(widget)
+        if doc:
+            self.on_text_modified(doc['frame'])
+
+    def apply_widget_text_change(self, widget, inserted_text='', delete_selection=False, delete_backward=False, delete_forward=False):
+        if not widget:
+            return False
+        try:
+            if delete_selection:
+                try:
+                    widget.delete('sel.first', 'sel.last')
+                except tk.TclError:
+                    pass
+            if delete_backward:
+                try:
+                    if widget.compare(tk.INSERT, '>', '1.0'):
+                        widget.delete(f'{tk.INSERT} -1c')
+                except tk.TclError:
+                    pass
+            if delete_forward:
+                try:
+                    widget.delete(tk.INSERT)
+                except tk.TclError:
+                    pass
+            if inserted_text:
+                widget.insert(tk.INSERT, inserted_text)
+            widget.edit_modified(True)
+            widget.see(tk.INSERT)
+            return True
+        except tk.TclError:
+            return False
+
+    def mirror_text_change(self, source_widget, inserted_text='', delete_selection=False, delete_backward=False, delete_forward=False):
+        target_widget = self.get_compare_mirror_target(source_widget)
+        if target_widget is None:
+            return
+        self.sync_mirror_target_position(source_widget, target_widget)
+        if self.apply_widget_text_change(
+            target_widget,
+            inserted_text=inserted_text,
+            delete_selection=delete_selection,
+            delete_backward=delete_backward,
+            delete_forward=delete_forward
+        ):
+            self.notify_text_widget_changed(target_widget)
+
+    def should_auto_pair_quote(self, text_widget, quote_char):
+        try:
+            before_char = text_widget.get(f'{tk.INSERT} -1c') if text_widget.compare(tk.INSERT, '>', '1.0') else ''
+            after_char = text_widget.get(tk.INSERT)
+        except tk.TclError:
+            return False
+        if self.text_has_selection(text_widget):
+            return True
+        if after_char == quote_char:
+            return False
+        if before_char and re.match(r'[A-Za-z0-9_]', before_char):
+            return False
+        return not after_char or after_char.isspace() or after_char in ')]}:;,.'
+
+    def handle_auto_pair_input(self, text_widget, char):
+        if not self.auto_pair_enabled.get():
+            return None
+        selection_ranges = text_widget.tag_ranges('sel')
+        mirror_target = self.get_compare_mirror_target(text_widget)
+
+        if char in self.bracket_pairs:
+            closing_char = self.bracket_pairs[char]
+            if selection_ranges:
+                try:
+                    selected_text = text_widget.get('sel.first', 'sel.last')
+                except tk.TclError:
+                    selected_text = ''
+                if mirror_target is not None:
+                    self.sync_mirror_target_position(text_widget, mirror_target)
+                self.apply_widget_text_change(text_widget, delete_selection=True, inserted_text=char + selected_text + closing_char)
+                try:
+                    text_widget.mark_set(tk.INSERT, f'{tk.INSERT} -1c')
+                except tk.TclError:
+                    pass
+                if mirror_target is not None:
+                    self.apply_widget_text_change(mirror_target, delete_selection=True, inserted_text=char + selected_text + closing_char)
+                    try:
+                        mirror_target.mark_set(tk.INSERT, f'{tk.INSERT} -1c')
+                    except tk.TclError:
+                        pass
+                    self.notify_text_widget_changed(mirror_target)
+            else:
+                self.apply_widget_text_change(text_widget, inserted_text=char + closing_char)
+                try:
+                    text_widget.mark_set(tk.INSERT, f'{tk.INSERT} -1c')
+                except tk.TclError:
+                    pass
+                if mirror_target is not None:
+                    self.sync_mirror_target_position(text_widget, mirror_target)
+                    self.apply_widget_text_change(mirror_target, inserted_text=char + closing_char)
+                    try:
+                        mirror_target.mark_set(tk.INSERT, f'{tk.INSERT} -1c')
+                    except tk.TclError:
+                        pass
+                    self.notify_text_widget_changed(mirror_target)
+            self.notify_text_widget_changed(text_widget)
+            return "break"
+
+        if char in self.reverse_bracket_pairs:
+            try:
+                next_char = text_widget.get(tk.INSERT)
+            except tk.TclError:
+                next_char = ''
+            if next_char == char:
+                try:
+                    text_widget.mark_set(tk.INSERT, f'{tk.INSERT} +1c')
+                except tk.TclError:
+                    pass
+                if mirror_target is not None:
+                    self.sync_mirror_target_position(text_widget, mirror_target)
+                    try:
+                        if mirror_target.get(tk.INSERT) == char:
+                            mirror_target.mark_set(tk.INSERT, f'{tk.INSERT} +1c')
+                    except tk.TclError:
+                        pass
+                return "break"
+
+        if char in {'"', "'"} and self.should_auto_pair_quote(text_widget, char):
+            if selection_ranges:
+                try:
+                    selected_text = text_widget.get('sel.first', 'sel.last')
+                except tk.TclError:
+                    selected_text = ''
+                if mirror_target is not None:
+                    self.sync_mirror_target_position(text_widget, mirror_target)
+                self.apply_widget_text_change(text_widget, delete_selection=True, inserted_text=char + selected_text + char)
+                try:
+                    text_widget.mark_set(tk.INSERT, f'{tk.INSERT} -1c')
+                except tk.TclError:
+                    pass
+                if mirror_target is not None:
+                    self.apply_widget_text_change(mirror_target, delete_selection=True, inserted_text=char + selected_text + char)
+                    try:
+                        mirror_target.mark_set(tk.INSERT, f'{tk.INSERT} -1c')
+                    except tk.TclError:
+                        pass
+                    self.notify_text_widget_changed(mirror_target)
+            else:
+                self.apply_widget_text_change(text_widget, inserted_text=char + char)
+                try:
+                    text_widget.mark_set(tk.INSERT, f'{tk.INSERT} -1c')
+                except tk.TclError:
+                    pass
+                if mirror_target is not None:
+                    self.sync_mirror_target_position(text_widget, mirror_target)
+                    self.apply_widget_text_change(mirror_target, inserted_text=char + char)
+                    try:
+                        mirror_target.mark_set(tk.INSERT, f'{tk.INSERT} -1c')
+                    except tk.TclError:
+                        pass
+                    self.notify_text_widget_changed(mirror_target)
+            self.notify_text_widget_changed(text_widget)
+            return "break"
+        if char in {'"', "'"}:
+            try:
+                next_char = text_widget.get(tk.INSERT)
+            except tk.TclError:
+                next_char = ''
+            if next_char == char:
+                try:
+                    text_widget.mark_set(tk.INSERT, f'{tk.INSERT} +1c')
+                except tk.TclError:
+                    pass
+                if mirror_target is not None:
+                    self.sync_mirror_target_position(text_widget, mirror_target)
+                    try:
+                        if mirror_target.get(tk.INSERT) == char:
+                            mirror_target.mark_set(tk.INSERT, f'{tk.INSERT} +1c')
+                    except tk.TclError:
+                        pass
+                return "break"
+        return None
+
+    def handle_auto_pair_backspace(self, text_widget):
+        if not self.auto_pair_enabled.get():
+            return None
+        if self.text_has_selection(text_widget):
+            return None
+        try:
+            if not text_widget.compare(tk.INSERT, '>', '1.0'):
+                return None
+            previous_char = text_widget.get(f'{tk.INSERT} -1c')
+            next_char = text_widget.get(tk.INSERT)
+        except tk.TclError:
+            return None
+        expected_next = self.bracket_pairs.get(previous_char, previous_char if previous_char in {'"', "'"} else None)
+        if expected_next and next_char == expected_next:
+            self.apply_widget_text_change(text_widget, delete_backward=True, delete_forward=True)
+            self.mirror_text_change(text_widget, delete_backward=True, delete_forward=True)
+            self.notify_text_widget_changed(text_widget)
+            return "break"
+        return None
+
+    def handle_compare_multi_edit_newline(self, text_widget):
+        newline_text = self.build_auto_indent_insert_text(text_widget)
+        has_selection = bool(text_widget.tag_ranges('sel'))
+        mirror_target = self.get_compare_mirror_target(text_widget)
+        if mirror_target is not None:
+            self.sync_mirror_target_position(text_widget, mirror_target)
+        self.apply_widget_text_change(text_widget, delete_selection=has_selection, inserted_text=newline_text)
+        if newline_text.count('\n') == 2:
+            try:
+                line_number = int(text_widget.index(tk.INSERT).split('.')[0]) - 1
+                prefix = newline_text.split('\n')[1]
+                text_widget.mark_set(tk.INSERT, f'{line_number}.{len(prefix)}')
+            except (tk.TclError, ValueError, IndexError):
+                pass
+        if mirror_target is not None:
+            self.apply_widget_text_change(mirror_target, delete_selection=has_selection, inserted_text=newline_text)
+            self.notify_text_widget_changed(mirror_target)
+        self.notify_text_widget_changed(text_widget)
         return "break"
 
     def clear_bracket_match_highlight(self, text_widget):
@@ -8274,10 +10466,99 @@ class NotepadX:
         navigation_keys = {'Up', 'Down', 'Left', 'Right', 'Home', 'End', 'Prior', 'Next'}
         return bool((state & 0x1) and keysym in navigation_keys)
 
+    def handle_autocomplete_keypress(self, event, doc_id):
+        if not self.autocomplete_popup_visible() or self.autocomplete_doc_id != doc_id:
+            return None
+        if event.keysym == 'Up':
+            return self.move_autocomplete_selection(-1)
+        if event.keysym == 'Down':
+            return self.move_autocomplete_selection(1)
+        if event.keysym in {'Tab', 'Return', 'KP_Enter'}:
+            if self.accept_autocomplete_selection():
+                return "break"
+        if event.keysym == 'Escape':
+            self.hide_autocomplete_popup()
+            return "break"
+        if event.keysym in {'Left', 'Right', 'Home', 'End', 'Prior', 'Next'}:
+            self.hide_autocomplete_popup()
+        return None
+
+    def perform_mirrored_edit(self, source_widget, inserted_text='', delete_selection=False, delete_backward=False, delete_forward=False):
+        mirror_target = self.get_compare_mirror_target(source_widget)
+        if mirror_target is not None:
+            self.sync_mirror_target_position(source_widget, mirror_target)
+        if not self.apply_widget_text_change(
+            source_widget,
+            inserted_text=inserted_text,
+            delete_selection=delete_selection,
+            delete_backward=delete_backward,
+            delete_forward=delete_forward
+        ):
+            return False
+        if mirror_target is not None:
+            self.apply_widget_text_change(
+                mirror_target,
+                inserted_text=inserted_text,
+                delete_selection=delete_selection,
+                delete_backward=delete_backward,
+                delete_forward=delete_forward
+            )
+            self.notify_text_widget_changed(mirror_target)
+        self.notify_text_widget_changed(source_widget)
+        return True
+
+    def handle_editable_text_keypress(self, event, text_widget, doc, doc_id):
+        autocomplete_result = self.handle_autocomplete_keypress(event, doc_id)
+        if autocomplete_result is not None:
+            return autocomplete_result
+
+        state = int(getattr(event, 'state', 0) or 0)
+        if (state & 0x4) or (state & 0x20000):
+            return None
+
+        keysym = str(getattr(event, 'keysym', '') or '')
+        char = str(getattr(event, 'char', '') or '')
+        has_selection = self.text_has_selection(text_widget)
+
+        if keysym in {'Return', 'KP_Enter'}:
+            return self.handle_compare_multi_edit_newline(text_widget)
+
+        if keysym == 'BackSpace':
+            auto_pair_result = self.handle_auto_pair_backspace(text_widget)
+            if auto_pair_result is not None:
+                return auto_pair_result
+            if self.get_compare_mirror_target(text_widget) is not None:
+                if self.perform_mirrored_edit(text_widget, delete_selection=has_selection, delete_backward=not has_selection):
+                    return "break"
+            return None
+
+        if keysym == 'Delete':
+            if self.get_compare_mirror_target(text_widget) is not None:
+                if self.perform_mirrored_edit(text_widget, delete_selection=has_selection, delete_forward=not has_selection):
+                    return "break"
+            return None
+
+        if keysym == 'Tab':
+            insert_text = self.get_auto_indent_unit('')
+            if self.get_compare_mirror_target(text_widget) is not None:
+                if self.perform_mirrored_edit(text_widget, inserted_text=insert_text, delete_selection=has_selection):
+                    return "break"
+            return None
+
+        if len(char) == 1 and ord(char) >= 32:
+            auto_pair_result = self.handle_auto_pair_input(text_widget, char)
+            if auto_pair_result is not None:
+                return auto_pair_result
+            if self.get_compare_mirror_target(text_widget) is not None:
+                if self.perform_mirrored_edit(text_widget, inserted_text=char, delete_selection=has_selection):
+                    return "break"
+        return None
+
     def handle_text_keypress(self, event, tab_id):
         doc = self.documents.get(str(tab_id))
         if not doc:
             return
+        self.hide_diagnostic_tooltip()
         state = int(getattr(event, 'state', 0) or 0)
         keysym = str(getattr(event, 'keysym', '') or '')
 
@@ -8295,23 +10576,10 @@ class NotepadX:
         ):
             if not doc.get('virtual_mode') and not doc.get('preview_mode'):
                 self.hide_autocomplete_popup()
-                return self.insert_auto_indent_newline(doc['text'])
+                return self.handle_compare_multi_edit_newline(doc['text'])
 
         if not doc.get('virtual_mode') and not doc.get('preview_mode'):
-            if self.autocomplete_popup_visible() and self.autocomplete_doc_id == str(tab_id):
-                if event.keysym == 'Up':
-                    return self.move_autocomplete_selection(-1)
-                if event.keysym == 'Down':
-                    return self.move_autocomplete_selection(1)
-                if event.keysym in {'Tab', 'Return', 'KP_Enter'}:
-                    if self.accept_autocomplete_selection():
-                        return "break"
-                if event.keysym == 'Escape':
-                    self.hide_autocomplete_popup()
-                    return "break"
-                if event.keysym in {'Left', 'Right', 'Home', 'End', 'Prior', 'Next'}:
-                    self.hide_autocomplete_popup()
-            return
+            return self.handle_editable_text_keypress(event, doc['text'], doc, str(tab_id))
 
         navigation_keys = {
             'Up', 'Down', 'Left', 'Right', 'Prior', 'Next', 'Home', 'End',
@@ -8325,6 +10593,7 @@ class NotepadX:
     def handle_compare_keypress(self, event):
         compare_doc = self.compare_view
         source_doc = self.documents.get(self.compare_source_tab) if self.compare_source_tab else None
+        self.hide_diagnostic_tooltip()
         state = int(getattr(event, 'state', 0) or 0)
         keysym = str(getattr(event, 'keysym', '') or '')
 
@@ -8341,23 +10610,10 @@ class NotepadX:
         ):
             if source_doc and not source_doc.get('virtual_mode') and not source_doc.get('preview_mode'):
                 self.hide_autocomplete_popup()
-                return self.insert_auto_indent_newline(compare_doc['text'])
+                return self.handle_compare_multi_edit_newline(compare_doc['text'])
         if source_doc and not source_doc.get('virtual_mode') and not source_doc.get('preview_mode'):
             compare_doc_id = str(compare_doc['frame']) if compare_doc else None
-            if self.autocomplete_popup_visible() and self.autocomplete_doc_id == compare_doc_id:
-                if event.keysym == 'Up':
-                    return self.move_autocomplete_selection(-1)
-                if event.keysym == 'Down':
-                    return self.move_autocomplete_selection(1)
-                if event.keysym in {'Tab', 'Return', 'KP_Enter'}:
-                    if self.accept_autocomplete_selection():
-                        return "break"
-                if event.keysym == 'Escape':
-                    self.hide_autocomplete_popup()
-                    return "break"
-                if event.keysym in {'Left', 'Right', 'Home', 'End', 'Prior', 'Next'}:
-                    self.hide_autocomplete_popup()
-            return
+            return self.handle_editable_text_keypress(event, compare_doc['text'], compare_doc, compare_doc_id)
 
         navigation_keys = {
             'Up', 'Down', 'Left', 'Right', 'Prior', 'Next', 'Home', 'End',
@@ -8377,6 +10633,8 @@ class NotepadX:
             return
         self.set_last_active_editor_widget(compare_text)
         event_type = str(getattr(event, 'type', ''))
+        if event_type in {'4', '5', '6', 'Motion', 'ButtonPress', 'ButtonRelease', '35', 'KeyRelease'}:
+            self.hide_diagnostic_tooltip()
         if self.is_shift_selection_navigation(event):
             self.hide_autocomplete_popup()
         elif event_type in {'4', '5', '6', 'Motion', 'ButtonPress', 'ButtonRelease'}:
@@ -8386,8 +10644,10 @@ class NotepadX:
         if event_type in {'3', 'KeyRelease'}:
             self.schedule_text_theme_effect(compare_doc)
             self.schedule_spellcheck(compare_doc)
+            self.schedule_diagnostics(compare_doc)
         self.update_bracket_match_highlight(compare_doc)
         self.update_line_number_gutter(compare_doc)
+        self.schedule_minimap_refresh(compare_doc)
         self.update_status()
 
     def on_compare_modified(self, event=None):
@@ -8426,6 +10686,7 @@ class NotepadX:
             compare_doc['last_insert_index'] = compare_insert
             compare_text.edit_modified(False)
             self.update_line_number_gutter(compare_doc)
+            self.schedule_minimap_refresh(compare_doc)
             self.update_status()
             return
 
@@ -8447,12 +10708,18 @@ class NotepadX:
         if compare_doc.get('syntax_mode') and compare_doc.get('syntax_mode') != 'python':
             self.schedule_syntax_highlight(compare_doc)
         self.schedule_text_theme_effect(compare_doc)
+        compare_doc['symbol_cache_signature'] = None
+        compare_doc['symbol_cache'] = None
+        self.invalidate_fold_regions(compare_doc)
+        self.schedule_diagnostics(compare_doc)
         self.update_line_number_gutter(compare_doc)
+        self.schedule_minimap_refresh(compare_doc)
         self.update_status()
         compare_text.edit_modified(False)
 
     def on_text_mousewheel(self, event, tab_id):
         doc = self.documents.get(str(tab_id))
+        self.hide_diagnostic_tooltip()
         if not doc or not doc.get('virtual_mode'):
             self.update_status()
             return
@@ -8493,6 +10760,7 @@ class NotepadX:
         doc = self.documents.get(str(tab_id))
         if not doc:
             return
+        self.hide_diagnostic_tooltip()
 
         if not doc.get('virtual_mode'):
             doc['text'].yview(*args)
@@ -8542,6 +10810,7 @@ class NotepadX:
     def on_compare_vertical_scroll(self, *args):
         if not self.compare_view or not self.compare_view.get('text'):
             return
+        self.hide_diagnostic_tooltip()
         self.compare_view['text'].yview(*args)
         self.update_line_number_gutter(self.compare_view)
 
@@ -8917,6 +11186,7 @@ class NotepadX:
     def show_context_menu_for_doc(self, event, doc, select_tab):
         if not doc:
             return "break"
+        self.hide_diagnostic_tooltip()
 
         if select_tab:
             self.notebook.select(doc['frame'])
@@ -8972,7 +11242,7 @@ class NotepadX:
     def show_note_popup(self, doc, note_data, x, y):
         self.hide_note_popup(doc)
 
-        popup = tk.Toplevel(self.root)
+        popup = self.create_toplevel(self.root)
         popup.wm_overrideredirect(True)
         popup.configure(bg='#1f2430')
 
@@ -9088,16 +11358,15 @@ class NotepadX:
         popup.bind('<Escape>', lambda e, current=doc: self.hide_note_popup(current))
         doc['note_popup'] = popup
 
-    def prompt_note_input(self, title, prompt, initialvalue="", parent=None):
+    def prompt_text_input(self, title, prompt, initialvalue="", parent=None):
         parent = parent or self.root
         self.hide_autocomplete_popup()
         self.autocomplete_suspended += 1
-        dialog = tk.Toplevel(parent)
+        dialog = self.create_toplevel(parent)
         dialog.title(title)
         dialog.transient(parent)
         dialog.resizable(False, False)
         dialog.configure(bg='#f0f0f0', padx=14, pady=12)
-        self.apply_window_icon(dialog)
 
         result = {'value': None}
         value_var = tk.StringVar(value=initialvalue)
@@ -9151,16 +11420,18 @@ class NotepadX:
             self.autocomplete_suspended = max(0, self.autocomplete_suspended - 1)
             self.hide_autocomplete_popup()
 
+    def prompt_note_input(self, title, prompt, initialvalue="", parent=None):
+        return self.prompt_text_input(title, prompt, initialvalue=initialvalue, parent=parent)
+
     def prompt_note_color(self, title=None, initialvalue='yellow', parent=None):
         parent = parent or self.root
         self.hide_autocomplete_popup()
         self.autocomplete_suspended += 1
-        dialog = tk.Toplevel(parent)
+        dialog = self.create_toplevel(parent)
         dialog.title(title or self.tr('note.color.title', 'Note Color'))
         dialog.transient(parent)
         dialog.resizable(False, False)
         dialog.configure(bg='#f0f0f0', padx=14, pady=12)
-        self.apply_window_icon(dialog)
 
         result = {'value': None}
         color_var = tk.StringVar(value=self.normalize_note_color(initialvalue))
@@ -10491,10 +12762,16 @@ class NotepadX:
             doc['last_insert_index'] = '1.0'
             doc['last_yview'] = 0.0
             doc['last_xview'] = 0.0
+            doc['symbol_cache_signature'] = None
+            doc['symbol_cache'] = None
             self.update_doc_file_signature(doc)
             self.configure_syntax_highlighting(doc['frame'])
             self.restore_doc_notes(doc)
             self.register_doc_for_shared_notes(doc)
+            self.invalidate_fold_regions(doc)
+            self.schedule_diagnostics(doc)
+            self.update_line_number_gutter(doc)
+            self.schedule_minimap_refresh(doc)
             self.refresh_tab_title(doc['frame'])
             if self.compare_active and self.compare_source_tab == str(doc['frame']):
                 self.refresh_compare_panel()
@@ -10531,20 +12808,22 @@ class NotepadX:
         current_doc = self.get_current_doc()
         selected_tab_id = self.notebook.select()
         selected_tab_doc = self.documents.get(str(selected_tab_id)) if selected_tab_id else None
-        selected_file = current_doc['file_path'] if current_doc and current_doc['file_path'] else None
+        selected_file = current_doc['file_path'] if current_doc and current_doc['file_path'] and not current_doc.get('is_remote') else None
         compare_file = None
         compare_base_file = None
         if self.compare_active and self.compare_source_tab:
             compare_doc = self.documents.get(self.compare_source_tab)
-            if compare_doc and compare_doc.get('file_path') and os.path.exists(compare_doc['file_path']):
+            if compare_doc and not compare_doc.get('is_remote') and compare_doc.get('file_path') and os.path.exists(compare_doc['file_path']):
                 compare_file = compare_doc['file_path']
-            if selected_tab_doc and selected_tab_doc.get('file_path') and os.path.exists(selected_tab_doc['file_path']):
+            if selected_tab_doc and not selected_tab_doc.get('is_remote') and selected_tab_doc.get('file_path') and os.path.exists(selected_tab_doc['file_path']):
                 compare_base_file = selected_tab_doc['file_path']
         open_files = []
 
         for tab_id in self.notebook.tabs():
             doc = self.documents.get(str(tab_id))
             if not doc:
+                continue
+            if doc.get('is_remote'):
                 continue
             if doc['file_path'] and os.path.exists(doc['file_path']):
                 open_files.append(doc['file_path'])
@@ -10572,9 +12851,15 @@ class NotepadX:
             'numbered_lines_enabled': bool(self.numbered_lines_enabled.get()),
             'autocomplete_enabled': bool(self.autocomplete_enabled.get()),
             'spell_check_enabled': bool(self.spell_check_enabled.get()),
+            'auto_pair_enabled': bool(self.auto_pair_enabled.get()),
+            'compare_multi_edit_enabled': bool(self.compare_multi_edit_enabled.get()),
             'markdown_preview_enabled': bool(self.markdown_preview_enabled.get()),
             'sync_page_navigation_enabled': bool(self.sync_page_navigation_enabled.get()),
             'edit_with_shell_enabled': bool(self.edit_with_shell_enabled.get()),
+            'minimap_enabled': bool(self.minimap_enabled.get()),
+            'breadcrumbs_enabled': bool(self.breadcrumbs_enabled.get()),
+            'diagnostics_enabled': bool(self.diagnostics_enabled.get()),
+            'autosave_enabled': bool(self.autosave_enabled.get()),
             'current_font_size': int(self.current_font_size),
             'syntax_theme': self.syntax_theme.get(),
             'locale_code': self.locale_code,
@@ -10882,8 +13167,14 @@ class NotepadX:
         self.numbered_lines_enabled.set(bool(session.get('numbered_lines_enabled', True)))
         self.autocomplete_enabled.set(bool(session.get('autocomplete_enabled', True)))
         self.spell_check_enabled.set(bool(session.get('spell_check_enabled', SpellChecker is not None)) and self.ensure_spellcheck_available(notify=False))
+        self.auto_pair_enabled.set(bool(session.get('auto_pair_enabled', True)))
+        self.compare_multi_edit_enabled.set(bool(session.get('compare_multi_edit_enabled', False)))
         self.markdown_preview_enabled.set(bool(session.get('markdown_preview_enabled', False)))
         self.sync_page_navigation_enabled.set(bool(session.get('sync_page_navigation_enabled', False)))
+        self.minimap_enabled.set(bool(session.get('minimap_enabled', True)))
+        self.breadcrumbs_enabled.set(bool(session.get('breadcrumbs_enabled', True)))
+        self.diagnostics_enabled.set(bool(session.get('diagnostics_enabled', True)))
+        self.autosave_enabled.set(bool(session.get('autosave_enabled', True)))
         saved_edit_with_shell = bool(session.get('edit_with_shell_enabled', False))
         shell_registered = self.is_edit_with_shell_registered()
         self.edit_with_shell_enabled.set(saved_edit_with_shell or shell_registered)
@@ -10912,6 +13203,8 @@ class NotepadX:
         else:
             self.status_frame.grid_remove()
         self.toggle_numbered_lines()
+        self.toggle_minimap()
+        self.toggle_breadcrumbs()
         self.refresh_recent_files_menu()
         if not open_files:
             if self.markdown_preview_enabled.get():
@@ -11015,12 +13308,15 @@ class NotepadX:
             self.current_file = None
             self.syntax_mode_selection.set('auto')
             self.root.title(self.app_name)
+            self.update_breadcrumbs()
             return
         self.text = doc['text']
         self.current_file = doc['file_path']
         self.syntax_mode_selection.set(doc.get('syntax_override') or 'auto')
         self.restore_doc_view_state(doc)
         self.update_line_number_gutter(doc)
+        self.schedule_minimap_refresh(doc)
+        self.schedule_diagnostics(doc)
         self.update_window_title()
         if self.markdown_preview_enabled.get():
             self.markdown_preview_source_tab = str(tab_id)
@@ -11051,6 +13347,8 @@ class NotepadX:
 
     def get_doc_name(self, tab_id):
         doc = self.documents[str(tab_id)]
+        if doc.get('display_name'):
+            return os.path.basename(str(doc.get('display_name')))
         if doc['file_path']:
             return os.path.basename(doc['file_path'])
         return doc['untitled_name']
@@ -11090,15 +13388,21 @@ class NotepadX:
             doc['text'].edit_modified(False)
             return
         self.remember_doc_view_state(doc)
+        doc['symbol_cache_signature'] = None
+        doc['symbol_cache'] = None
+        self.invalidate_fold_regions(doc)
         if not doc.get('file_path'):
             self.configure_syntax_highlighting(tab_id)
         if doc.get('syntax_mode') and doc.get('syntax_mode') != 'python':
             self.schedule_syntax_highlight(doc)
         self.schedule_text_theme_effect(doc)
         self.schedule_spellcheck(doc)
+        self.schedule_diagnostics(doc)
+        self.schedule_doc_autosave(doc)
         if self.markdown_preview_enabled.get() and self.markdown_preview_source_tab == str(tab_id):
             self.schedule_markdown_preview_refresh()
         self.update_line_number_gutter(doc)
+        self.schedule_minimap_refresh(doc)
         self.refresh_tab_title(tab_id)
         self.schedule_recovery_save()
         if self.compare_active and self.compare_source_tab == str(tab_id) and not self.compare_view.get('pushing_to_source'):
@@ -11173,7 +13477,7 @@ class NotepadX:
             return "break"
 
         closed_file_path = doc.get('file_path')
-        if closed_file_path:
+        if closed_file_path and not doc.get('is_remote'):
             self.closed_session_files.add(closed_file_path)
 
         if self.compare_active and self.compare_source_tab == str(doc['frame']):
@@ -11209,6 +13513,7 @@ class NotepadX:
         if not doc:
             return
         self.cancel_text_theme_effect_job(doc)
+        self.cancel_doc_autosave(doc)
         syntax_job = doc.get('syntax_job')
         if syntax_job:
             try:
@@ -11216,6 +13521,20 @@ class NotepadX:
             except tk.TclError:
                 pass
             doc['syntax_job'] = None
+        diagnostic_job = doc.get('diagnostic_job')
+        if diagnostic_job:
+            try:
+                self.root.after_cancel(diagnostic_job)
+            except tk.TclError:
+                pass
+            doc['diagnostic_job'] = None
+        minimap_job = doc.get('minimap_job')
+        if minimap_job:
+            try:
+                self.root.after_cancel(minimap_job)
+            except tk.TclError:
+                pass
+            doc['minimap_job'] = None
         spellcheck_job = doc.get('spellcheck_job')
         if spellcheck_job:
             try:
@@ -11267,6 +13586,7 @@ class NotepadX:
         self.menu.add_cascade(label=t('menu.file', 'File'), menu=file_menu)
         file_menu.add_command(label=t('menu.file.open', 'Open'), command=self.open_file, accelerator=t('accel.open', 'Ctrl+W'))
         file_menu.add_command(label=t('menu.file.open_project', 'Open Project'), command=self.open_project, accelerator=t('accel.open_project', 'Ctrl+Shift+W'))
+        file_menu.add_command(label='Open Remote (SSH)', command=self.open_remote_file_dialog, accelerator='Ctrl+Alt+O')
         file_menu.add_command(label=t('menu.file.grab_git', 'Grab Git'), command=self.grab_git_project, accelerator=t('accel.grab_git', 'Ctrl+Shift+G'))
         self.recent_menu = tk.Menu(file_menu, tearoff=0, bg='#2d2d2d', fg=self.fg_color,
                                    activebackground='#3a3a3a')
@@ -11300,6 +13620,13 @@ class NotepadX:
         edit_menu.add_command(label=t('menu.edit.find_next', 'Find Next'), command=self.find_next, accelerator=t('accel.find_next', 'F3'))
         edit_menu.add_command(label=t('menu.edit.find_previous', 'Find Previous'), command=self.find_previous, accelerator=t('accel.find_previous', 'Shift+F3'))
         edit_menu.add_command(label=t('menu.edit.replace', 'Replace'), command=self.show_replace_panel, accelerator=t('accel.replace', 'Ctrl+R'))
+        edit_menu.add_command(label='Command Panel', command=self.show_command_panel, accelerator='Ctrl+Shift+K')
+        edit_menu.add_command(label='Jump to Symbol', command=self.show_symbol_navigator, accelerator='Ctrl+Shift+O')
+        edit_menu.add_command(label='Project Symbols', command=lambda: self.show_symbol_navigator(project_scope=True), accelerator='Ctrl+Alt+P')
+        edit_menu.add_separator()
+        edit_menu.add_command(label='Toggle Fold', command=self.toggle_fold_at_cursor, accelerator='F9')
+        edit_menu.add_command(label='Collapse All Folds', command=self.collapse_all_folds, accelerator='Shift+F9')
+        edit_menu.add_command(label='Expand All Folds', command=self.expand_all_folds, accelerator='Ctrl+F9')
         edit_menu.add_separator()
         edit_menu.add_command(label=t('menu.edit.date', 'Date'), command=self.insert_date, accelerator=t('accel.date', 'Ctrl+D'))
         edit_menu.add_command(label=t('menu.edit.time_date', 'Time/Date'), command=self.insert_time_date, accelerator=t('accel.time_date', 'Ctrl+Shift+D'))
@@ -11318,6 +13645,12 @@ class NotepadX:
         view_menu.add_checkbutton(label=t('menu.view.numbered_lines', 'Numbered Lines'), variable=self.numbered_lines_enabled, command=self.toggle_numbered_lines)
         view_menu.add_checkbutton(label=t('menu.view.autocomplete', 'Autocomplete'), variable=self.autocomplete_enabled, command=self.toggle_autocomplete)
         view_menu.add_checkbutton(label=t('menu.view.spell_check', 'Spell Check'), variable=self.spell_check_enabled, command=self.toggle_spell_check, accelerator=t('accel.spell_check', 'F7'))
+        view_menu.add_checkbutton(label='Auto Pair Brackets/Quotes', variable=self.auto_pair_enabled, command=self.save_session)
+        view_menu.add_checkbutton(label='Compare Multi-Edit', variable=self.compare_multi_edit_enabled, command=self.save_session)
+        view_menu.add_checkbutton(label='Minimap', variable=self.minimap_enabled, command=self.toggle_minimap)
+        view_menu.add_checkbutton(label='Breadcrumbs', variable=self.breadcrumbs_enabled, command=self.toggle_breadcrumbs)
+        view_menu.add_checkbutton(label='Diagnostics', variable=self.diagnostics_enabled, command=self.toggle_diagnostics)
+        view_menu.add_checkbutton(label='Auto Save', variable=self.autosave_enabled, command=self.save_session)
         view_menu.add_checkbutton(label=t('menu.view.word_wrap', 'Word Wrap'), variable=self.word_wrap_enabled, command=self.toggle_word_wrap)
         view_menu.add_checkbutton(label=t('menu.view.preview_markdown', 'Preview Markdown'), variable=self.markdown_preview_enabled, command=self.toggle_markdown_preview, accelerator=t('accel.preview_markdown', 'Ctrl+Shift+P'))
         view_menu.add_command(label=t('menu.view.currently_editing', 'Currently Editing'), command=self.toggle_currently_editing_panel, accelerator=t('accel.currently_editing', 'Ctrl+Shift+C'))
@@ -11368,12 +13701,11 @@ class NotepadX:
         help_menu.add_command(label=t('menu.help.about', 'About Notepad-X'), command=self.show_about_dialog)
 
     def show_help_contents(self):
-        dialog = tk.Toplevel(self.root)
+        dialog = self.create_toplevel(self.root)
         dialog.title(self.tr('app.help_title', 'Notepad-X Help'))
         dialog.transient(self.root)
         dialog.configure(bg=self.bg_color)
         dialog.geometry("900x650")
-        self.apply_window_icon(dialog)
 
         container = tk.Frame(dialog, bg=self.bg_color)
         container.pack(fill='both', expand=True, padx=12, pady=12)
@@ -11453,11 +13785,10 @@ class NotepadX:
             if doc is current_doc:
                 continue
             choices.append((self.get_doc_name(doc['frame']), doc))
-        dialog = tk.Toplevel(self.root)
+        dialog = self.create_toplevel(self.root)
         dialog.title(self.tr('app.compare_title', 'Compare With Tab'))
         dialog.transient(self.root)
         dialog.configure(bg=self.bg_color, padx=12, pady=12)
-        self.apply_window_icon(dialog)
         tk.Label(
             dialog,
             text=self.tr('compare.choose_prompt', 'Choose a tab to compare with the current one:'),
@@ -11641,10 +13972,16 @@ class NotepadX:
 
         compare_doc = self.compare_view
         compare_doc['file_path'] = doc.get('file_path')
+        compare_doc['display_name'] = f"Preview: {self.get_doc_name(doc['frame'])}"
         compare_doc['syntax_override'] = None
         compare_doc['large_file_mode'] = False
         compare_doc['preview_mode'] = True
         compare_doc['virtual_mode'] = False
+        compare_doc['is_remote'] = False
+        compare_doc['remote_spec'] = None
+        compare_doc['remote_host'] = None
+        compare_doc['remote_path'] = None
+        compare_doc['remote_shadow_path'] = None
         compare_doc['window_start_line'] = 1
         compare_doc['window_end_line'] = 1
         compare_doc['total_file_lines'] = 1
@@ -11679,6 +14016,8 @@ class NotepadX:
         compare_doc['total_file_lines'] = max(1, int(compare_text.index('end-1c').split('.')[0]))
         compare_doc['window_end_line'] = compare_doc['total_file_lines']
         self.update_line_number_gutter(compare_doc)
+        self.schedule_minimap_refresh(compare_doc)
+        self.schedule_diagnostics(compare_doc)
         if not compare_container_visible:
             self.schedule_compare_layout_refresh()
         self.update_status()
@@ -11702,8 +14041,14 @@ class NotepadX:
             self.compare_view['virtual_mode'] = False
             self.compare_view['large_file_mode'] = False
             self.compare_view['file_path'] = None
+            self.compare_view['display_name'] = None
             self.compare_view['syntax_override'] = None
             self.compare_view['syntax_mode'] = None
+            self.compare_view['is_remote'] = False
+            self.compare_view['remote_spec'] = None
+            self.compare_view['remote_host'] = None
+            self.compare_view['remote_path'] = None
+            self.compare_view['remote_shadow_path'] = None
             self.compare_view['window_start_line'] = 1
             self.compare_view['window_end_line'] = 1
             self.compare_view['total_file_lines'] = 1
@@ -11735,10 +14080,16 @@ class NotepadX:
 
         compare_doc = self.compare_view
         compare_doc['file_path'] = doc.get('file_path')
+        compare_doc['display_name'] = doc.get('display_name')
         compare_doc['syntax_override'] = doc.get('syntax_override')
         compare_doc['large_file_mode'] = bool(doc.get('large_file_mode'))
         compare_doc['preview_mode'] = bool(doc.get('preview_mode'))
         compare_doc['virtual_mode'] = bool(doc.get('virtual_mode'))
+        compare_doc['is_remote'] = bool(doc.get('is_remote'))
+        compare_doc['remote_spec'] = doc.get('remote_spec')
+        compare_doc['remote_host'] = doc.get('remote_host')
+        compare_doc['remote_path'] = doc.get('remote_path')
+        compare_doc['remote_shadow_path'] = doc.get('remote_shadow_path')
         compare_doc['window_start_line'] = doc.get('window_start_line', 1)
         compare_doc['window_end_line'] = doc.get('window_end_line', 1)
         compare_doc['total_file_lines'] = doc.get('total_file_lines', 1)
@@ -11774,8 +14125,13 @@ class NotepadX:
         except (tk.TclError, TypeError, ValueError):
             pass
         self.configure_syntax_for_doc(compare_doc)
+        compare_doc['symbol_cache_signature'] = None
+        compare_doc['symbol_cache'] = None
+        self.invalidate_fold_regions(compare_doc)
+        self.schedule_diagnostics(compare_doc)
         self.sync_compare_note_tags(doc)
         self.update_line_number_gutter(compare_doc)
+        self.schedule_minimap_refresh(compare_doc)
         self.update_status()
 
     def set_compare_sash_position(self):
@@ -11867,10 +14223,16 @@ class NotepadX:
             self.compare_view['syntax_job'] = None
             self.compare_view['syntax_mode'] = None
             self.compare_view['file_path'] = None
+            self.compare_view['display_name'] = None
             self.compare_view['syntax_override'] = None
             self.compare_view['large_file_mode'] = False
             self.compare_view['preview_mode'] = False
             self.compare_view['virtual_mode'] = False
+            self.compare_view['is_remote'] = False
+            self.compare_view['remote_spec'] = None
+            self.compare_view['remote_host'] = None
+            self.compare_view['remote_path'] = None
+            self.compare_view['remote_shadow_path'] = None
             self.compare_view['text'].configure(state='normal')
             self.compare_view['text'].delete('1.0', tk.END)
 
@@ -11893,13 +14255,12 @@ class NotepadX:
         return "break"
 
     def show_about_dialog(self):
-        dialog = tk.Toplevel(self.root)
+        dialog = self.create_toplevel(self.root)
         dialog.title(self.tr('app.about_title', 'About Notepad-X'))
         dialog.transient(self.root)
         dialog.resizable(False, False)
         dialog.configure(bg=self.bg_color, padx=24, pady=20)
         dialog.pong_after_id = None
-        self.apply_window_icon(dialog)
 
         content = tk.Frame(dialog, bg=self.bg_color)
         content.pack()
@@ -12289,12 +14650,11 @@ class NotepadX:
 
     def prompt_grab_git_repository(self, parent=None):
         parent = parent or self.root
-        dialog = tk.Toplevel(parent)
+        dialog = self.create_toplevel(parent)
         dialog.title(self.tr('grab_git.title', 'Grab Git'))
         dialog.transient(parent)
         dialog.resizable(False, False)
         dialog.configure(bg=self.bg_color, padx=14, pady=12)
-        self.apply_window_icon(dialog)
 
         result = {'value': None}
         repo_var = tk.StringVar()
@@ -12396,12 +14756,11 @@ class NotepadX:
 
     def prompt_grab_git_files_to_open(self, root_dir, file_paths, parent=None):
         parent = parent or self.root
-        dialog = tk.Toplevel(parent)
+        dialog = self.create_toplevel(parent)
         dialog.title(self.tr('grab_git.open_title', 'Open Downloaded Project Files'))
         dialog.transient(parent)
         dialog.configure(bg=self.bg_color, padx=12, pady=12)
         dialog.minsize(760, 420)
-        self.apply_window_icon(dialog)
         dialog.grid_rowconfigure(1, weight=1)
         dialog.grid_columnconfigure(0, weight=1)
 
@@ -12523,12 +14882,11 @@ class NotepadX:
             )
             return "break"
 
-        progress_dialog = tk.Toplevel(self.root)
+        progress_dialog = self.create_toplevel(self.root)
         progress_dialog.title(self.tr('grab_git.downloading', 'Downloading Project'))
         progress_dialog.transient(self.root)
         progress_dialog.resizable(False, False)
         progress_dialog.configure(bg=self.bg_color, padx=14, pady=12)
-        self.apply_window_icon(progress_dialog)
 
         tk.Label(
             progress_dialog,
@@ -13086,56 +15444,7 @@ class NotepadX:
 
     def save(self, event=None):
         doc = self.get_current_doc()
-        if not doc:
-            return False
-        if doc.get('preview_mode') or doc.get('virtual_mode'):
-            messagebox.showinfo(
-                self.tr('large_file.title', 'Large File Mode'),
-                self.tr(
-                    'large_file.save_disabled',
-                    'This tab is opened in buffered large-file mode. Editing and saving are disabled for the full file view.'
-                ),
-                parent=self.root
-            )
-            return False
-
-        if doc['file_path']:
-            if not self.confirm_external_file_change(doc):
-                return False
-            try:
-                text_content = doc['text'].get('1.0', tk.END).rstrip('\n')
-                if doc.get('encrypted_file'):
-                    self.write_encrypted_text_file(
-                        doc['file_path'],
-                        text_content,
-                        header=doc.get('encryption_header'),
-                        key=doc.get('encryption_key'),
-                        original_name=doc.get('file_path')
-                    )
-                else:
-                    self.write_file_atomically(doc['file_path'], text_content)
-            except PermissionError as exc:
-                self.show_filesystem_error(self.tr('save.failed_title', 'Save Failed'), doc['file_path'], exc)
-                return False
-            except RuntimeError as exc:
-                messagebox.showerror(self.tr('save.failed_title', 'Save Failed'), str(exc), parent=self.root)
-                return False
-            except ValueError as exc:
-                messagebox.showerror(self.tr('save.failed_title', 'Save Failed'), str(exc), parent=self.root)
-                return False
-            except OSError as exc:
-                self.log_exception("save file", exc)
-                self.show_filesystem_error(self.tr('save.failed_title', 'Save Failed'), doc['file_path'], exc)
-                return False
-            doc['text'].edit_modified(False)
-            self.update_doc_file_signature(doc)
-            self.add_recent_file(doc['file_path'])
-            self.refresh_tab_title(doc['frame'])
-            self.update_status()
-            self.save_session()
-            return True
-        else:
-            return self.save_as()
+        return self.save_document_content(doc, autosave=False, show_errors=True, update_recent=True)
 
     def save_all(self, event=None):
         original_tab = self.notebook.select()
@@ -13182,6 +15491,8 @@ class NotepadX:
             if old_file_path and old_file_path != file_path:
                 self.unregister_doc_from_shared_notes(doc)
             doc['file_path'] = os.path.abspath(file_path)
+            self.clear_remote_metadata(doc)
+            doc['display_name'] = None
             doc['untitled_name'] = None
             self.configure_syntax_highlighting(doc['frame'])
             self.set_active_document(doc['frame'])
@@ -13461,13 +15772,24 @@ class NotepadX:
         self.root.clipboard_append(selection)
         self.root.update_idletasks()
 
+        mirror_target = self.get_compare_mirror_target(target)
+        if mirror_target is not None:
+            self.sync_mirror_target_position(target, mirror_target)
         try:
             target.delete('sel.first', 'sel.last')
             target.edit_modified(True)
         except tk.TclError:
             return "break"
+        if mirror_target is not None:
+            try:
+                mirror_target.delete('sel.first', 'sel.last')
+                mirror_target.edit_modified(True)
+            except tk.TclError:
+                pass
 
         self.set_last_active_editor_widget(target)
+        if mirror_target is not None:
+            self.notify_text_widget_changed(mirror_target)
         if compare_widget is not None and target == compare_widget:
             self.on_compare_modified()
         elif doc:
@@ -13532,13 +15854,28 @@ class NotepadX:
         except tk.TclError:
             pass
 
+        mirror_target = self.get_compare_mirror_target(target)
+        if mirror_target is not None:
+            self.sync_mirror_target_position(target, mirror_target)
         target.insert(tk.INSERT, clipboard_text)
         try:
             target.edit_modified(True)
         except tk.TclError:
             pass
+        if mirror_target is not None:
+            try:
+                mirror_target.delete('sel.first', 'sel.last')
+            except tk.TclError:
+                pass
+            try:
+                mirror_target.insert(tk.INSERT, clipboard_text)
+                mirror_target.edit_modified(True)
+            except tk.TclError:
+                pass
         target.see(tk.INSERT)
         self.set_last_active_editor_widget(target)
+        if mirror_target is not None:
+            self.notify_text_widget_changed(mirror_target)
         if compare_widget is not None and target == compare_widget:
             self.on_compare_modified()
         elif doc:
@@ -13566,12 +15903,11 @@ class NotepadX:
         return "break"
 
     def show_font_dialog(self, event=None):
-        dialog = tk.Toplevel(self.root)
+        dialog = self.create_toplevel(self.root)
         dialog.title(self.tr('font.title', 'Font'))
         dialog.transient(self.root)
         dialog.resizable(False, False)
         dialog.configure(bg=self.bg_color, padx=16, pady=16)
-        self.apply_window_icon(dialog)
 
         tk.Label(dialog, text=self.tr('font.family', 'Font:'), bg=self.bg_color, fg=self.fg_color).grid(row=0, column=0, sticky='w', pady=(0, 8))
         tk.Label(dialog, text=self.tr('font.size', 'Size:'), bg=self.bg_color, fg=self.fg_color).grid(row=0, column=1, sticky='w', padx=(12, 0), pady=(0, 8))
@@ -13668,12 +16004,11 @@ class NotepadX:
 
     # ─── Goto Line ───────────────────────────────────────────────
     def goto_line_dialog(self, event=None):
-        dialog = tk.Toplevel(self.root)
+        dialog = self.create_toplevel(self.root)
         dialog.title(self.tr('goto_line.title', 'Go To Line'))
         dialog.transient(self.root)
         dialog.resizable(False, False)
         dialog.configure(bg=self.bg_color)
-        self.apply_window_icon(dialog)
 
         tk.Label(dialog, text=self.tr('goto_line.prompt', 'Line Number:'), bg=self.bg_color, fg=self.fg_color)\
             .grid(row=0, column=0, padx=6, pady=8)
