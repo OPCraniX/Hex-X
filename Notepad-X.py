@@ -590,6 +590,7 @@ def is_notepadx_support_file_path(file_path):
         or candidate_name.endswith('.notepadx.editors.json')
         or candidate_name == 'notepad-x.recovery.json'
         or candidate_name == 'notepad-x.crash.log'
+        or candidate_name == 'notepad-x.startup.trace.log'
         or (candidate_name.startswith('notepad-x.') and candidate_name.endswith('.session.json'))
         or (candidate_name.startswith('notepad-x.') and candidate_name.endswith('.editor.json'))
     )
@@ -736,8 +737,7 @@ class NotepadX:
         self.session_path = self.build_session_path(config_dir)
         self.editor_identity_path = self.build_editor_identity_path(config_dir)
         self.recovery_path = os.path.join(self.app_dir, "Notepad-X.recovery.json")
-        self.crash_log_path = os.path.join(self.app_dir, "Notepad-X.crash.log")
-        self.startup_trace_path = os.path.join(self.app_dir, "Notepad-X.startup.trace.log")
+        self.refresh_log_paths()
         self.help_path = os.path.join(self.resource_dir, "Notepad-X-help.txt")
         self.note_color_labels = {
             'yellow': self.tr('note.filter.yellow', 'Yellow'),
@@ -1071,6 +1071,15 @@ class NotepadX:
 
     def get_config_dir(self, base_dir):
         return os.path.join(base_dir, 'cfg')
+
+    def get_logs_dir(self, base_dir):
+        return os.path.join(base_dir, 'logs')
+
+    def refresh_log_paths(self):
+        self.logs_dir = self.get_logs_dir(self.app_dir)
+        os.makedirs(self.logs_dir, exist_ok=True)
+        self.crash_log_path = os.path.join(self.logs_dir, "Notepad-X.crash.log")
+        self.startup_trace_path = os.path.join(self.logs_dir, "Notepad-X.startup.trace.log")
 
     def get_locale_dir(self, config_dir):
         return os.path.join(config_dir, 'language')
@@ -1932,7 +1941,7 @@ class NotepadX:
         self.session_path = self.build_session_path(config_dir)
         self.editor_identity_path = self.build_editor_identity_path(config_dir)
         self.recovery_path = os.path.join(self.app_dir, "Notepad-X.recovery.json")
-        self.crash_log_path = os.path.join(self.app_dir, "Notepad-X.crash.log")
+        self.refresh_log_paths()
 
     def move_support_paths_to_emergency_dir(self):
         fallback_dir = self.get_emergency_support_dir()
@@ -1946,7 +1955,7 @@ class NotepadX:
         self.session_path = self.build_session_path(config_dir)
         self.editor_identity_path = self.build_editor_identity_path(config_dir)
         self.recovery_path = os.path.join(self.app_dir, "Notepad-X.recovery.json")
-        self.crash_log_path = os.path.join(self.app_dir, "Notepad-X.crash.log")
+        self.refresh_log_paths()
 
     def utc_timestamp(self):
         return datetime.now(timezone.utc).isoformat(timespec='seconds')
