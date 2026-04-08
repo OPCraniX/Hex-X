@@ -98,6 +98,7 @@ DEFAULT_LOCALE_STRINGS = {
     "common.go": "Go",
     "common.color": "Color:",
     "clipboard.line_copied": "Copied line {line_number} to clipboard",
+    "clipboard.path_copied": "Copied to clipboard",
     "context.cut": "Cut",
     "context.copy": "Copy",
     "context.paste": "Paste",
@@ -4564,6 +4565,34 @@ class NotepadX:
             return doc.get('display_name')
         return doc.get('file_path')
 
+    def get_doc_copyable_path(self, doc):
+        if not doc:
+            return None
+        if doc.get('is_remote') and doc.get('remote_spec'):
+            return doc.get('remote_spec')
+        file_path = doc.get('file_path')
+        if isinstance(file_path, str) and file_path.strip():
+            return file_path
+        display_name = doc.get('display_name')
+        if isinstance(display_name, str) and display_name.strip():
+            return display_name
+        return None
+
+    def get_doc_copyable_name(self, doc):
+        if not doc:
+            return None
+        frame = doc.get('frame')
+        if frame is not None and str(frame) in self.documents:
+            return self.get_doc_name(frame)
+        display_path = self.get_doc_display_path(doc)
+        if isinstance(display_path, str) and display_path.strip():
+            normalized_path = str(display_path).rstrip('/\\')
+            return os.path.basename(normalized_path) or display_path
+        untitled_name = doc.get('untitled_name')
+        if isinstance(untitled_name, str) and untitled_name.strip():
+            return untitled_name
+        return None
+
     def get_doc_working_directory(self, doc=None):
         doc = doc or self.get_current_doc()
         if not doc:
@@ -4937,6 +4966,7 @@ class NotepadX:
     def update_breadcrumbs(self):
         current_doc = self.get_current_doc()
         label_text = ""
+        current_copy_path = self.get_doc_copyable_path(current_doc)
         if self.breadcrumbs_enabled.get():
             label_text = self.build_breadcrumb_text(current_doc, self.get_active_search_widget())
         try:
@@ -4944,15 +4974,23 @@ class NotepadX:
                 self.breadcrumbs_bar.grid()
             else:
                 self.breadcrumbs_bar.grid_remove()
-            self.breadcrumbs_label.config(text=label_text)
+            self.breadcrumbs_label.config(text=label_text, cursor='hand2' if current_copy_path else 'arrow')
         except tk.TclError:
             pass
 
         compare_text = ""
+        compare_copy_path = None
+        compare_copy_name = None
         if self.is_side_panel_visible() and self.compare_view:
             compare_text = self.build_breadcrumb_text(self.compare_view, self.compare_view.get('text'))
+            compare_copy_path = self.get_doc_copyable_path(self.compare_view)
+            compare_copy_name = self.get_doc_copyable_name(self.compare_view)
         try:
-            self.compare_breadcrumbs.config(text=compare_text)
+            self.compare_breadcrumbs.config(text=compare_text, cursor='hand2' if compare_copy_path else 'arrow')
+        except tk.TclError:
+            pass
+        try:
+            self.compare_title.config(cursor='hand2' if compare_copy_name else 'arrow')
         except tk.TclError:
             pass
 
@@ -4960,6 +4998,54 @@ class NotepadX:
         self.update_breadcrumbs()
         self.save_session()
         return "break"
+
+    def should_copy_breadcrumb_name(self, doc, event=None):
+        copy_name = self.get_doc_copyable_name(doc)
+        if not copy_name:
+            return False
+        copy_path = self.get_doc_copyable_path(doc)
+        if not copy_path or copy_path == copy_name:
+            return True
+        widget = getattr(event, 'widget', None)
+        if widget is None:
+            return False
+        try:
+            widget_font = tkfont.Font(font=widget.cget('font'))
+            padding_x = int(float(widget.cget('padx') or 0))
+            click_limit = padding_x + widget_font.measure(copy_name) + 4
+        except (tk.TclError, TypeError, ValueError):
+            return False
+        return int(getattr(event, 'x', 0) or 0) <= click_limit
+
+    def copy_text_to_clipboard(self, clipboard_text, event=None):
+        if not clipboard_text:
+            return "break"
+        try:
+            self.root.clipboard_clear()
+            self.root.clipboard_append(clipboard_text)
+            self.root.update_idletasks()
+        except tk.TclError:
+            return "break"
+        widget = getattr(event, 'widget', None)
+        if widget is not None:
+            toast_x = widget.winfo_rootx() + getattr(event, 'x', 0)
+            toast_y = widget.winfo_rooty() + getattr(event, 'y', 0)
+        else:
+            toast_x = self.root.winfo_pointerx()
+            toast_y = self.root.winfo_pointery()
+        self.show_toast(self.tr('clipboard.path_copied', 'Copied to clipboard'), x=toast_x, y=toast_y)
+        return "break"
+
+    def copy_breadcrumb_path(self, event=None, target='primary'):
+        doc = self.compare_view if target in {'compare', 'compare_title'} else self.get_current_doc()
+        if target == 'compare_title':
+            clipboard_text = self.get_doc_copyable_name(doc) or self.get_doc_copyable_path(doc)
+        else:
+            if self.should_copy_breadcrumb_name(doc, event):
+                clipboard_text = self.get_doc_copyable_name(doc) or self.get_doc_copyable_path(doc)
+            else:
+                clipboard_text = self.get_doc_copyable_path(doc) or self.get_doc_copyable_name(doc)
+        return self.copy_text_to_clipboard(clipboard_text, event)
 
     def sanitize_search_history_entries(self, entries):
         cleaned_entries = []
@@ -7895,9 +7981,11 @@ class NotepadX:
             anchor='w',
             padx=10,
             pady=6,
-            font=('Segoe UI', 9)
+            font=('Segoe UI', 9),
+            cursor='arrow'
         )
         self.breadcrumbs_label.grid(row=0, column=0, sticky='ew')
+        self.breadcrumbs_label.bind('<Button-1>', lambda e: self.copy_breadcrumb_path(e, target='primary'))
 
         self.notebook = ttk.Notebook(self.primary_editor_container, style='EditorTabs.TNotebook')
         self.notebook.grid(row=1, column=0, sticky='nsew')
@@ -7923,9 +8011,11 @@ class NotepadX:
             font=('Segoe UI', 10, 'bold'),
             anchor='w',
             padx=10,
-            pady=8
+            pady=8,
+            cursor='arrow'
         )
         self.compare_title.grid(row=0, column=0, sticky='ew')
+        self.compare_title.bind('<Button-1>', lambda e: self.copy_breadcrumb_path(e, target='compare_title'))
 
         self.compare_breadcrumbs = tk.Label(
             compare_header,
@@ -7935,9 +8025,11 @@ class NotepadX:
             anchor='w',
             padx=10,
             pady=4,
-            font=('Segoe UI', 9)
+            font=('Segoe UI', 9),
+            cursor='arrow'
         )
         self.compare_breadcrumbs.grid(row=1, column=0, sticky='ew')
+        self.compare_breadcrumbs.bind('<Button-1>', lambda e: self.copy_breadcrumb_path(e, target='compare'))
 
         compare_body = tk.Frame(self.compare_container, bg=self.bg_color)
         compare_body.grid(row=1, column=0, sticky='nsew')
