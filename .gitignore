@@ -16,6 +16,9 @@ Notepad-X.*.editor.json
 Notepad-X.Version.File.txt
 *.json
 !cfg/themes/*.json
+cfg/themes/lolcat.json
+cfg/backups/
+cfg/remote-cache/
 cfg/themes/*.notepadx.notes.json
 cfg/themes/*.notepadx.editors.json
 *.tmp

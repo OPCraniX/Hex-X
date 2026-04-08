@@ -1376,6 +1376,8 @@ class NotepadX:
         builtins = self.get_builtin_theme_definitions()
         for theme_name, theme_payload in builtins.items():
             file_name = f"{self.slugify_theme_name(theme_name)}.json"
+            if file_name == 'lolcat.json':
+                continue
             file_path = os.path.join(theme_dir, file_name)
             if os.path.exists(file_path):
                 continue
