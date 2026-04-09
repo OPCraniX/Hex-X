@@ -162,6 +162,7 @@ DEFAULT_LOCALE_STRINGS = {
     "menu.view.currently_editing": "Currently Editing",
     "menu.view.compare_tabs": "Compare Tabs",
     "menu.view.close_compare_tabs": "Close Compare Tabs",
+    "menu.settings": "Settings",
     "menu.help": "Help",
     "menu.help.contents": "Help Contents",
     "menu.help.about": "About Notepad-X",
@@ -9627,6 +9628,43 @@ class NotepadX:
             }
         return collapsed
 
+    def get_preferred_fold_region_at_line(self, doc, line_number, regions=None, collapsed_regions=None):
+        if not doc:
+            return None
+        try:
+            line_number = max(1, int(line_number))
+        except (TypeError, ValueError):
+            line_number = 1
+        if collapsed_regions is None:
+            collapsed_regions = self.get_collapsed_fold_regions(doc)
+        collapsed_region = collapsed_regions.get(line_number)
+        if collapsed_region:
+            return collapsed_region
+        if regions is None:
+            regions = self.get_cached_fold_regions(doc)
+        exact_matches = [region for region in regions if int(region.get('start', 0) or 0) == line_number]
+        if exact_matches:
+            return min(
+                exact_matches,
+                key=lambda region: (
+                    int(region.get('end', line_number) or line_number) - int(region.get('start', line_number) or line_number),
+                    -int(region.get('start', line_number) or line_number)
+                )
+            )
+        containing_matches = [
+            region for region in regions
+            if int(region.get('start', 0) or 0) < line_number <= int(region.get('end', line_number) or line_number)
+        ]
+        if containing_matches:
+            return min(
+                containing_matches,
+                key=lambda region: (
+                    int(region.get('end', line_number) or line_number) - int(region.get('start', line_number) or line_number),
+                    -int(region.get('start', line_number) or line_number)
+                )
+            )
+        return None
+
     def clear_fold_tags(self, doc):
         if not doc:
             return
@@ -9718,13 +9756,12 @@ class NotepadX:
             current_line = 1
         regions = self.get_cached_fold_regions(target_doc)
         collapsed_regions = self.get_collapsed_fold_regions(target_doc)
-        selected_region = None
-        for region in regions:
-            if int(region['start']) == current_line or (int(region['start']) <= current_line <= int(region['end'])):
-                selected_region = region
-                break
-        if selected_region is None:
-            selected_region = collapsed_regions.get(current_line)
+        selected_region = self.get_preferred_fold_region_at_line(
+            target_doc,
+            current_line,
+            regions=regions,
+            collapsed_regions=collapsed_regions
+        )
         if not selected_region:
             return "break"
         self.toggle_fold_region(target_doc, selected_region)
@@ -14628,8 +14665,6 @@ class NotepadX:
         edit_menu.add_command(label=t('menu.edit.date', 'Date'), command=self.insert_date, accelerator=t('accel.date', 'Ctrl+D'))
         edit_menu.add_command(label=t('menu.edit.time_date', 'Time/Date'), command=self.insert_time_date, accelerator=t('accel.time_date', 'Ctrl+Shift+D'))
         edit_menu.add_command(label=t('menu.edit.font', 'Font'), command=self.show_font_dialog, accelerator=t('accel.font', 'Ctrl+Shift+F'))
-        edit_menu.add_checkbutton(label=t('menu.view.edit_with_notepadx', 'Edit with Notepad-X'), variable=self.edit_with_shell_enabled, command=self.toggle_edit_with_shell)
-        edit_menu.add_checkbutton(label=t('menu.view.sound', 'Sound'), variable=self.sound_enabled, command=self.toggle_sound)
         self.language_menu = tk.Menu(edit_menu, tearoff=0, bg='#2d2d2d', fg=self.fg_color, activebackground='#3a3a3a', postcommand=self.refresh_language_menu)
         edit_menu.add_cascade(label=t('menu.edit.language', 'Language'), menu=self.language_menu)
         self.refresh_language_menu()
@@ -14638,18 +14673,6 @@ class NotepadX:
         self.menu.add_cascade(label=t('menu.view', 'View'), menu=view_menu)
         view_menu.add_command(label=t('menu.view.full_screen', 'Full Screen'), command=self.toggle_fullscreen, accelerator=t('accel.full_screen', 'F11'))
         view_menu.add_command(label=t('menu.view.switch_tab', 'Switch Tab'), command=self.switch_tab_right, accelerator=t('accel.switch_tab', 'Ctrl+Tab'))
-        view_menu.add_checkbutton(label=t('menu.view.status_bar', 'Status Bar'), variable=self.status_bar_enabled, command=self.toggle_status_bar, accelerator=t('accel.status_bar', 'Ctrl+B'))
-        view_menu.add_checkbutton(label=t('menu.view.numbered_lines', 'Numbered Lines'), variable=self.numbered_lines_enabled, command=self.toggle_numbered_lines)
-        view_menu.add_checkbutton(label=t('menu.view.autocomplete', 'Autocomplete'), variable=self.autocomplete_enabled, command=self.toggle_autocomplete)
-        view_menu.add_checkbutton(label=t('menu.view.spell_check', 'Spell Check'), variable=self.spell_check_enabled, command=self.toggle_spell_check, accelerator=t('accel.spell_check', 'F7'))
-        view_menu.add_checkbutton(label='Auto Pair Brackets/Quotes', variable=self.auto_pair_enabled, command=self.save_session)
-        view_menu.add_checkbutton(label='Compare Multi-Edit', variable=self.compare_multi_edit_enabled, command=self.save_session)
-        view_menu.add_checkbutton(label='Minimap', variable=self.minimap_enabled, command=self.toggle_minimap)
-        view_menu.add_checkbutton(label='Breadcrumbs', variable=self.breadcrumbs_enabled, command=self.toggle_breadcrumbs)
-        view_menu.add_checkbutton(label='Diagnostics', variable=self.diagnostics_enabled, command=self.toggle_diagnostics)
-        view_menu.add_checkbutton(label='Auto Save', variable=self.autosave_enabled, command=self.save_session)
-        view_menu.add_checkbutton(label=t('menu.view.word_wrap', 'Word Wrap'), variable=self.word_wrap_enabled, command=self.toggle_word_wrap)
-        view_menu.add_checkbutton(label=t('menu.view.preview_markdown', 'Preview Markdown'), variable=self.markdown_preview_enabled, command=self.toggle_markdown_preview, accelerator=t('accel.preview_markdown', 'Ctrl+Shift+P'))
         view_menu.add_command(label=t('menu.view.currently_editing', 'Currently Editing'), command=self.toggle_currently_editing_panel, accelerator=t('accel.currently_editing', 'Ctrl+Shift+C'))
         view_menu.add_command(label=t('menu.edit.cycle_notes', 'Cycle Notes'), command=self.goto_next_note, accelerator=t('accel.cycle_notes', 'F4'))
         note_filter_menu = tk.Menu(view_menu, tearoff=0, bg='#2d2d2d', fg=self.fg_color, activebackground='#3a3a3a')
@@ -14663,7 +14686,6 @@ class NotepadX:
         view_menu.add_command(label=t('menu.edit.goto_line', 'Go To Line'), command=self.goto_line_dialog, accelerator=t('accel.goto_line', 'Ctrl+G'))
         view_menu.add_command(label=t('menu.edit.top_of_document', 'Top of Document'), command=self.goto_document_start, accelerator=t('accel.top_of_document', 'Ctrl+PgUp'))
         view_menu.add_command(label=t('menu.edit.bottom_of_document', 'Bottom of Document'), command=self.goto_document_end, accelerator=t('accel.bottom_of_document', 'Ctrl+PgDn'))
-        view_menu.add_checkbutton(label=t('menu.edit.sync_page_navigation', 'Sync PgUp/PgDn in Compare'), variable=self.sync_page_navigation_enabled, command=self.save_session)
         syntax_theme_menu = tk.Menu(view_menu, tearoff=0, bg='#2d2d2d', fg=self.fg_color, activebackground='#3a3a3a')
         view_menu.add_cascade(label=t('menu.view.syntax_theme', 'Syntax Theme'), menu=syntax_theme_menu)
         syntax_theme_menu.add_command(label=t('menu.view.create_theme', 'Create Theme'), command=self.show_create_theme_dialog)
@@ -14690,6 +14712,26 @@ class NotepadX:
             )
         view_menu.add_command(label=t('menu.view.compare_tabs', 'Compare Tabs'), command=self.show_split_compare, accelerator=t('accel.compare_tabs', 'Ctrl+Q'))
         view_menu.add_command(label=t('menu.view.close_compare_tabs', 'Close Compare Tabs'), command=self.close_compare_panel, accelerator=t('accel.close_compare_tabs', 'Ctrl+Shift+X'))
+
+        settings_menu = tk.Menu(self.menu, tearoff=0, bg='#2d2d2d', fg=self.fg_color,
+                                activebackground='#3a3a3a')
+        self.menu.add_cascade(label=t('menu.settings', 'Settings'), menu=settings_menu)
+        settings_menu.add_checkbutton(label=t('menu.view.edit_with_notepadx', 'Edit with Notepad-X'), variable=self.edit_with_shell_enabled, command=self.toggle_edit_with_shell)
+        settings_menu.add_checkbutton(label=t('menu.view.sound', 'Sound'), variable=self.sound_enabled, command=self.toggle_sound)
+        settings_menu.add_separator()
+        settings_menu.add_checkbutton(label=t('menu.view.status_bar', 'Status Bar'), variable=self.status_bar_enabled, command=self.toggle_status_bar, accelerator=t('accel.status_bar', 'Ctrl+B'))
+        settings_menu.add_checkbutton(label=t('menu.view.numbered_lines', 'Numbered Lines'), variable=self.numbered_lines_enabled, command=self.toggle_numbered_lines)
+        settings_menu.add_checkbutton(label=t('menu.view.autocomplete', 'Autocomplete'), variable=self.autocomplete_enabled, command=self.toggle_autocomplete)
+        settings_menu.add_checkbutton(label=t('menu.view.spell_check', 'Spell Check'), variable=self.spell_check_enabled, command=self.toggle_spell_check, accelerator=t('accel.spell_check', 'F7'))
+        settings_menu.add_checkbutton(label='Auto Pair Brackets/Quotes', variable=self.auto_pair_enabled, command=self.save_session)
+        settings_menu.add_checkbutton(label='Compare Multi-Edit', variable=self.compare_multi_edit_enabled, command=self.save_session)
+        settings_menu.add_checkbutton(label='Minimap', variable=self.minimap_enabled, command=self.toggle_minimap)
+        settings_menu.add_checkbutton(label='Breadcrumbs', variable=self.breadcrumbs_enabled, command=self.toggle_breadcrumbs)
+        settings_menu.add_checkbutton(label='Diagnostics', variable=self.diagnostics_enabled, command=self.toggle_diagnostics)
+        settings_menu.add_checkbutton(label='Auto Save', variable=self.autosave_enabled, command=self.save_session)
+        settings_menu.add_checkbutton(label=t('menu.view.word_wrap', 'Word Wrap'), variable=self.word_wrap_enabled, command=self.toggle_word_wrap)
+        settings_menu.add_checkbutton(label=t('menu.view.preview_markdown', 'Preview Markdown'), variable=self.markdown_preview_enabled, command=self.toggle_markdown_preview, accelerator=t('accel.preview_markdown', 'Ctrl+Shift+P'))
+        settings_menu.add_checkbutton(label=t('menu.edit.sync_page_navigation', 'Sync PgUp/PgDn in Compare'), variable=self.sync_page_navigation_enabled, command=self.save_session)
 
         help_menu = tk.Menu(self.menu, tearoff=0, bg='#2d2d2d', fg=self.fg_color,
                             activebackground='#3a3a3a')
