@@ -30,6 +30,7 @@ from datetime import datetime, timezone
 from ctypes import wintypes
 from pathlib import Path
 from types import SimpleNamespace
+from urllib.parse import unquote, urlparse
 
 _null_streams = []
 for _stream_name in ('stdout', 'stderr'):
@@ -586,6 +587,18 @@ def get_notepadx_app_dir():
     return os.path.dirname(os.path.abspath(__file__))
 
 
+def get_notepadx_instance_scope_dir(app_dir):
+    try:
+        candidate_dir = os.path.abspath(str(app_dir))
+    except Exception:
+        return str(app_dir)
+    parent_dir = os.path.dirname(candidate_dir)
+    if os.path.basename(candidate_dir).lower() == 'output':
+        if os.path.exists(os.path.join(parent_dir, 'Notepad-X.py')):
+            return parent_dir
+    return candidate_dir
+
+
 def is_notepadx_support_file_path(file_path):
     try:
         candidate_name = os.path.basename(str(file_path)).lower()
@@ -602,9 +615,97 @@ def is_notepadx_support_file_path(file_path):
     )
 
 
+def get_windows_command_line_args():
+    if os.name != 'nt':
+        return []
+    try:
+        kernel32 = ctypes.WinDLL('kernel32', use_last_error=True)
+        shell32 = ctypes.WinDLL('shell32', use_last_error=True)
+        kernel32.GetCommandLineW.restype = wintypes.LPWSTR
+        shell32.CommandLineToArgvW.argtypes = [wintypes.LPCWSTR, ctypes.POINTER(ctypes.c_int)]
+        shell32.CommandLineToArgvW.restype = ctypes.POINTER(wintypes.LPWSTR)
+        kernel32.LocalFree.argtypes = [ctypes.c_void_p]
+        kernel32.LocalFree.restype = ctypes.c_void_p
+        command_line = kernel32.GetCommandLineW()
+        if not command_line:
+            return []
+        argc = ctypes.c_int(0)
+        argv = shell32.CommandLineToArgvW(command_line, ctypes.byref(argc))
+        if not argv:
+            return []
+        try:
+            return [argv[index] for index in range(max(0, argc.value))]
+        finally:
+            kernel32.LocalFree(argv)
+    except Exception:
+        return []
+
+
+def get_process_launch_arguments():
+    collected_args = []
+    seen_args = set()
+    arg_sources = [list(sys.argv[1:])]
+    windows_args = get_windows_command_line_args()
+    if len(windows_args) > 1:
+        arg_sources.append(list(windows_args[1:]))
+    for source in arg_sources:
+        for raw_arg in source:
+            if not isinstance(raw_arg, str):
+                continue
+            value = raw_arg.strip()
+            if not value:
+                continue
+            lowered = value.lower() if os.name == 'nt' else value
+            if lowered in seen_args:
+                continue
+            seen_args.add(lowered)
+            collected_args.append(value)
+    return collected_args
+
+
+def normalize_startup_path_argument(raw_path, base_dir=None):
+    if raw_path is None:
+        return None
+    value = str(raw_path).strip()
+    if not value:
+        return None
+    for _ in range(2):
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in {'"', "'"}:
+            value = value[1:-1].strip()
+    if not value:
+        return None
+    lowered = value.lower()
+    if lowered in {'--isolated', '/dde', '-dde', '/embedding', '-embedding'} or lowered.startswith('/prefetch:'):
+        return None
+    parsed = urlparse(value)
+    if parsed.scheme.lower() == 'file':
+        candidate_value = unquote(parsed.path or '')
+        if parsed.netloc:
+            candidate_value = f"//{parsed.netloc}{candidate_value}"
+        if os.name == 'nt' and re.match(r'^/[A-Za-z]:', candidate_value):
+            candidate_value = candidate_value[1:]
+        value = candidate_value
+    value = os.path.expandvars(os.path.expanduser(value))
+    if not value:
+        return None
+    candidate_paths = []
+    if os.path.isabs(value):
+        candidate_paths.append(os.path.abspath(value))
+    else:
+        active_base_dir = base_dir or os.getcwd()
+        candidate_paths.append(os.path.abspath(os.path.join(active_base_dir, value)))
+        if active_base_dir != os.getcwd():
+            candidate_paths.append(os.path.abspath(os.path.join(os.getcwd(), value)))
+    for candidate_path in candidate_paths:
+        if os.path.exists(candidate_path):
+            return candidate_path
+    return None
+
+
 def get_notepadx_single_instance_port(app_dir):
+    scope_dir = get_notepadx_instance_scope_dir(app_dir)
     seed = (
-        f"NotepadX::{os.path.normcase(os.path.abspath(app_dir))}::"
+        f"NotepadX::{os.path.normcase(os.path.abspath(scope_dir))}::"
         f"{os.environ.get('USERNAME') or os.environ.get('USER') or 'user'}"
     )
     seed_hash = hashlib.sha256(seed.encode('utf-8')).hexdigest()
@@ -613,12 +714,17 @@ def get_notepadx_single_instance_port(app_dir):
 
 def send_files_to_running_notepadx(app_dir, startup_files):
     normalized_files = []
+    seen_files = set()
     for raw_path in startup_files or []:
-        if not raw_path:
+        candidate_path = normalize_startup_path_argument(raw_path)
+        if not candidate_path:
+            candidate_path = normalize_startup_path_argument(raw_path, base_dir=app_dir)
+        if not candidate_path:
             continue
-        candidate_path = os.path.abspath(raw_path)
-        if not os.path.exists(candidate_path) or is_notepadx_support_file_path(candidate_path):
+        candidate_key = os.path.normcase(candidate_path)
+        if candidate_key in seen_files:
             continue
+        seen_files.add(candidate_key)
         normalized_files.append(candidate_path)
 
     if not normalized_files:
@@ -646,6 +752,10 @@ def send_files_to_running_notepadx(app_dir, startup_files):
 class NotepadX:
     def __init__(self, isolated_session=False, startup_files=None):
         self.root = tk.Tk()
+        try:
+            self.root.withdraw()
+        except tk.TclError:
+            pass
         self._shutdown_requested = False
         self.main_loop_started = False
         self.root.title(DEFAULT_LOCALE_STRINGS.get('app.name', 'Notepad-X'))
@@ -757,6 +867,7 @@ class NotepadX:
         }
         self.max_recent_files = 10
         self.max_search_history = 10
+        self.max_command_history = 25
         self.max_session_files = 100
         self.max_recovery_tabs = 20
         self.shared_editor_stale_seconds = 30
@@ -815,6 +926,11 @@ class NotepadX:
         self.markdown_quote_pattern = re.compile(r'^\s*>\s?(.*)$')
         self.markdown_list_pattern = re.compile(r'^(\s*)([-*+])\s+(.*)$')
         self.markdown_ordered_list_pattern = re.compile(r'^(\s*)(\d+)[.)]\s+(.*)$')
+        self.log_traceback_header_pattern = re.compile(r'^Traceback \(most recent call last\):\s*$', re.IGNORECASE)
+        self.log_traceback_frame_pattern = re.compile(r'^\s*File\s+"[^"]+",\s+line\s+\d+.*$')
+        self.log_exception_line_pattern = re.compile(r'^\s*([A-Za-z_][\w.]*(Error|Exception|Warning))(?::|\b)(.*)$')
+        self.log_error_level_pattern = re.compile(r'^\s*(?:\[[^\]]+\]\s*)?(?:error|fatal|critical)\b[:\s-]*(.*)$', re.IGNORECASE)
+        self.log_warning_level_pattern = re.compile(r'^\s*(?:\[[^\]]+\]\s*)?(?:warn(?:ing)?)\b[:\s-]*(.*)$', re.IGNORECASE)
         self.single_instance_host = '127.0.0.1'
         self.single_instance_port = get_notepadx_single_instance_port(self.app_dir)
         self.single_instance_server = None
@@ -880,9 +996,25 @@ class NotepadX:
         self.command_panel_visible = False
         self.command_history = []
         self.command_history_index = None
+        self.command_history_listbox = None
+        self.command_panel_height = 8
+        self.command_panel_default_height = 8
+        self.command_panel_min_height = 5
+        self.command_panel_max_height = 28
+        self.command_panel_resize_active = False
+        self.command_panel_resize_origin_y = 0
+        self.command_panel_resize_origin_height = self.command_panel_height
         self.command_runner_thread = None
         self.command_runner_active = False
         self.command_output_buffer = []
+        self.default_window_width = 1500
+        self.default_window_height = 700
+        self.window_width = self.default_window_width
+        self.window_height = self.default_window_height
+        self.window_state = 'normal'
+        self.window_layout_job = None
+        self.window_layout_restored = False
+        self.window_layout_save_delay_ms = 650
         self.active_context_menu = None
         self.context_menu_posted_at = 0.0
         self.hovered_editor_widget = None
@@ -890,6 +1022,8 @@ class NotepadX:
         self.diagnostic_tooltip_job = None
         self.diagnostic_tooltip_doc = None
         self.diagnostic_tooltip_signature = None
+        self.tab_context_menu = None
+        self.tab_context_menu_tab_id = None
         self.sync_page_navigation_enabled = tk.BooleanVar(value=False)
         self.find_panel_visible = False
         self.replace_panel_visible = False
@@ -917,7 +1051,7 @@ class NotepadX:
 
     def init_ui(self):
         self.apply_window_icon(self.root)
-        self.root.geometry("1500x700")
+        self.root.geometry(f"{self.default_window_width}x{self.default_window_height}")
         self.root.configure(bg='#1e1e1e')
         self.root.protocol("WM_DELETE_WINDOW", self.exit_app)
         self.root.grid_rowconfigure(0, weight=1)
@@ -929,7 +1063,9 @@ class NotepadX:
         self.create_status_bar()
         self.reset_startup_trace()
         self.trace_startup(f"init_ui session_path={self.session_path}")
+        self.trace_startup(f"init_ui startup_files={self.startup_files}")
         self.restore_session()
+        self.root.bind('<Configure>', self.on_root_configure, add='+')
 
         self.bind_keys()
         self.update_font()
@@ -938,7 +1074,9 @@ class NotepadX:
         self.process_background_file_results()
         self.process_remote_open_requests()
         self.poll_shared_notes()
-        self.center_window(self.root)
+        if not self.window_layout_restored or self.window_state != 'zoomed':
+            self.center_window(self.root)
+        self.reveal_main_window()
         self.schedule_startup_file_opening()
         self.schedule_blank_startup_memory_trim()
 
@@ -1066,6 +1204,48 @@ class NotepadX:
         window = tk.Toplevel(parent or self.root)
         self.apply_window_icon(window)
         return window
+
+    def create_popup_toplevel(self, parent=None, topmost=True):
+        window = tk.Toplevel(parent or self.root)
+        try:
+            window.withdraw()
+        except tk.TclError:
+            pass
+        try:
+            window.wm_overrideredirect(True)
+        except tk.TclError:
+            pass
+        if self.is_windows:
+            try:
+                window.attributes('-toolwindow', True)
+            except tk.TclError:
+                pass
+        if topmost:
+            try:
+                window.attributes('-topmost', True)
+            except tk.TclError:
+                pass
+        return window
+
+    def show_popup_toplevel(self, window, x, y):
+        if window is None:
+            return
+        try:
+            window.geometry(f'+{int(x)}+{int(y)}')
+            window.deiconify()
+            window.lift()
+        except tk.TclError:
+            return
+
+    def reveal_main_window(self):
+        try:
+            if not self.root.winfo_exists():
+                return
+            self.root.update_idletasks()
+            self.root.deiconify()
+            self.root.lift()
+        except tk.TclError:
+            return
 
     def create_about_display_image(self):
         if os.path.exists(self.splash_path):
@@ -3154,6 +3334,12 @@ class NotepadX:
             except tk.TclError:
                 pass
             self.recovery_job = None
+        if self.window_layout_job:
+            try:
+                self.root.after_cancel(self.window_layout_job)
+            except tk.TclError:
+                pass
+            self.window_layout_job = None
         if os.path.exists(self.recovery_path):
             try:
                 os.remove(self.recovery_path)
@@ -3198,6 +3384,7 @@ class NotepadX:
 
         find_history = self.sanitize_search_history_entries(session.get('find_history', []))
         find_in_history = self.sanitize_search_history_entries(session.get('find_in_history', []))
+        command_history = self.sanitize_command_history_entries(session.get('command_history', []))
 
         selected_file = session.get('selected_file')
         if not isinstance(selected_file, str) or selected_file not in open_files:
@@ -3223,6 +3410,22 @@ class NotepadX:
         locale_code = str(session.get('locale_code', self.locale_code)).strip().lower()
         if not os.path.exists(self.get_locale_file_path(locale_code)):
             locale_code = self.locale_code
+        try:
+            command_panel_height = int(session.get('command_panel_height', self.command_panel_default_height))
+        except (TypeError, ValueError):
+            command_panel_height = self.command_panel_default_height
+        command_panel_height = max(self.command_panel_min_height, min(self.command_panel_max_height, command_panel_height))
+        try:
+            window_width = int(session.get('window_width', self.default_window_width))
+        except (TypeError, ValueError):
+            window_width = self.default_window_width
+        try:
+            window_height = int(session.get('window_height', self.default_window_height))
+        except (TypeError, ValueError):
+            window_height = self.default_window_height
+        window_width = max(240, min(10000, window_width))
+        window_height = max(180, min(10000, window_height))
+        window_state = 'zoomed' if str(session.get('window_state', 'normal')).strip().lower() == 'zoomed' else 'normal'
 
         return {
             'open_files': open_files,
@@ -3230,6 +3433,11 @@ class NotepadX:
             'recent_files': recent_files,
             'find_history': find_history,
             'find_in_history': find_in_history,
+            'command_history': command_history,
+            'command_panel_height': command_panel_height,
+            'window_width': window_width,
+            'window_height': window_height,
+            'window_state': window_state,
             'closed_session_files': closed_files,
             'sound_enabled': bool(session.get('sound_enabled', True)),
             'status_bar_enabled': bool(session.get('status_bar_enabled', True)),
@@ -3513,6 +3721,96 @@ class NotepadX:
         self.center_window(window, parent)
         window.lift()
 
+    def get_root_window_state(self):
+        try:
+            state = str(self.root.state() or 'normal').strip().lower()
+        except tk.TclError:
+            state = 'normal'
+        return 'zoomed' if state == 'zoomed' else 'normal'
+
+    def get_window_layout_snapshot(self):
+        width = max(240, int(getattr(self, 'window_width', self.default_window_width) or self.default_window_width))
+        height = max(180, int(getattr(self, 'window_height', self.default_window_height) or self.default_window_height))
+        state = self.get_root_window_state()
+        if not self.fullscreen:
+            try:
+                current_width = int(self.root.winfo_width())
+                current_height = int(self.root.winfo_height())
+            except (tk.TclError, ValueError):
+                current_width = current_height = 0
+            if state == 'normal' and current_width > 240 and current_height > 180:
+                width = current_width
+                height = current_height
+        return width, height, state
+
+    def apply_saved_window_layout(self, width=None, height=None, state='normal'):
+        try:
+            width = int(width if width is not None else self.default_window_width)
+        except (TypeError, ValueError):
+            width = self.default_window_width
+        try:
+            height = int(height if height is not None else self.default_window_height)
+        except (TypeError, ValueError):
+            height = self.default_window_height
+        width = max(240, width)
+        height = max(180, height)
+        state = 'zoomed' if str(state or 'normal').strip().lower() == 'zoomed' else 'normal'
+        try:
+            screen_width = int(self.root.winfo_screenwidth() or width)
+            screen_height = int(self.root.winfo_screenheight() or height)
+        except (tk.TclError, ValueError):
+            screen_width = width
+            screen_height = height
+        width = min(width, max(240, screen_width))
+        height = min(height, max(180, screen_height))
+        self.window_width = width
+        self.window_height = height
+        self.window_state = state
+        try:
+            self.root.state('normal')
+        except tk.TclError:
+            pass
+        try:
+            self.root.geometry(f"{width}x{height}")
+            self.root.update_idletasks()
+        except tk.TclError:
+            return False
+        if state == 'zoomed' and not self.fullscreen:
+            try:
+                self.root.state('zoomed')
+            except tk.TclError:
+                try:
+                    self.root.wm_state('zoomed')
+                except tk.TclError:
+                    self.window_state = 'normal'
+        return True
+
+    def schedule_window_layout_save(self):
+        if self.isolated_session or self._shutdown_requested or not self.main_loop_started:
+            return
+        if self.window_layout_job:
+            try:
+                self.root.after_cancel(self.window_layout_job)
+            except tk.TclError:
+                pass
+        try:
+            self.window_layout_job = self.root.after(self.window_layout_save_delay_ms, self.save_session)
+        except tk.TclError:
+            self.window_layout_job = None
+
+    def on_root_configure(self, event=None):
+        if getattr(event, 'widget', None) not in (None, self.root):
+            return None
+        if self._shutdown_requested or self.fullscreen:
+            return None
+        width, height, state = self.get_window_layout_snapshot()
+        self.window_state = state
+        if state == 'normal':
+            self.window_width = width
+            self.window_height = height
+        self.schedule_window_layout_save()
+        return None
+
     def is_notepadx_support_file(self, file_path):
         return is_notepadx_support_file_path(file_path)
 
@@ -3568,8 +3866,6 @@ class NotepadX:
                         if not raw_path:
                             continue
                         candidate_path = os.path.abspath(str(raw_path))
-                        if self.is_notepadx_support_file(candidate_path):
-                            continue
                         incoming_files.append(candidate_path)
                     if incoming_files:
                         with self.remote_open_lock:
@@ -3842,6 +4138,7 @@ class NotepadX:
             return
         pending_files = list(self.startup_files)
         self.startup_files = []
+        self.trace_startup(f"schedule_startup_file_opening pending_files={pending_files}")
         self.schedule_when_root_ready(lambda files=pending_files: self.open_startup_files(files))
 
     # ─── Status Bar ──────────────────────────────────────────────
@@ -4500,29 +4797,49 @@ class NotepadX:
 
         # Command panel
         self.command_frame = tk.Frame(self.bottom_frame, bg=self.panel_bg)
-        self.command_frame.grid_columnconfigure(1, weight=1)
-        self.command_frame.grid_rowconfigure(1, weight=1)
-        tk.Label(
+        self.command_frame.grid_columnconfigure(0, weight=1)
+        self.command_frame.grid_rowconfigure(2, weight=1)
+        self.command_resize_grip = tk.Frame(
             self.command_frame,
+            bg='#30363d',
+            height=6,
+            cursor='sb_v_double_arrow'
+        )
+        self.command_resize_grip.grid(row=0, column=0, sticky='ew')
+        self.command_resize_grip.grid_propagate(False)
+        self.command_resize_grip.bind('<ButtonPress-1>', self.start_command_panel_resize)
+        self.command_resize_grip.bind('<B1-Motion>', self.drag_command_panel_resize)
+        self.command_resize_grip.bind('<ButtonRelease-1>', self.finish_command_panel_resize)
+        self.command_resize_grip.bind('<Double-Button-1>', self.reset_command_panel_height)
+
+        self.command_controls_frame = tk.Frame(self.command_frame, bg=self.panel_bg)
+        self.command_controls_frame.grid(row=1, column=0, sticky='ew')
+        self.command_controls_frame.grid_columnconfigure(1, weight=1)
+        tk.Label(
+            self.command_controls_frame,
             text='Cmd:',
             bg=self.panel_bg,
             fg=self.fg_color
         ).grid(row=0, column=0, sticky='w', padx=(8, 4), pady=6)
-        self.command_entry = tk.Entry(self.command_frame)
+        self.command_entry = tk.Entry(self.command_controls_frame)
         self.command_entry.grid(row=0, column=1, sticky='ew', padx=4, pady=6)
         tk.Button(
-            self.command_frame,
+            self.command_controls_frame,
             text='Run',
             command=self.run_command_panel
         ).grid(row=0, column=2, padx=4, pady=6)
         tk.Button(
-            self.command_frame,
+            self.command_controls_frame,
             text='Clear',
             command=self.clear_command_output
         ).grid(row=0, column=3, padx=(4, 8), pady=6)
+        self.command_body_frame = tk.Frame(self.command_frame, bg=self.panel_bg)
+        self.command_body_frame.grid(row=2, column=0, sticky='nsew')
+        self.command_body_frame.grid_columnconfigure(0, weight=1)
+        self.command_body_frame.grid_rowconfigure(0, weight=1)
         self.command_output = tk.Text(
-            self.command_frame,
-            height=8,
+            self.command_body_frame,
+            height=self.command_panel_height,
             wrap='word',
             bg=self.text_bg,
             fg=self.text_fg,
@@ -4534,21 +4851,60 @@ class NotepadX:
             highlightthickness=0,
             relief='flat'
         )
-        self.command_output.grid(row=1, column=0, columnspan=3, sticky='nsew', padx=(8, 0), pady=(0, 8))
+        self.command_output.grid(row=0, column=0, sticky='nsew', padx=(8, 0), pady=(0, 8))
         self.command_output.configure(state='disabled')
-        self.command_output_scroll = ttk.Scrollbar(self.command_frame, orient='vertical', command=self.command_output.yview)
-        self.command_output_scroll.grid(row=1, column=3, sticky='ns', padx=(0, 8), pady=(0, 8))
+        self.command_output_scroll = ttk.Scrollbar(self.command_body_frame, orient='vertical', command=self.command_output.yview)
+        self.command_output_scroll.grid(row=0, column=1, sticky='ns', padx=(0, 8), pady=(0, 8))
         self.command_output.configure(yscrollcommand=self.command_output_scroll.set)
+        self.command_history_frame = tk.Frame(self.command_body_frame, bg=self.panel_bg)
+        self.command_history_frame.grid(row=0, column=2, sticky='ns', padx=(0, 8), pady=(0, 8))
+        self.command_history_frame.grid_rowconfigure(1, weight=1)
+        tk.Label(
+            self.command_history_frame,
+            text='History',
+            bg=self.panel_bg,
+            fg='#9aa0a6',
+            anchor='w'
+        ).grid(row=0, column=0, columnspan=2, sticky='ew', pady=(0, 4))
+        self.command_history_listbox = tk.Listbox(
+            self.command_history_frame,
+            height=self.command_panel_height,
+            width=28,
+            bg='#161b22',
+            fg=self.fg_color,
+            selectbackground='#264f78',
+            selectforeground='white',
+            activestyle='none',
+            highlightthickness=1,
+            highlightbackground='#30363d',
+            relief='flat',
+            borderwidth=0,
+            font=('Consolas', 10),
+            exportselection=False,
+            takefocus=False,
+            selectmode='browse'
+        )
+        self.command_history_listbox.grid(row=1, column=0, sticky='ns')
+        self.command_history_scroll = ttk.Scrollbar(
+            self.command_history_frame,
+            orient='vertical',
+            command=self.command_history_listbox.yview
+        )
+        self.command_history_scroll.grid(row=1, column=1, sticky='ns', padx=(4, 0))
+        self.command_history_listbox.configure(yscrollcommand=self.command_history_scroll.set)
         self.command_entry.bind('<Return>', lambda e: self.run_command_panel())
         self.command_entry.bind('<Escape>', lambda e: self.show_command_panel())
         self.command_entry.bind('<Up>', self.handle_command_history_keypress)
         self.command_entry.bind('<Down>', self.handle_command_history_keypress)
+        self.command_entry.bind('<KeyRelease>', self.on_command_entry_key_release)
+        self.command_history_listbox.bind('<<ListboxSelect>>', self.on_command_history_select)
 
         # Hide both initially
         self.find_frame.grid_remove()
         self.replace_frame.grid_remove()
         self.command_frame.grid_remove()
         self.bottom_frame.grid_remove()
+        self.refresh_command_history_list()
 
     def update_bottom_panel_visibility(self):
         if self.find_panel_visible or self.replace_panel_visible or self.command_panel_visible:
@@ -4593,6 +4949,32 @@ class NotepadX:
             return untitled_name
         return None
 
+    def get_breadcrumb_segments(self, doc, text_widget=None):
+        if not doc:
+            return []
+        segments = []
+        copy_name = self.get_doc_copyable_name(doc)
+        if copy_name:
+            segments.append({'kind': 'name', 'text': copy_name, 'copy': copy_name})
+
+        display_path = self.get_doc_display_path(doc)
+        copy_path = self.get_doc_copyable_path(doc)
+        if display_path and display_path != copy_name:
+            segments.append({'kind': 'path', 'text': display_path, 'copy': copy_path or display_path})
+
+        text_widget = text_widget or doc.get('text')
+        if text_widget:
+            try:
+                current_line = int(text_widget.index(tk.INSERT).split('.')[0])
+            except (tk.TclError, ValueError):
+                current_line = 1
+            symbol = self.get_symbol_at_line(doc, current_line)
+            if symbol:
+                symbol_name = str(symbol.get('name') or '').strip()
+                if symbol_name:
+                    segments.append({'kind': 'symbol', 'text': symbol_name, 'copy': None})
+        return segments
+
     def get_doc_working_directory(self, doc=None):
         doc = doc or self.get_current_doc()
         if not doc:
@@ -4621,6 +5003,8 @@ class NotepadX:
             self.bottom_frame.grid()
             self.command_frame.grid(sticky='nsew')
             self.command_panel_visible = True
+            self.set_command_panel_height(self.command_panel_height, persist=False)
+            self.refresh_command_history_list()
             self.command_entry.focus_set()
         else:
             self.command_frame.grid_remove()
@@ -4629,21 +5013,178 @@ class NotepadX:
         self.update_bottom_panel_visibility()
         return "break"
 
+    def on_command_entry_key_release(self, event=None):
+        keysym = str(getattr(event, 'keysym', '') or '')
+        if keysym in {'Up', 'Down', 'Return', 'Escape'}:
+            return None
+        self.command_history_index = None
+        self.select_command_history_value(self.command_entry.get())
+        return None
+
+    def on_command_history_select(self, event=None):
+        listbox = getattr(self, 'command_history_listbox', None)
+        if not listbox:
+            return None
+        selection = listbox.curselection()
+        if not selection:
+            return None
+        selected_index = max(0, int(selection[0]))
+        if selected_index >= len(self.command_history):
+            return None
+        self.command_history_index = selected_index
+        value = self.command_history[selected_index]
+        self.command_entry.delete(0, tk.END)
+        self.command_entry.insert(0, value)
+        self.command_entry.icursor(tk.END)
+        self.command_entry.focus_set()
+        return None
+
+    def select_command_history_value(self, value):
+        listbox = getattr(self, 'command_history_listbox', None)
+        if not listbox:
+            return False
+        try:
+            if not listbox.winfo_exists():
+                return False
+        except tk.TclError:
+            return False
+        listbox.selection_clear(0, tk.END)
+        if not self.command_history:
+            return False
+        normalized = str(value or '').strip().lower()
+        if not normalized:
+            return False
+        selected_index = None
+        for index, item in enumerate(self.command_history):
+            lowered_item = str(item).lower()
+            if lowered_item == normalized:
+                selected_index = index
+                break
+            if selected_index is None and lowered_item.startswith(normalized):
+                selected_index = index
+        if selected_index is None:
+            return False
+        listbox.selection_set(selected_index)
+        listbox.activate(selected_index)
+        listbox.see(selected_index)
+        return True
+
+    def refresh_command_history_list(self, selected_value=None):
+        listbox = getattr(self, 'command_history_listbox', None)
+        if not listbox:
+            return
+        try:
+            if not listbox.winfo_exists():
+                return
+        except tk.TclError:
+            return
+        selection = listbox.curselection()
+        if selected_value is None and selection:
+            selected_index = int(selection[0])
+            if 0 <= selected_index < len(self.command_history):
+                selected_value = self.command_history[selected_index]
+        listbox.delete(0, tk.END)
+        for item in self.command_history:
+            listbox.insert(tk.END, item)
+        self.select_command_history_value(selected_value)
+
+    def record_command_history(self, command_text):
+        cleaned_command = str(command_text or '').strip()
+        if not cleaned_command:
+            return False
+        updated_history = [
+            item for item in self.command_history
+            if str(item).strip().lower() != cleaned_command.lower()
+        ]
+        updated_history.insert(0, cleaned_command)
+        updated_history = updated_history[:self.max_command_history]
+        changed = updated_history != self.command_history
+        self.command_history = updated_history
+        self.command_history_index = None
+        self.refresh_command_history_list(selected_value=cleaned_command)
+        if changed:
+            self.save_session()
+        return changed
+
+    def get_command_panel_line_height(self):
+        if not hasattr(self, 'command_output') or not self.command_output:
+            return 18
+        try:
+            font_name = self.command_output.cget('font')
+            return max(1, tkfont.Font(font=font_name).metrics('linespace'))
+        except (tk.TclError, RuntimeError):
+            return 18
+
+    def set_command_panel_height(self, height_lines, persist=False):
+        try:
+            safe_height = int(round(float(height_lines)))
+        except (TypeError, ValueError):
+            safe_height = self.command_panel_default_height
+        safe_height = max(self.command_panel_min_height, min(self.command_panel_max_height, safe_height))
+        self.command_panel_height = safe_height
+        widgets = [getattr(self, 'command_output', None), getattr(self, 'command_history_listbox', None)]
+        for widget in widgets:
+            if not widget:
+                continue
+            try:
+                widget.configure(height=safe_height)
+            except tk.TclError:
+                continue
+        if persist:
+            self.save_session()
+        return safe_height
+
+    def start_command_panel_resize(self, event=None):
+        if event is None:
+            return "break"
+        self.command_panel_resize_active = True
+        self.command_panel_resize_origin_y = int(getattr(event, 'y_root', 0))
+        self.command_panel_resize_origin_height = int(self.command_panel_height)
+        return "break"
+
+    def drag_command_panel_resize(self, event=None):
+        if not self.command_panel_resize_active or event is None:
+            return "break"
+        delta_pixels = self.command_panel_resize_origin_y - int(getattr(event, 'y_root', self.command_panel_resize_origin_y))
+        delta_lines = int(round(delta_pixels / max(1, self.get_command_panel_line_height())))
+        self.set_command_panel_height(self.command_panel_resize_origin_height + delta_lines, persist=False)
+        return "break"
+
+    def finish_command_panel_resize(self, event=None):
+        if self.command_panel_resize_active:
+            self.command_panel_resize_active = False
+            self.save_session()
+        return "break"
+
+    def reset_command_panel_height(self, event=None):
+        self.command_panel_resize_active = False
+        self.set_command_panel_height(self.command_panel_default_height, persist=True)
+        return "break"
+
     def handle_command_history_keypress(self, event=None):
         if not self.command_history:
             return "break"
-        if self.command_history_index is None:
-            self.command_history_index = len(self.command_history)
-        if getattr(event, 'keysym', '') == 'Up':
-            self.command_history_index = max(0, self.command_history_index - 1)
+        keysym = str(getattr(event, 'keysym', '') or '')
+        if keysym == 'Up':
+            if self.command_history_index is None:
+                self.command_history_index = 0
+            else:
+                self.command_history_index = min(len(self.command_history) - 1, self.command_history_index + 1)
         else:
-            self.command_history_index = min(len(self.command_history), self.command_history_index + 1)
-        if self.command_history_index >= len(self.command_history):
+            if self.command_history_index is None:
+                return "break"
+            if self.command_history_index <= 0:
+                self.command_history_index = None
+            else:
+                self.command_history_index -= 1
+        if self.command_history_index is None:
             value = ''
         else:
             value = self.command_history[self.command_history_index]
         self.command_entry.delete(0, tk.END)
         self.command_entry.insert(0, value)
+        self.command_entry.icursor(tk.END)
+        self.select_command_history_value(value)
         return "break"
 
     def append_command_output(self, text):
@@ -4756,15 +5297,17 @@ class NotepadX:
         self.command_runner_active = False
         self.command_runner_thread = None
         if not result:
-            self.append_command_output(f"$ {command_text}\nNo output.\n\n")
+            self.append_command_output("No output.\n[exit 0]\n\n")
             return
-        output_parts = [f"$ {command_text}\n"]
+        output_parts = []
         stdout_text = str(result.get('stdout') or '')
         stderr_text = str(result.get('stderr') or '')
         if stdout_text:
             output_parts.append(stdout_text.rstrip() + '\n')
         if stderr_text:
             output_parts.append(stderr_text.rstrip() + '\n')
+        if not stdout_text and not stderr_text:
+            output_parts.append("No output.\n")
         output_parts.append(f"[exit {result.get('returncode', 0)}]\n\n")
         self.append_command_output("".join(output_parts))
 
@@ -4774,17 +5317,23 @@ class NotepadX:
         command_text = self.command_entry.get().strip()
         if not command_text:
             return "break"
-        if not self.command_history or self.command_history[-1] != command_text:
-            self.command_history.append(command_text)
-        self.command_history = self.command_history[-50:]
-        self.command_history_index = None
-        self.command_entry.selection_range(0, tk.END)
+        normalized_command = command_text.lower()
+
+        if normalized_command in {'cls', 'clear'}:
+            self.record_command_history(command_text)
+            self.clear_command_output()
+            self.command_entry.delete(0, tk.END)
+            self.command_entry.focus_set()
+            return "break"
 
         named_result = None
         if command_text.startswith(':'):
             named_result = self.run_named_command(command_text)
         if named_result is not None:
+            self.record_command_history(command_text)
+            self.command_entry.delete(0, tk.END)
             self.append_command_output(named_result if named_result.endswith('\n') else f"{named_result}\n")
+            self.command_entry.focus_set()
             return "break"
 
         if self.command_runner_active:
@@ -4793,6 +5342,9 @@ class NotepadX:
 
         cwd = self.get_doc_working_directory()
         self.command_runner_active = True
+        self.record_command_history(command_text)
+        self.command_entry.delete(0, tk.END)
+        self.command_entry.focus_set()
 
         def worker():
             result = {'returncode': -1, 'stdout': '', 'stderr': ''}
@@ -4940,28 +5492,8 @@ class NotepadX:
         return "break"
 
     def build_breadcrumb_text(self, doc, text_widget=None):
-        if not doc:
-            return ""
-        frame = doc.get('frame')
-        if frame is not None and str(frame) in self.documents:
-            primary_name = self.get_doc_name(frame)
-        else:
-            display_path = self.get_doc_display_path(doc) or doc.get('untitled_name') or 'Untitled'
-            primary_name = os.path.basename(str(display_path))
-        parts = [primary_name]
-        display_path = self.get_doc_display_path(doc)
-        if display_path and display_path != parts[0]:
-            parts.append(display_path)
-        text_widget = text_widget or doc.get('text')
-        if text_widget:
-            try:
-                current_line = int(text_widget.index(tk.INSERT).split('.')[0])
-            except (tk.TclError, ValueError):
-                current_line = 1
-            symbol = self.get_symbol_at_line(doc, current_line)
-            if symbol:
-                parts.append(symbol.get('name', ''))
-        return "  >  ".join(part for part in parts if part)
+        segments = self.get_breadcrumb_segments(doc, text_widget=text_widget)
+        return "  >  ".join(segment['text'] for segment in segments if segment.get('text'))
 
     def update_breadcrumbs(self):
         current_doc = self.get_current_doc()
@@ -4999,23 +5531,33 @@ class NotepadX:
         self.save_session()
         return "break"
 
-    def should_copy_breadcrumb_name(self, doc, event=None):
-        copy_name = self.get_doc_copyable_name(doc)
-        if not copy_name:
-            return False
-        copy_path = self.get_doc_copyable_path(doc)
-        if not copy_path or copy_path == copy_name:
-            return True
-        widget = getattr(event, 'widget', None)
-        if widget is None:
-            return False
+    def get_breadcrumb_click_value(self, doc, event=None, text_widget=None):
+        segments = self.get_breadcrumb_segments(doc, text_widget=text_widget)
+        if not segments:
+            return None
+        if event is None or getattr(event, 'widget', None) is None:
+            for segment in segments:
+                if segment.get('copy'):
+                    return segment['copy']
+            return None
         try:
+            widget = event.widget
             widget_font = tkfont.Font(font=widget.cget('font'))
             padding_x = int(float(widget.cget('padx') or 0))
-            click_limit = padding_x + widget_font.measure(copy_name) + 4
-        except (tk.TclError, TypeError, ValueError):
-            return False
-        return int(getattr(event, 'x', 0) or 0) <= click_limit
+            click_x = int(getattr(event, 'x', 0) or 0)
+        except (tk.TclError, TypeError, ValueError, AttributeError):
+            return None
+
+        separator = "  >  "
+        current_x = padding_x
+        for segment in segments:
+            segment_text = str(segment.get('text') or '')
+            segment_width = widget_font.measure(segment_text)
+            if current_x <= click_x <= (current_x + segment_width):
+                return segment.get('copy')
+            current_x += segment_width
+            current_x += widget_font.measure(separator)
+        return None
 
     def copy_text_to_clipboard(self, clipboard_text, event=None):
         if not clipboard_text:
@@ -5041,10 +5583,8 @@ class NotepadX:
         if target == 'compare_title':
             clipboard_text = self.get_doc_copyable_name(doc) or self.get_doc_copyable_path(doc)
         else:
-            if self.should_copy_breadcrumb_name(doc, event):
-                clipboard_text = self.get_doc_copyable_name(doc) or self.get_doc_copyable_path(doc)
-            else:
-                clipboard_text = self.get_doc_copyable_path(doc) or self.get_doc_copyable_name(doc)
+            breadcrumb_widget = self.compare_view.get('text') if target == 'compare' and self.compare_view else self.get_active_search_widget()
+            clipboard_text = self.get_breadcrumb_click_value(doc, event=event, text_widget=breadcrumb_widget)
         return self.copy_text_to_clipboard(clipboard_text, event)
 
     def sanitize_search_history_entries(self, entries):
@@ -5063,6 +5603,25 @@ class NotepadX:
             seen.add(lowered)
             cleaned_entries.append(value)
             if len(cleaned_entries) >= self.max_search_history:
+                break
+        return cleaned_entries
+
+    def sanitize_command_history_entries(self, entries):
+        cleaned_entries = []
+        seen = set()
+        source_entries = entries if isinstance(entries, list) else []
+        for entry in source_entries:
+            if not isinstance(entry, str):
+                continue
+            value = entry.strip()
+            if not value:
+                continue
+            lowered = value.lower()
+            if lowered in seen:
+                continue
+            seen.add(lowered)
+            cleaned_entries.append(value)
+            if len(cleaned_entries) >= self.max_command_history:
                 break
         return cleaned_entries
 
@@ -5180,8 +5739,7 @@ class NotepadX:
 
         popup = self.search_history_popup
         if not self.search_history_popup_visible():
-            popup = self.create_toplevel(self.root)
-            popup.wm_overrideredirect(True)
+            popup = self.create_popup_toplevel(self.root)
             popup.configure(bg='#2d2d2d')
             listbox = tk.Listbox(
                 popup,
@@ -5222,8 +5780,11 @@ class NotepadX:
             selected_index = suggestions.index(selected_value)
         self.select_search_history_index(selected_index)
 
-        popup.geometry(f"+{entry_widget.winfo_rootx()}+{entry_widget.winfo_rooty() + entry_widget.winfo_height() + 2}")
-        popup.lift()
+        self.show_popup_toplevel(
+            popup,
+            entry_widget.winfo_rootx(),
+            entry_widget.winfo_rooty() + entry_widget.winfo_height() + 2
+        )
         self.search_history_entry = entry_widget
         self.search_history_items = suggestions
         return True
@@ -5772,19 +6333,24 @@ class NotepadX:
         self.hide_diagnostic_tooltip()
         self.diagnostic_tooltip_signature = signature
 
-        popup = self.create_toplevel(self.root)
-        popup.wm_overrideredirect(True)
+        popup = self.create_popup_toplevel(self.root)
         popup.configure(bg='#1f2430')
-        try:
-            popup.attributes('-topmost', True)
-        except tk.TclError:
-            pass
 
         accent_color = '#ff6b6b' if any(item.get('severity') == 'error' for item in diagnostics) else '#ffcc66'
         frame = tk.Frame(popup, bg='#1f2430', highlightthickness=1, highlightbackground=accent_color)
         frame.pack(fill='both', expand=True)
 
-        header_text = f"Line {line_number} issue" if len(diagnostics) == 1 else f"Line {line_number} issues"
+        error_count = sum(1 for item in diagnostics if item.get('severity') == 'error')
+        warning_count = len(diagnostics) - error_count
+        if len(diagnostics) == 1:
+            header_text = f"{'Error' if error_count else 'Warning'} on line {line_number}"
+        else:
+            summary_parts = []
+            if error_count:
+                summary_parts.append(f"{error_count} error{'s' if error_count != 1 else ''}")
+            if warning_count:
+                summary_parts.append(f"{warning_count} warning{'s' if warning_count != 1 else ''}")
+            header_text = f"Line {line_number}: {', '.join(summary_parts)}"
         tk.Label(
             frame,
             text=header_text,
@@ -5812,7 +6378,7 @@ class NotepadX:
         popup_height = popup.winfo_reqheight()
         x = min(max(0, x_root + 16), max(0, screen_width - popup_width - 12))
         y = min(max(0, y_root + 20), max(0, screen_height - popup_height - 12))
-        popup.geometry(f'+{int(x)}+{int(y)}')
+        self.show_popup_toplevel(popup, x, y)
         self.diagnostic_tooltip_popup = popup
         self.diagnostic_tooltip_doc = doc
 
@@ -7632,13 +8198,22 @@ class NotepadX:
 
     def open_startup_files(self, startup_files):
         normalized_files = []
+        seen_files = set()
+        self.trace_startup(f"open_startup_files raw={list(startup_files or [])}")
 
         for raw_path in startup_files:
-            if not raw_path:
+            candidate_path = normalize_startup_path_argument(raw_path)
+            if not candidate_path:
+                candidate_path = normalize_startup_path_argument(raw_path, base_dir=self.app_dir)
+            if not candidate_path:
                 continue
-            candidate_path = os.path.abspath(raw_path)
-            if os.path.exists(candidate_path) and not self.is_notepadx_support_file(candidate_path):
-                normalized_files.append(candidate_path)
+            candidate_key = os.path.normcase(candidate_path)
+            if candidate_key in seen_files:
+                continue
+            seen_files.add(candidate_key)
+            normalized_files.append(candidate_path)
+
+        self.trace_startup(f"open_startup_files normalized={normalized_files}")
 
         opened_frames = []
         for file_path in normalized_files:
@@ -7845,8 +8420,7 @@ class NotepadX:
         x, y, width, height = bbox
         popup = self.autocomplete_popup
         if not self.autocomplete_popup_visible():
-            popup = self.create_toplevel(self.root)
-            popup.wm_overrideredirect(True)
+            popup = self.create_popup_toplevel(self.root)
             popup.configure(bg='#2d2d2d')
             listbox = tk.Listbox(
                 popup,
@@ -7877,8 +8451,7 @@ class NotepadX:
         listbox.selection_set(0)
         listbox.activate(0)
 
-        popup.geometry(f"+{text.winfo_rootx() + x}+{text.winfo_rooty() + y + height + 2}")
-        popup.lift()
+        self.show_popup_toplevel(popup, text.winfo_rootx() + x, text.winfo_rooty() + y + height + 2)
         self.autocomplete_doc_id = str(doc['frame'])
         self.autocomplete_start_index = f"{line_start}+{match.start(1)}c"
         self.autocomplete_prefix = prefix
@@ -7993,6 +8566,7 @@ class NotepadX:
         self.notebook.bind('<ButtonPress-1>', self.on_tab_drag_start, add='+')
         self.notebook.bind('<B1-Motion>', self.on_tab_drag_motion, add='+')
         self.notebook.bind('<ButtonRelease-1>', self.on_tab_drag_end, add='+')
+        self.notebook.bind('<Button-3>', self.show_tab_context_menu, add='+')
 
         self.compare_container = tk.Frame(self.editor_paned, bg=self.bg_color)
         self.compare_container.grid_rowconfigure(1, weight=1)
@@ -9156,6 +9730,66 @@ class NotepadX:
         self.toggle_fold_region(target_doc, selected_region)
         return "break"
 
+    def is_log_like_path(self, file_path):
+        file_name = os.path.basename(str(file_path or '')).lower()
+        return file_name.endswith(('.log', '.trace', '.err', '.out')) or file_name in {'stdout', 'stderr'}
+
+    def extract_log_diagnostics(self, lines):
+        diagnostics = []
+        in_traceback = False
+        for line_number, line in enumerate(lines, start=1):
+            stripped = str(line or '').strip()
+            if not stripped:
+                in_traceback = False
+                continue
+
+            if self.log_traceback_header_pattern.match(stripped):
+                diagnostics.append({
+                    'severity': 'error',
+                    'line': line_number,
+                    'message': 'Python traceback (most recent call last)'
+                })
+                in_traceback = True
+                if len(diagnostics) >= 25:
+                    break
+                continue
+
+            exception_match = self.log_exception_line_pattern.match(stripped)
+            if in_traceback and self.log_traceback_frame_pattern.match(stripped):
+                diagnostics.append({'severity': 'error', 'line': line_number, 'message': stripped})
+                if len(diagnostics) >= 25:
+                    break
+                continue
+
+            if in_traceback and stripped.lower().startswith('during handling of the above exception'):
+                diagnostics.append({'severity': 'error', 'line': line_number, 'message': stripped})
+                if len(diagnostics) >= 25:
+                    break
+                continue
+
+            if exception_match:
+                severity = 'warning' if exception_match.group(2) == 'Warning' else 'error'
+                diagnostics.append({'severity': severity, 'line': line_number, 'message': stripped})
+                in_traceback = False
+                if len(diagnostics) >= 25:
+                    break
+                continue
+
+            if self.log_error_level_pattern.match(stripped):
+                diagnostics.append({'severity': 'error', 'line': line_number, 'message': stripped})
+                in_traceback = False
+                if len(diagnostics) >= 25:
+                    break
+                continue
+
+            if self.log_warning_level_pattern.match(stripped):
+                diagnostics.append({'severity': 'warning', 'line': line_number, 'message': stripped})
+                in_traceback = False
+                if len(diagnostics) >= 25:
+                    break
+
+        return diagnostics
+
     def clear_diagnostics(self, doc):
         if not doc:
             return
@@ -9231,6 +9865,9 @@ class NotepadX:
                 diagnostics.append({'severity': 'warning', 'line': line_number, 'message': 'Long line (> 140 chars)'})
             if len(diagnostics) >= 50:
                 break
+
+        if self.is_log_like_path(doc.get('file_path')) or self.is_log_like_path(doc.get('remote_path')) or self.is_log_like_path(doc.get('display_name')):
+            diagnostics = self.extract_log_diagnostics(lines) + diagnostics
 
         try:
             if syntax_mode == 'python':
@@ -11200,6 +11837,7 @@ class NotepadX:
         except tk.TclError:
             pass
         self.active_context_menu = None
+        self.tab_context_menu_tab_id = None
         self.context_menu_posted_at = 0.0
         return None
 
@@ -11336,8 +11974,7 @@ class NotepadX:
     def show_note_popup(self, doc, note_data, x, y):
         self.hide_note_popup(doc)
 
-        popup = self.create_toplevel(self.root)
-        popup.wm_overrideredirect(True)
+        popup = self.create_popup_toplevel(self.root)
         popup.configure(bg='#1f2430')
 
         highlight_color = self.get_note_color_hex(note_data.get('color'))
@@ -11449,6 +12086,11 @@ class NotepadX:
 
         popup.update_idletasks()
         self.center_window(popup, self.root)
+        try:
+            popup.deiconify()
+            popup.lift()
+        except tk.TclError:
+            pass
         popup.bind('<Escape>', lambda e, current=doc: self.hide_note_popup(current))
         doc['note_popup'] = popup
 
@@ -12903,6 +13545,7 @@ class NotepadX:
         selected_tab_id = self.notebook.select()
         selected_tab_doc = self.documents.get(str(selected_tab_id)) if selected_tab_id else None
         selected_file = current_doc['file_path'] if current_doc and current_doc['file_path'] and not current_doc.get('is_remote') else None
+        window_width, window_height, window_state = self.get_window_layout_snapshot()
         compare_file = None
         compare_base_file = None
         if self.compare_active and self.compare_source_tab:
@@ -12936,6 +13579,11 @@ class NotepadX:
             ][:self.max_recent_files],
             'find_history': self.sanitize_search_history_entries(self.find_history),
             'find_in_history': self.sanitize_search_history_entries(self.find_in_history),
+            'command_history': self.sanitize_command_history_entries(self.command_history),
+            'command_panel_height': int(self.command_panel_height),
+            'window_width': int(window_width),
+            'window_height': int(window_height),
+            'window_state': window_state,
             'closed_session_files': [
                 path for path in self.closed_session_files
                 if isinstance(path, str)
@@ -13244,8 +13892,11 @@ class NotepadX:
             self.schedule_startup_recovery_restore()
             return
 
-        session = self.read_json_file(self.session_path, "restore session", None)
-        session = self.sanitize_session_payload(session)
+        raw_session = self.read_json_file(self.session_path, "restore session", None)
+        has_saved_window_layout = isinstance(raw_session, dict) and any(
+            key in raw_session for key in ('window_width', 'window_height', 'window_state')
+        )
+        session = self.sanitize_session_payload(raw_session)
         if session is None:
             self.schedule_startup_recovery_restore()
             return
@@ -13256,6 +13907,18 @@ class NotepadX:
         self.recent_files = list(session.get('recent_files', []))[:self.max_recent_files]
         self.find_history = self.sanitize_search_history_entries(session.get('find_history', []))
         self.find_in_history = self.sanitize_search_history_entries(session.get('find_in_history', []))
+        self.command_history = self.sanitize_command_history_entries(session.get('command_history', []))
+        self.command_panel_height = max(
+            self.command_panel_min_height,
+            min(self.command_panel_max_height, int(session.get('command_panel_height', self.command_panel_default_height)))
+        )
+        self.window_layout_restored = False
+        if has_saved_window_layout:
+            self.window_layout_restored = self.apply_saved_window_layout(
+                session.get('window_width', self.default_window_width),
+                session.get('window_height', self.default_window_height),
+                session.get('window_state', 'normal')
+            )
         self.sound_enabled.set(bool(session.get('sound_enabled', True)))
         self.status_bar_enabled.set(bool(session.get('status_bar_enabled', True)))
         self.numbered_lines_enabled.set(bool(session.get('numbered_lines_enabled', True)))
@@ -13299,6 +13962,8 @@ class NotepadX:
         self.toggle_numbered_lines()
         self.toggle_minimap()
         self.toggle_breadcrumbs()
+        self.set_command_panel_height(self.command_panel_height, persist=False)
+        self.refresh_command_history_list()
         self.refresh_recent_files_menu()
         if not open_files:
             if self.markdown_preview_enabled.get():
@@ -13557,18 +14222,63 @@ class NotepadX:
     def switch_tab_right(self, event=None):
         return self.switch_tab_by_offset(1)
 
-    def close_current_tab(self, event=None, recreate_if_empty=True):
-        doc = self.get_current_doc()
+    def get_tab_id_at_position(self, x, y):
+        try:
+            tab_index = self.notebook.index(f"@{int(x)},{int(y)}")
+        except (tk.TclError, ValueError, TypeError):
+            return None
+        tab_ids = list(self.notebook.tabs())
+        if 0 <= tab_index < len(tab_ids):
+            return str(tab_ids[tab_index])
+        return None
+
+    def select_tab_by_id(self, tab_id, focus_editor=False):
+        if not tab_id or str(tab_id) not in self.documents:
+            return None
+        try:
+            self.notebook.select(tab_id)
+        except tk.TclError:
+            return None
+        self.set_active_document(tab_id)
+        if focus_editor:
+            doc = self.documents.get(str(tab_id))
+            text_widget = doc.get('text') if doc else None
+            if text_widget and text_widget.winfo_exists():
+                try:
+                    text_widget.focus_set()
+                except tk.TclError:
+                    pass
+        return self.documents.get(str(tab_id))
+
+    def get_tab_close_candidate_ids(self, target_tab_id=None, mode='single'):
+        tab_ids = [str(tab_id) for tab_id in self.notebook.tabs() if str(tab_id) in self.documents]
+        if not tab_ids:
+            return []
+        if target_tab_id is None or target_tab_id not in tab_ids:
+            target_tab_id = str(self.notebook.select()) if self.notebook.select() in tab_ids else tab_ids[0]
+        target_index = tab_ids.index(target_tab_id)
+        if mode == 'others':
+            return [tab_id for tab_id in tab_ids if tab_id != target_tab_id]
+        if mode == 'left':
+            return tab_ids[:target_index]
+        if mode == 'right':
+            return tab_ids[target_index + 1:]
+        if mode == 'all':
+            return list(tab_ids)
+        return [target_tab_id]
+
+    def close_tab_by_id(self, tab_id, recreate_if_empty=True, confirm=True):
+        doc = self.documents.get(str(tab_id))
         if not doc:
-            return "break"
+            return False
         if (
             len(self.documents) == 1 and
             not doc.get('file_path') and
             doc.get('untitled_name') == 'Untitled 1'
         ):
-            return "break"
-        if not self.confirm_close_tab(doc):
-            return "break"
+            return False
+        if confirm and not self.confirm_close_tab(doc):
+            return False
 
         closed_file_path = doc.get('file_path')
         if closed_file_path and not doc.get('is_remote'):
@@ -13578,9 +14288,12 @@ class NotepadX:
             self.close_compare_panel()
 
         self.unregister_doc_from_shared_notes(doc)
-        tab_id = str(doc['frame'])
-        self.notebook.forget(doc['frame'])
-        self.documents.pop(tab_id, None)
+        tab_key = str(doc['frame'])
+        try:
+            self.notebook.forget(doc['frame'])
+        except tk.TclError:
+            return False
+        self.documents.pop(tab_key, None)
         self.dispose_doc_resources(doc)
 
         if not self.documents:
@@ -13591,9 +14304,14 @@ class NotepadX:
             else:
                 self.save_session()
                 self.root.quit()
-                return "break"
+                return True
         else:
-            self.set_active_document(self.notebook.select())
+            try:
+                selected_tab_id = self.notebook.select()
+            except tk.TclError:
+                selected_tab_id = None
+            if selected_tab_id:
+                self.set_active_document(selected_tab_id)
         if not any(existing_doc.get('file_path') for existing_doc in self.documents.values()):
             self.current_file = None
         self.cpu_used_percent = self.get_process_cpu_usage_percent()
@@ -13601,6 +14319,191 @@ class NotepadX:
         self.update_status()
         self.schedule_memory_trim()
         self.save_session()
+        return True
+
+    def close_tab_group(self, target_tab_id=None, mode='single', recreate_if_empty=True):
+        tab_ids = self.get_tab_close_candidate_ids(target_tab_id=target_tab_id, mode=mode)
+        if not tab_ids:
+            return "break"
+        target_tab_id = str(target_tab_id) if target_tab_id is not None else None
+        for tab_id in list(tab_ids):
+            if str(tab_id) not in self.documents:
+                continue
+            if not self.close_tab_by_id(tab_id, recreate_if_empty=recreate_if_empty, confirm=True):
+                return "break"
+        if target_tab_id and target_tab_id in self.documents:
+            self.select_tab_by_id(target_tab_id)
+        return "break"
+
+    def copy_tab_file_name(self, tab_id):
+        doc = self.documents.get(str(tab_id))
+        if not doc:
+            return "break"
+        file_name = self.get_doc_name(doc['frame'])
+        return self.copy_text_to_clipboard(file_name)
+
+    def copy_tab_file_path(self, tab_id):
+        doc = self.documents.get(str(tab_id))
+        if not doc:
+            return "break"
+        return self.copy_text_to_clipboard(self.get_doc_display_path(doc))
+
+    def reveal_tab_in_file_manager(self, tab_id):
+        doc = self.documents.get(str(tab_id))
+        if not doc:
+            return "break"
+        file_path = doc.get('file_path')
+        if not file_path or not os.path.exists(file_path):
+            messagebox.showinfo(
+                self.tr('tab.menu.reveal_title', 'Reveal in File Explorer'),
+                self.tr('tab.menu.reveal_unavailable', 'This tab does not have a local file path to reveal yet.'),
+                parent=self.root
+            )
+            return "break"
+        try:
+            if self.is_windows:
+                subprocess.Popen(
+                    ['explorer.exe', '/select,', file_path],
+                    creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0)
+                )
+            elif self.is_linux:
+                target_dir = os.path.dirname(file_path) or file_path
+                subprocess.Popen(['xdg-open', target_dir], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            else:
+                webbrowser.open(os.path.dirname(file_path) or file_path)
+        except OSError as exc:
+            self.log_exception('reveal tab in file manager', exc)
+            messagebox.showerror(self.tr('tab.menu.reveal_title', 'Reveal in File Explorer'), str(exc), parent=self.root)
+        return "break"
+
+    def build_new_window_launch_args(self, file_path):
+        if getattr(sys, 'frozen', False):
+            return [os.path.abspath(sys.executable), '--isolated', file_path]
+        return [sys.executable, os.path.abspath(__file__), '--isolated', file_path]
+
+    def move_tab_to_new_window(self, tab_id):
+        doc = self.documents.get(str(tab_id))
+        if not doc:
+            return "break"
+        self.select_tab_by_id(tab_id)
+        doc = self.documents.get(str(tab_id))
+        if not doc:
+            return "break"
+        if doc.get('is_remote'):
+            messagebox.showinfo(
+                self.tr('tab.menu.new_window_title', 'Open in New Window'),
+                self.tr('tab.menu.new_window_remote', 'Remote tabs cannot be moved to a separate window yet.'),
+                parent=self.root
+            )
+            return "break"
+        if doc.get('preview_mode') or doc.get('virtual_mode'):
+            local_path = doc.get('file_path')
+            if not local_path or not os.path.exists(local_path):
+                messagebox.showinfo(
+                    self.tr('tab.menu.new_window_title', 'Open in New Window'),
+                    self.tr('tab.menu.new_window_unavailable', 'Only saved local tabs can be moved to a separate window.'),
+                    parent=self.root
+                )
+                return "break"
+        if not doc.get('file_path'):
+            if not self.save_as():
+                return "break"
+            doc = self.documents.get(str(tab_id))
+            if not doc or not doc.get('file_path'):
+                return "break"
+        elif doc['text'].edit_modified() and not (doc.get('preview_mode') or doc.get('virtual_mode')):
+            if not self.save_document_content(doc, autosave=False, show_errors=True, update_recent=True):
+                return "break"
+
+        file_path = doc.get('file_path')
+        if not file_path or not os.path.exists(file_path):
+            messagebox.showinfo(
+                self.tr('tab.menu.new_window_title', 'Open in New Window'),
+                self.tr('tab.menu.new_window_unavailable', 'Only saved local tabs can be moved to a separate window.'),
+                parent=self.root
+            )
+            return "break"
+        command_args = self.build_new_window_launch_args(file_path)
+        try:
+            subprocess.Popen(
+                command_args,
+                cwd=self.app_dir,
+                creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0) if not getattr(sys, 'frozen', False) else 0
+            )
+        except OSError as exc:
+            self.log_exception('move tab to new window', exc)
+            messagebox.showerror(self.tr('tab.menu.new_window_title', 'Open in New Window'), str(exc), parent=self.root)
+            return "break"
+        self.close_tab_by_id(tab_id, recreate_if_empty=True, confirm=False)
+        return "break"
+
+    def create_tab_context_menu(self):
+        menu = tk.Menu(self.root, tearoff=0)
+        self.tab_context_menu = menu
+        return menu
+
+    def rebuild_tab_context_menu(self, tab_id):
+        doc = self.documents.get(str(tab_id))
+        if not doc:
+            return None
+        menu = self.tab_context_menu or self.create_tab_context_menu()
+        menu.delete(0, tk.END)
+        save_disabled = bool(doc.get('preview_mode') or doc.get('virtual_mode'))
+        has_local_path = bool(doc.get('file_path') and os.path.exists(doc.get('file_path')))
+
+        menu.add_command(label=self.tr('tab.menu.save', 'Save'), state='disabled' if save_disabled else 'normal', command=lambda current=tab_id: self.run_tab_menu_action(current, self.save))
+        menu.add_command(label=self.tr('tab.menu.save_as', 'Save As...'), state='disabled' if save_disabled else 'normal', command=lambda current=tab_id: self.run_tab_menu_action(current, self.save_as))
+        menu.add_command(label=self.tr('tab.menu.save_copy_as', 'Save Copy As...'), command=lambda current=tab_id: self.run_tab_menu_action(current, self.save_copy_as))
+        menu.add_separator()
+        menu.add_command(label=self.tr('tab.menu.copy_name', 'Copy File Name'), command=lambda current=tab_id: self.run_tab_menu_action(current, lambda: self.copy_tab_file_name(current)))
+        menu.add_command(label=self.tr('tab.menu.copy_path', 'Copy Full Path'), command=lambda current=tab_id: self.run_tab_menu_action(current, lambda: self.copy_tab_file_path(current)))
+        menu.add_command(label=self.tr('tab.menu.reveal', 'Reveal in File Explorer'), state='normal' if has_local_path else 'disabled', command=lambda current=tab_id: self.run_tab_menu_action(current, lambda: self.reveal_tab_in_file_manager(current)))
+        menu.add_separator()
+        menu.add_command(label=self.tr('tab.menu.new_window', 'Open in New Notepad-X Window'), command=lambda current=tab_id: self.run_tab_menu_action(current, lambda: self.move_tab_to_new_window(current)))
+        menu.add_separator()
+        menu.add_command(label=self.tr('tab.menu.close', 'Close Tab'), command=lambda current=tab_id: self.run_tab_menu_action(current, lambda: self.close_tab_group(current, mode='single')))
+        return menu
+
+    def run_tab_menu_action(self, tab_id, callback):
+        self.dismiss_context_menu()
+        if callback is None:
+            return "break"
+        current = self.select_tab_by_id(tab_id)
+        if current is None:
+            return "break"
+        try:
+            self.root.after_idle(callback)
+        except tk.TclError:
+            return callback()
+        return "break"
+
+    def show_tab_context_menu(self, event):
+        tab_id = self.get_tab_id_at_position(getattr(event, 'x', 0), getattr(event, 'y', 0))
+        if not tab_id:
+            self.dismiss_context_menu()
+            return None
+        self.select_tab_by_id(tab_id)
+        menu = self.rebuild_tab_context_menu(tab_id)
+        if menu is None:
+            return None
+        self.dismiss_context_menu()
+        self.active_context_menu = menu
+        self.tab_context_menu_tab_id = str(tab_id)
+        self.context_menu_posted_at = time.monotonic()
+        try:
+            menu.tk_popup(event.x_root, event.y_root)
+        finally:
+            try:
+                menu.grab_release()
+            except tk.TclError:
+                pass
+        return "break"
+
+    def close_current_tab(self, event=None, recreate_if_empty=True):
+        doc = self.get_current_doc()
+        if not doc:
+            return "break"
+        self.close_tab_by_id(doc['frame'], recreate_if_empty=recreate_if_empty, confirm=True)
         return "break"
 
     def dispose_doc_resources(self, doc):
@@ -15235,9 +16138,10 @@ class NotepadX:
     def get_save_filetypes(self, include_encrypted=False):
         t = self.tr
         filetypes = [
-            (t('filetype.all_supported', 'All Supported'), "*.txt *.md .gitignore *.py *.pyw *.c *.cpp *.cxx *.cc *.h *.hpp *.hxx *.hh *.cs *.rs *.java *.js *.html *.htm *.php *.xml *.sql *.css *.json *.ini *.bat *.cmd *.ps1 *.psm1 *.psd1 *.ps1xml *.pssc *.psrc *.psc1 *.cdxml *.sh *.asm *.s *.tex *.vb *.vbs *.pas *.pl *.pm *.diff *.patch *.nsi *.nsh *.iss *.rc *.as *.mx *.asp *.aspx *.au3 *.ml *.mli *.sml *.thy *.for *.f *.f90 *.f95 *.f2k *.lsp *.lisp *.mak *.m *.nfo *.st *.xsd *.xsml *.xsl *.kml"),
+            (t('filetype.all_supported', 'All Supported'), "*.txt *.md *.log .gitignore *.py *.pyw *.c *.cpp *.cxx *.cc *.h *.hpp *.hxx *.hh *.cs *.rs *.java *.js *.html *.htm *.php *.xml *.sql *.css *.json *.ini *.bat *.cmd *.ps1 *.psm1 *.psd1 *.ps1xml *.pssc *.psrc *.psc1 *.cdxml *.sh *.asm *.s *.tex *.vb *.vbs *.pas *.pl *.pm *.diff *.patch *.nsi *.nsh *.iss *.rc *.as *.mx *.asp *.aspx *.au3 *.ml *.mli *.sml *.thy *.for *.f *.f90 *.f95 *.f2k *.lsp *.lisp *.mak *.m *.nfo *.st *.xsd *.xsml *.xsl *.kml"),
             (t('filetype.text_document', 'Text Document'), "*.txt"),
             (t('filetype.markdown', 'Markdown'), "*.md"),
+            (t('filetype.log', 'Log File'), "*.log"),
             (t('filetype.git_ignore', 'Git Ignore'), ".gitignore"),
             (t('filetype.python', 'Python'), "*.py *.pyw"),
             (t('filetype.c_headers', 'C / Headers'), "*.c *.h"),
@@ -16157,7 +17061,7 @@ class NotepadX:
         dialog.grab_set()
 
 if __name__ == "__main__":
-    raw_args = sys.argv[1:]
+    raw_args = get_process_launch_arguments()
     isolated_mode = '--isolated' in {arg.lower() for arg in raw_args}
     startup_files = [arg for arg in raw_args if arg.lower() != '--isolated']
     app_dir = get_notepadx_app_dir()
