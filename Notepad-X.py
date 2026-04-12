@@ -1,6 +1,8 @@
 import tkinter as tk
 import tkinter.font as tkfont
 from tkinter import filedialog, messagebox, ttk, colorchooser
+from concurrent.futures import ProcessPoolExecutor, as_completed
+from collections import OrderedDict
 import colorsys
 import os
 import sys
@@ -14,6 +16,7 @@ import keyword
 import re
 import hashlib
 import base64
+import codecs
 import secrets
 import subprocess
 import tempfile
@@ -23,14 +26,17 @@ import shutil
 import stat
 import socket
 import threading
+import multiprocessing
 import webbrowser
 import gc
+import zlib
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from ctypes import wintypes
 from pathlib import Path
 from types import SimpleNamespace
 from urllib.parse import unquote, urlparse
+from array import array
 
 _null_streams = []
 for _stream_name in ('stdout', 'stderr'):
@@ -244,6 +250,10 @@ DEFAULT_LOCALE_STRINGS = {
     "large_file.find_unavailable": "Find is not available in buffered large-file mode yet.",
     "large_file.loading": "Loading large file...",
     "large_file.indexing": "Indexing large file...",
+    "large_file.buffering_title": "Buffering Large File",
+    "large_file.buffering_prompt": "Loading:\n{file_path}",
+    "large_file.buffering_status": "{percent}% ({loaded} / {total})",
+    "large_file.buffering_lines": "Buffered {line_count} lines",
     "large_file.replace_unavailable": "Replace is not available in buffered large-file mode.",
     "large_file.save_run_unavailable": "Save and Run is not available for buffered large-file tabs.",
     "large_file.save_disabled": "This tab is opened in buffered large-file mode. Editing and saving are disabled for the full file view.",
@@ -750,6 +760,130 @@ def send_files_to_running_notepadx(app_dir, startup_files):
         except OSError:
             pass
 
+
+def scan_large_text_file_index_range_worker(file_path, nominal_start, nominal_end, chunk_size=4 * 1024 * 1024, range_index=0):
+    safe_chunk_size = max(64 * 1024, int(chunk_size or (4 * 1024 * 1024)))
+    file_size = os.path.getsize(file_path)
+    start_offset = max(0, min(file_size, int(nominal_start or 0)))
+    end_offset = max(start_offset, min(file_size, int(nominal_end if nominal_end is not None else file_size)))
+
+    if start_offset >= file_size or start_offset >= end_offset:
+        return {'range_index': int(range_index or 0), 'line_lengths': []}
+
+    def align_start(source_file, offset):
+        if offset <= 0:
+            return 0
+        source_file.seek(offset)
+        current = offset
+        while current < file_size:
+            block = source_file.read(min(safe_chunk_size, file_size - current))
+            if not block:
+                return file_size
+            newline_index = block.find(b'\n')
+            if newline_index != -1:
+                return current + newline_index + 1
+            current += len(block)
+        return file_size
+
+    def align_end(source_file, offset):
+        if offset >= file_size:
+            return file_size
+        current = offset
+        source_file.seek(current)
+        while current < file_size:
+            block = source_file.read(min(safe_chunk_size, file_size - current))
+            if not block:
+                return file_size
+            newline_index = block.find(b'\n')
+            if newline_index != -1:
+                return current + newline_index + 1
+            current += len(block)
+        return file_size
+
+    with open(file_path, 'rb') as source_file:
+        aligned_start = align_start(source_file, start_offset)
+        aligned_end = align_end(source_file, end_offset)
+        if aligned_start >= aligned_end:
+            return {'range_index': int(range_index or 0), 'line_lengths': []}
+
+        source_file.seek(aligned_start)
+        remaining = aligned_end - aligned_start
+        line_lengths = array('I')
+        current_line_length = 0
+        remainder = b''
+
+        while remaining > 0:
+            chunk = source_file.read(min(safe_chunk_size, remaining))
+            if not chunk:
+                break
+            remaining -= len(chunk)
+            data = remainder + chunk
+            parts = data.split(b'\n')
+            if remaining == 0:
+                remainder = parts.pop() if parts else b''
+            else:
+                remainder = parts.pop() if parts else b''
+            if not parts and remainder and remaining > 0:
+                current_line_length += len(remainder)
+                remainder = b''
+                continue
+            if parts:
+                line_lengths.append(current_line_length + len(parts[0]))
+                if len(parts) > 1:
+                    line_lengths.extend(len(part) for part in parts[1:])
+                current_line_length = len(remainder)
+            else:
+                current_line_length += len(remainder)
+                remainder = b''
+
+        final_length = current_line_length + len(remainder)
+        if final_length > 0 or aligned_end >= file_size:
+            line_lengths.append(final_length)
+    return {
+        'range_index': int(range_index or 0),
+        'line_lengths': line_lengths.tolist(),
+    }
+
+
+def scan_newline_start_offsets_range_worker(file_path, start_offset, end_offset, chunk_size=4 * 1024 * 1024, range_index=0):
+    safe_chunk_size = max(64 * 1024, int(chunk_size or (4 * 1024 * 1024)))
+    file_size = os.path.getsize(file_path)
+    safe_start = max(0, min(file_size, int(start_offset or 0)))
+    safe_end = max(safe_start, min(file_size, int(end_offset if end_offset is not None else file_size)))
+    newline_starts = array('Q')
+    if safe_start >= safe_end:
+        return {
+            'range_index': int(range_index or 0),
+            'line_starts': [],
+            'bytes_scanned': 0,
+        }
+
+    with open(file_path, 'rb') as source_file:
+        source_file.seek(safe_start)
+        absolute_offset = safe_start
+        remaining = safe_end - safe_start
+        while remaining > 0:
+            chunk = source_file.read(min(safe_chunk_size, remaining))
+            if not chunk:
+                break
+            search_from = 0
+            while True:
+                newline_index = chunk.find(b'\n', search_from)
+                if newline_index == -1:
+                    break
+                newline_starts.append(absolute_offset + newline_index + 1)
+                search_from = newline_index + 1
+            consumed = len(chunk)
+            absolute_offset += consumed
+            remaining -= consumed
+
+    return {
+        'range_index': int(range_index or 0),
+        'line_starts': newline_starts.tolist(),
+        'bytes_scanned': max(0, safe_end - safe_start),
+    }
+
+
 class NotepadX:
     def __init__(self, isolated_session=False, startup_files=None):
         self.root = tk.Tk()
@@ -777,7 +911,7 @@ class NotepadX:
     def init_config(self):
         self.is_windows = os.name == 'nt'
         self.is_linux = sys.platform.startswith('linux')
-        self.app_version = "v1.0.6"
+        self.app_version = "v1.0.7"
         self.resource_dir = self.get_resource_dir()
         self.app_dir = self.get_app_dir()
         self.machine_profile_slug = self.get_machine_profile_slug()
@@ -828,8 +962,11 @@ class NotepadX:
         self.last_cpu_sample = None
         self.syntax_highlighting_available = ColorDelegator is not None and Percolator is not None
         self.large_file_threshold_bytes = 5 * 1024 * 1024
-        self.max_editable_large_file_bytes = 64 * 1024 * 1024
+        self.max_editable_large_file_bytes = 24 * 1024 * 1024
         self.file_load_chunk_size = 256 * 1024
+        self.background_stream_read_chunk_size = 256 * 1024
+        self.background_stream_max_pending_chunks = 4
+        self.background_file_result_batch_size = 2
         self.virtual_index_chunk_size = 4 * 1024 * 1024
         self.huge_file_preview_threshold_bytes = 100 * 1024 * 1024
         self.huge_file_preview_bytes = 2 * 1024 * 1024
@@ -837,6 +974,9 @@ class NotepadX:
         self.virtual_file_margin_lines = 800
         self.virtual_file_window_max_bytes = 8 * 1024 * 1024
         self.huge_virtual_file_window_max_bytes = 4 * 1024 * 1024
+        self.virtual_hot_chunk_cache_entries = 10
+        self.virtual_cold_chunk_cache_entries = 20
+        self.virtual_cold_chunk_cache_enabled = True
         config_dir = self.get_config_dir(self.app_dir)
         os.makedirs(config_dir, exist_ok=True)
         self.locale_dir = self.get_locale_dir(config_dir)
@@ -944,6 +1084,12 @@ class NotepadX:
         self.remote_open_lock = threading.Lock()
         self.background_file_results = []
         self.background_file_lock = threading.Lock()
+        self.index_process_executor = None
+        self.index_process_executor_disabled = False
+        self.index_process_chunk_size = 4 * 1024 * 1024
+        self.index_process_target_workers = max(1, (int(os.cpu_count() or 1) + 1) // 2)
+        self.index_process_min_bytes_per_worker = 24 * 1024 * 1024
+        self.virtual_index_task_multiplier = 4
         self.kernel32 = None
         self.psapi = None
 
@@ -1185,6 +1331,330 @@ class NotepadX:
                 text_widget.edit_modified(False)
             except tk.TclError:
                 pass
+
+    def get_index_process_executor(self):
+        if self.index_process_executor_disabled:
+            return None
+        if self.index_process_executor is not None:
+            return self.index_process_executor
+        try:
+            self.index_process_executor = ProcessPoolExecutor(
+                max_workers=max(1, int(getattr(self, 'index_process_target_workers', 1) or 1))
+            )
+        except Exception as exc:
+            self.index_process_executor_disabled = True
+            self.log_exception("create index process executor", exc)
+            return None
+        return self.index_process_executor
+
+    def shutdown_index_process_executor(self):
+        executor = self.index_process_executor
+        self.index_process_executor = None
+        if executor is None:
+            return
+        try:
+            executor.shutdown(wait=False, cancel_futures=True)
+        except TypeError:
+            executor.shutdown(wait=False)
+        except Exception as exc:
+            self.log_exception("shutdown index process executor", exc)
+
+    def cancel_doc_background_index(self, doc):
+        if not doc:
+            return
+        future = doc.get('background_index_future')
+        doc['background_index_future'] = None
+        doc['background_index_token'] = None
+        doc['background_index_active'] = False
+        if future is None:
+            return
+        futures = list(future) if isinstance(future, (list, tuple, set)) else [future]
+        for pending_future in futures:
+            try:
+                pending_future.cancel()
+            except Exception:
+                pass
+
+    def get_background_index_worker_count(self, file_size):
+        try:
+            safe_file_size = max(0, int(file_size or 0))
+        except (TypeError, ValueError):
+            safe_file_size = 0
+        target_workers = max(1, int(getattr(self, 'index_process_target_workers', 1) or 1))
+        bytes_per_worker = max(4 * 1024 * 1024, int(getattr(self, 'index_process_min_bytes_per_worker', 24 * 1024 * 1024) or (24 * 1024 * 1024)))
+        size_limited_workers = max(1, (safe_file_size + bytes_per_worker - 1) // bytes_per_worker)
+        return max(1, min(target_workers, size_limited_workers))
+
+    def build_background_index_ranges(self, file_size, worker_count, task_multiplier=1):
+        try:
+            safe_file_size = max(0, int(file_size or 0))
+        except (TypeError, ValueError):
+            safe_file_size = 0
+        safe_worker_count = max(1, int(worker_count or 1))
+        safe_task_multiplier = max(1, int(task_multiplier or 1))
+        if safe_file_size <= 0:
+            return [(0, 0)]
+        target_segments = max(1, safe_worker_count * safe_task_multiplier)
+        if target_segments == 1:
+            return [(0, safe_file_size)]
+        step = max(1, (safe_file_size + target_segments - 1) // target_segments)
+        ranges = []
+        start_offset = 0
+        while start_offset < safe_file_size:
+            end_offset = min(safe_file_size, start_offset + step)
+            ranges.append((start_offset, end_offset))
+            start_offset = end_offset
+        return ranges
+
+    def start_background_text_index(self, doc, file_path):
+        if not doc or not file_path:
+            return False
+        executor = self.get_index_process_executor()
+        if executor is None:
+            return False
+
+        token = str(doc.get('background_load_token') or f"{doc['frame']}:index:{time.time_ns()}")
+        doc['background_index_token'] = token
+        doc['background_index_active'] = True
+        file_size = max(0, int(doc.get('background_bytes_total', 0) or 0))
+        worker_count = self.get_background_index_worker_count(file_size)
+        index_ranges = self.build_background_index_ranges(file_size, worker_count)
+        try:
+            futures = [
+                executor.submit(
+                    scan_large_text_file_index_range_worker,
+                    file_path,
+                    start_offset,
+                    end_offset,
+                    self.index_process_chunk_size,
+                    range_index
+                )
+                for range_index, (start_offset, end_offset) in enumerate(index_ranges)
+            ]
+        except Exception as exc:
+            doc['background_index_token'] = None
+            doc['background_index_active'] = False
+            self.log_exception("submit background text index", exc)
+            return False
+        doc['background_index_future'] = list(futures)
+        frame_id = str(doc['frame'])
+        file_path_abs = os.path.abspath(file_path)
+
+        def coordinator(current_futures=tuple(futures), current_tab_id=frame_id, current_token=token, current_file_path=file_path_abs, current_file_size=file_size):
+            try:
+                partial_results = [future.result() for future in current_futures]
+            except Exception as exc:
+                self.queue_background_file_result({
+                    'kind': 'text_index_error',
+                    'tab_id': current_tab_id,
+                    'token': current_token,
+                    'file_path': current_file_path,
+                    'error': exc,
+                })
+                return
+            partial_results = sorted(
+                (dict(item or {}) for item in partial_results),
+                key=lambda item: int(item.get('range_index', 0) or 0)
+            )
+            total_lines = 0
+            for item in partial_results:
+                try:
+                    total_lines += len(item.get('line_lengths') or [])
+                except TypeError:
+                    continue
+            total_lines = max(1, total_lines)
+            sample_step = max(1, total_lines // self.minimap_max_segments)
+            segment_count = max(1, (total_lines + sample_step - 1) // sample_step)
+            segment_max_lengths = [0] * segment_count
+            current_line_index = 0
+            for item in partial_results:
+                for raw_length in (item.get('line_lengths') or []):
+                    safe_length = max(0, int(raw_length or 0))
+                    segment_index = min(segment_count - 1, current_line_index // sample_step)
+                    if safe_length > segment_max_lengths[segment_index]:
+                        segment_max_lengths[segment_index] = safe_length
+                    current_line_index += 1
+            payload = {
+                'total_lines': total_lines,
+                'sample_step': sample_step,
+                'segment_max_lengths': segment_max_lengths,
+                'file_size_bytes': current_file_size,
+                'kind': 'text_index',
+                'tab_id': current_tab_id,
+                'token': current_token,
+                'file_path': current_file_path,
+            }
+            self.queue_background_file_result(payload)
+
+        threading.Thread(target=coordinator, name='NotepadXIndexCoordinator', daemon=True).start()
+        return True
+
+    def format_byte_size(self, size_bytes):
+        try:
+            size_value = max(0, int(size_bytes or 0))
+        except (TypeError, ValueError):
+            size_value = 0
+        if size_value == 1:
+            return '1 byte'
+        if size_value < 1024:
+            return f'{size_value} bytes'
+        units = ['KB', 'MB', 'GB', 'TB']
+        size_float = float(size_value)
+        for unit in units:
+            size_float /= 1024.0
+            if size_float < 1024.0 or unit == units[-1]:
+                return f'{size_float:.1f} {unit}'
+        return f'{size_value} bytes'
+
+    def close_doc_load_progress(self, doc):
+        if not doc:
+            return
+        dialog = doc.get('load_progress_dialog')
+        doc['load_progress_dialog'] = None
+        doc['load_progress_bar'] = None
+        doc['load_progress_status_label'] = None
+        doc['load_progress_detail_label'] = None
+        if not dialog:
+            return
+        try:
+            if dialog.winfo_exists():
+                dialog.destroy()
+        except tk.TclError:
+            pass
+
+    def ensure_doc_load_progress(self, doc, file_path=None, total_bytes=None):
+        if not doc:
+            return
+        dialog = doc.get('load_progress_dialog')
+        try:
+            if dialog and dialog.winfo_exists():
+                return
+        except tk.TclError:
+            pass
+
+        display_path = str(file_path or doc.get('display_name') or doc.get('file_path') or self.get_doc_name(doc['frame']) or '')
+        dialog = self.create_toplevel(self.root)
+        dialog.title(self.tr('large_file.buffering_title', 'Buffering Large File'))
+        dialog.transient(self.root)
+        dialog.resizable(False, False)
+        dialog.configure(bg=self.bg_color, padx=14, pady=12)
+
+        tk.Label(
+            dialog,
+            text=self.tr('large_file.buffering_prompt', 'Loading:\n{file_path}', file_path=display_path),
+            bg=self.bg_color,
+            fg=self.fg_color,
+            justify='left',
+            anchor='w',
+            wraplength=540
+        ).pack(anchor='w', pady=(0, 10))
+
+        progress_bar = ttk.Progressbar(dialog, orient='horizontal', mode='determinate', length=340)
+        progress_bar.pack(fill='x')
+
+        status_label = tk.Label(
+            dialog,
+            text='',
+            bg=self.bg_color,
+            fg=self.fg_color,
+            justify='left',
+            anchor='w'
+        )
+        status_label.pack(anchor='w', pady=(10, 0))
+
+        detail_label = tk.Label(
+            dialog,
+            text='',
+            bg=self.bg_color,
+            fg=self.fg_color,
+            justify='left',
+            anchor='w'
+        )
+        detail_label.pack(anchor='w', pady=(4, 0))
+
+        dialog.protocol('WM_DELETE_WINDOW', lambda: None)
+        dialog.update_idletasks()
+        self.center_window(dialog, self.root)
+        dialog.lift()
+        dialog.after(1, lambda current=dialog: self.center_window_after_show(current, self.root))
+
+        doc['load_progress_dialog'] = dialog
+        doc['load_progress_bar'] = progress_bar
+        doc['load_progress_status_label'] = status_label
+        doc['load_progress_detail_label'] = detail_label
+        self.update_doc_load_progress(
+            doc,
+            loaded_bytes=doc.get('background_bytes_loaded', 0),
+            total_bytes=total_bytes if total_bytes is not None else doc.get('background_bytes_total', 0),
+            line_count=doc.get('background_lines_loaded', 1)
+        )
+
+    def update_doc_load_progress(self, doc, loaded_bytes=None, total_bytes=None, line_count=None):
+        if not doc:
+            return
+        dialog = doc.get('load_progress_dialog')
+        if not dialog:
+            return
+        try:
+            if not dialog.winfo_exists():
+                self.close_doc_load_progress(doc)
+                return
+        except tk.TclError:
+            self.close_doc_load_progress(doc)
+            return
+
+        if loaded_bytes is None:
+            loaded_bytes = doc.get('background_bytes_loaded', 0)
+        if total_bytes is None:
+            total_bytes = doc.get('background_bytes_total', 0)
+        if line_count is None:
+            line_count = doc.get('background_lines_loaded', 1)
+
+        try:
+            loaded_value = max(0, int(loaded_bytes or 0))
+        except (TypeError, ValueError):
+            loaded_value = 0
+        try:
+            total_value = max(0, int(total_bytes or 0))
+        except (TypeError, ValueError):
+            total_value = 0
+        try:
+            line_value = max(1, int(line_count or 1))
+        except (TypeError, ValueError):
+            line_value = 1
+
+        if total_value > 0:
+            loaded_value = min(loaded_value, total_value)
+            percent_value = int((loaded_value / total_value) * 100)
+        else:
+            percent_value = 0
+
+        progress_bar = doc.get('load_progress_bar')
+        status_label = doc.get('load_progress_status_label')
+        detail_label = doc.get('load_progress_detail_label')
+        try:
+            if progress_bar is not None:
+                progress_bar.configure(maximum=max(1, total_value or 1), value=max(0, loaded_value))
+            if status_label is not None:
+                status_label.configure(
+                    text=self.tr(
+                        'large_file.buffering_status',
+                        '{percent}% ({loaded} / {total})',
+                        percent=percent_value,
+                        loaded=self.format_byte_size(loaded_value),
+                        total=self.format_byte_size(total_value)
+                    )
+                )
+            if detail_label is not None:
+                detail_label.configure(
+                    text=self.tr(
+                        'large_file.buffering_lines',
+                        'Buffered {line_count} lines',
+                        line_count=f'{line_value:,}'
+                    )
+                )
+        except tk.TclError:
+            self.close_doc_load_progress(doc)
 
     def get_resource_dir(self):
         if getattr(sys, 'frozen', False):
@@ -2683,10 +3153,13 @@ class NotepadX:
         except tk.TclError:
             return
         results = []
+        remaining_results = False
         with self.background_file_lock:
             if self.background_file_results:
-                results = self.background_file_results[:]
-                self.background_file_results.clear()
+                batch_size = max(1, int(getattr(self, 'background_file_result_batch_size', 1) or 1))
+                results = self.background_file_results[:batch_size]
+                del self.background_file_results[:batch_size]
+                remaining_results = bool(self.background_file_results)
         for result in results:
             try:
                 self.handle_background_file_result(result)
@@ -2695,7 +3168,7 @@ class NotepadX:
         if self._shutdown_requested:
             return
         try:
-            self.root.after(60, self.process_background_file_results)
+            self.root.after(8 if remaining_results else 30, self.process_background_file_results)
         except tk.TclError:
             pass
 
@@ -2719,74 +3192,371 @@ class NotepadX:
         return line_starts, file_size
 
     def start_background_text_load(self, doc, file_path):
+        self.cancel_doc_background_index(doc)
         doc['background_loading'] = True
         doc['background_load_kind'] = 'text'
         doc['background_load_file_path'] = file_path
+        doc['background_load_token'] = f"{doc['frame']}:{time.time_ns()}"
+        doc['background_bytes_loaded'] = 0
+        try:
+            doc['background_bytes_total'] = max(0, int(os.path.getsize(file_path)))
+        except OSError:
+            doc['background_bytes_total'] = 0
+        doc['background_lines_loaded'] = 1
+        doc['pending_insert_batch_count'] = 0
         text = doc['text']
         text.configure(state='normal')
         text.delete('1.0', tk.END)
-        text.insert('1.0', f"{self.tr('large_file.loading', 'Loading large file...')}\n")
         text.edit_modified(False)
+        text.mark_set(tk.INSERT, '1.0')
+        text.tag_remove('sel', '1.0', tk.END)
+        text.see('1.0')
+        self.invalidate_minimap_cache(doc)
+        process_index_started = self.start_background_text_index(doc, file_path)
+        if process_index_started:
+            doc['minimap_progressive_state'] = None
+            doc['minimap_model'] = self.create_minimap_model(1, 1, [0], complete=False)
+            doc['minimap_model_dirty'] = False
+        else:
+            self.start_progressive_minimap_build(doc, None)
+        self.refresh_minimap(doc)
+        self.ensure_doc_load_progress(doc, file_path=file_path, total_bytes=doc.get('background_bytes_total', 0))
         frame_id = str(doc['frame'])
+        load_token = str(doc.get('background_load_token') or '')
 
         def worker():
             try:
-                with open(file_path, 'r', encoding='utf-8', errors='replace') as f:
-                    content = f.read()
-                try:
-                    file_size = os.path.getsize(file_path)
-                except OSError:
-                    file_size = len(content.encode('utf-8'))
+                decoder = codecs.getincrementaldecoder('utf-8')('replace')
+                file_size = int(doc.get('background_bytes_total', 0) or 0)
+                bytes_loaded = 0
+                total_lines = 1
+                with open(file_path, 'rb') as f:
+                    while True:
+                        if doc.get('background_load_token') != load_token:
+                            return
+                        chunk = f.read(self.background_stream_read_chunk_size)
+                        if not chunk:
+                            break
+                        bytes_loaded += len(chunk)
+                        chunk_text = decoder.decode(chunk, final=False)
+                        if chunk_text:
+                            total_lines += chunk_text.count('\n')
+                            self.queue_background_file_result({
+                                'kind': 'text_chunk',
+                                'tab_id': frame_id,
+                                'token': load_token,
+                                'file_path': file_path,
+                                'chunk_text': chunk_text,
+                                'bytes_loaded': bytes_loaded,
+                                'file_size_bytes': file_size,
+                                'total_lines_hint': total_lines,
+                            })
+                        else:
+                            self.queue_background_file_result({
+                                'kind': 'text_progress',
+                                'tab_id': frame_id,
+                                'token': load_token,
+                                'file_path': file_path,
+                                'bytes_loaded': bytes_loaded,
+                                'file_size_bytes': file_size,
+                                'total_lines_hint': total_lines,
+                            })
+                        while self.count_pending_background_stream_chunks(frame_id, load_token) >= self.background_stream_max_pending_chunks:
+                            if doc.get('background_load_token') != load_token:
+                                return
+                            time.sleep(0.01)
+                tail_text = decoder.decode(b'', final=True)
+                if tail_text:
+                    total_lines += tail_text.count('\n')
+                    self.queue_background_file_result({
+                        'kind': 'text_chunk',
+                        'tab_id': frame_id,
+                        'token': load_token,
+                        'file_path': file_path,
+                        'chunk_text': tail_text,
+                        'bytes_loaded': bytes_loaded,
+                        'file_size_bytes': file_size,
+                        'total_lines_hint': total_lines,
+                    })
                 self.queue_background_file_result({
-                    'kind': 'text',
+                    'kind': 'text_complete',
                     'tab_id': frame_id,
+                    'token': load_token,
                     'file_path': file_path,
-                    'content': content,
-                    'total_lines_hint': max(1, content.count('\n') + 1),
+                    'bytes_loaded': bytes_loaded,
                     'file_size_bytes': file_size,
+                    'total_lines_hint': max(1, total_lines),
                 })
             except Exception as exc:
                 self.queue_background_file_result({
                     'kind': 'error',
                     'tab_id': frame_id,
+                    'token': load_token,
                     'file_path': file_path,
                     'error': exc,
                 })
 
         threading.Thread(target=worker, name='NotepadXLargeFileLoad', daemon=True).start()
 
+    def count_pending_background_stream_chunks(self, tab_id, load_token):
+        target_tab_id = str(tab_id or '')
+        target_token = str(load_token or '')
+        with self.background_file_lock:
+            return sum(
+                1 for item in self.background_file_results
+                if str(item.get('tab_id') or '') == target_tab_id
+                and str(item.get('token') or '') == target_token
+                and item.get('kind') in {'text_chunk', 'text_progress'}
+            )
+
+    def append_background_text_chunk(self, doc, chunk_text, bytes_loaded=None, total_bytes=None, total_lines_hint=None):
+        text = doc.get('text')
+        if not text:
+            return
+        safe_chunk = chunk_text if isinstance(chunk_text, str) else ''
+        update_status_now = not safe_chunk
+        if bytes_loaded is not None:
+            try:
+                doc['background_bytes_loaded'] = max(0, int(bytes_loaded))
+            except (TypeError, ValueError):
+                pass
+        if total_bytes is not None:
+            try:
+                doc['background_bytes_total'] = max(0, int(total_bytes))
+            except (TypeError, ValueError):
+                pass
+        if total_lines_hint is not None:
+            try:
+                doc['background_lines_loaded'] = max(1, int(total_lines_hint))
+            except (TypeError, ValueError):
+                pass
+
+        if safe_chunk:
+            text.insert(tk.END, safe_chunk)
+            text.edit_modified(False)
+            if not doc.get('background_index_active'):
+                self.append_progressive_minimap_chunk(doc, safe_chunk, finalize=False)
+            doc['pending_insert_batch_count'] = int(doc.get('pending_insert_batch_count', 0) or 0) + 1
+            batch_count = int(doc.get('pending_insert_batch_count', 0) or 0)
+            update_status_now = batch_count == 1 or batch_count % 8 == 0
+            if not doc.get('background_index_active') and (batch_count == 1 or batch_count % 16 == 0):
+                self.refresh_minimap(doc)
+        self.update_doc_load_progress(doc)
+        if update_status_now and str(doc['frame']) == self.notebook.select():
+            self.update_status()
+
+    def finalize_background_text_load(self, doc, bytes_loaded=None, total_bytes=None, total_lines_hint=None):
+        text = doc.get('text')
+        if not text:
+            return
+        if bytes_loaded is not None:
+            try:
+                doc['background_bytes_loaded'] = max(0, int(bytes_loaded))
+            except (TypeError, ValueError):
+                pass
+        if total_bytes is not None:
+            try:
+                doc['background_bytes_total'] = max(0, int(total_bytes))
+            except (TypeError, ValueError):
+                pass
+        if total_lines_hint is not None:
+            try:
+                doc['background_lines_loaded'] = max(1, int(total_lines_hint))
+            except (TypeError, ValueError):
+                pass
+
+        if doc.get('background_index_active'):
+            if doc.get('minimap_model') is None:
+                doc['minimap_model'] = self.create_minimap_model(max(1, int(doc.get('background_lines_loaded', 1) or 1)), 1, [0], complete=False)
+                doc['minimap_model_dirty'] = False
+        else:
+            self.append_progressive_minimap_chunk(doc, '', finalize=True)
+            self.refresh_minimap(doc)
+        try:
+            doc['total_file_lines'] = max(1, int(text.index('end-1c').split('.')[0]))
+        except (tk.TclError, TypeError, ValueError):
+            doc['total_file_lines'] = max(1, int(doc.get('background_lines_loaded', 1) or 1))
+        doc['window_start_line'] = 1
+        doc['window_end_line'] = doc['total_file_lines']
+        text.edit_modified(False)
+        text.mark_set(tk.INSERT, '1.0')
+        text.tag_remove('sel', '1.0', tk.END)
+        text.see('1.0')
+        doc['last_insert_index'] = '1.0'
+        doc['last_yview'] = 0.0
+        doc['last_xview'] = 0.0
+        doc['background_loading'] = False
+        doc['background_load_kind'] = None
+        doc['background_load_file_path'] = None
+        doc['background_load_token'] = None
+        doc['pending_insert_batch_count'] = 0
+        doc['symbol_cache_signature'] = None
+        doc['symbol_cache'] = None
+        self.update_doc_load_progress(doc)
+        self.close_doc_load_progress(doc)
+        self.end_doc_load(doc)
+        self.update_doc_file_signature(doc)
+        self.configure_syntax_highlighting(doc['frame'])
+        self.restore_doc_notes(doc)
+        self.register_doc_for_shared_notes(doc)
+        self.invalidate_fold_regions(doc)
+        self.schedule_diagnostics(doc)
+        self.update_line_number_gutter(doc)
+        self.schedule_minimap_refresh(doc)
+        self.refresh_tab_title(doc['frame'])
+        if self.compare_active and self.compare_source_tab == str(doc['frame']):
+            self.refresh_compare_panel()
+        if self.markdown_preview_enabled.get() and str(doc['frame']) == self.notebook.select():
+            self.schedule_markdown_preview_refresh()
+        if str(doc['frame']) == self.notebook.select():
+            self.update_status()
+
     def start_background_virtual_index(self, doc, file_path):
+        self.cancel_doc_background_index(doc)
         doc['background_loading'] = True
         doc['background_load_kind'] = 'virtual'
         doc['background_load_file_path'] = file_path
+        doc['background_load_token'] = f"{doc['frame']}:virtual:{time.time_ns()}"
+        try:
+            doc['background_bytes_total'] = max(0, int(os.path.getsize(file_path)))
+        except OSError:
+            doc['background_bytes_total'] = 0
+        doc['background_bytes_loaded'] = 0
+        doc['background_lines_loaded'] = 1
         text = doc['text']
         text.configure(state='normal')
         text.delete('1.0', tk.END)
-        text.insert('1.0', f"{self.tr('large_file.indexing', 'Indexing large file...')}\n")
         text.edit_modified(False)
+        text.mark_set(tk.INSERT, '1.0')
+        text.tag_remove('sel', '1.0', tk.END)
+        text.see('1.0')
+        self.ensure_doc_load_progress(doc, file_path=file_path, total_bytes=doc.get('background_bytes_total', 0))
         frame_id = str(doc['frame'])
+        load_token = str(doc.get('background_load_token') or '')
+        file_size = max(0, int(doc.get('background_bytes_total', 0) or 0))
+        executor = self.get_index_process_executor()
+        if executor is None:
+            def worker():
+                try:
+                    line_starts, indexed_file_size = self.build_line_index_background(file_path)
+                    minimap_model = self.build_minimap_model_from_line_starts(line_starts, indexed_file_size)
+                    self.queue_background_file_result({
+                        'kind': 'virtual',
+                        'tab_id': frame_id,
+                        'token': load_token,
+                        'file_path': file_path,
+                        'line_starts': line_starts,
+                        'file_size_bytes': indexed_file_size,
+                        'minimap_model': minimap_model,
+                    })
+                except Exception as exc:
+                    self.queue_background_file_result({
+                        'kind': 'error',
+                        'tab_id': frame_id,
+                        'token': load_token,
+                        'file_path': file_path,
+                        'error': exc,
+                    })
 
-        def worker():
+            threading.Thread(target=worker, name='NotepadXLargeFileIndex', daemon=True).start()
+            return
+
+        worker_count = self.get_background_index_worker_count(file_size)
+        index_ranges = self.build_background_index_ranges(file_size, worker_count, self.virtual_index_task_multiplier)
+        token = load_token
+        doc['background_index_token'] = token
+        doc['background_index_active'] = True
+        try:
+            futures = [
+                executor.submit(
+                    scan_newline_start_offsets_range_worker,
+                    file_path,
+                    start_offset,
+                    end_offset,
+                    self.index_process_chunk_size,
+                    range_index
+                )
+                for range_index, (start_offset, end_offset) in enumerate(index_ranges)
+            ]
+        except Exception as exc:
+            doc['background_index_token'] = None
+            doc['background_index_active'] = False
+            self.log_exception("submit background virtual index", exc)
+            def fallback_worker():
+                try:
+                    line_starts, indexed_file_size = self.build_line_index_background(file_path)
+                    minimap_model = self.build_minimap_model_from_line_starts(line_starts, indexed_file_size)
+                    self.queue_background_file_result({
+                        'kind': 'virtual',
+                        'tab_id': frame_id,
+                        'token': token,
+                        'file_path': file_path,
+                        'line_starts': line_starts,
+                        'file_size_bytes': indexed_file_size,
+                        'minimap_model': minimap_model,
+                    })
+                except Exception as inner_exc:
+                    self.queue_background_file_result({
+                        'kind': 'error',
+                        'tab_id': frame_id,
+                        'token': token,
+                        'file_path': file_path,
+                        'error': inner_exc,
+                    })
+
+            threading.Thread(target=fallback_worker, name='NotepadXLargeFileIndexFallback', daemon=True).start()
+            return
+
+        doc['background_index_future'] = list(futures)
+        file_path_abs = os.path.abspath(file_path)
+        total_ranges = max(1, len(index_ranges))
+
+        def coordinator(current_futures=tuple(futures), current_tab_id=frame_id, current_token=token, current_file_path=file_path_abs, current_file_size=file_size, current_total_ranges=total_ranges):
+            completed_results = {}
+            bytes_scanned = 0
+            completed_count = 0
             try:
-                line_starts, file_size = self.build_line_index_background(file_path)
-                minimap_model = self.build_minimap_model_from_line_starts(line_starts, file_size)
+                for completed_future in as_completed(current_futures):
+                    payload = completed_future.result()
+                    payload = dict(payload or {})
+                    completed_results[int(payload.get('range_index', completed_count) or completed_count)] = list(payload.get('line_starts') or [])
+                    bytes_scanned += max(0, int(payload.get('bytes_scanned', 0) or 0))
+                    completed_count += 1
+                    self.queue_background_file_result({
+                        'kind': 'virtual_index_progress',
+                        'tab_id': current_tab_id,
+                        'token': current_token,
+                        'file_path': current_file_path,
+                        'bytes_loaded': min(current_file_size, bytes_scanned),
+                        'file_size_bytes': current_file_size,
+                        'completed_ranges': completed_count,
+                        'total_ranges': current_total_ranges,
+                    })
+                line_starts = [0]
+                for range_index in range(current_total_ranges):
+                    line_starts.extend(completed_results.get(range_index, []))
+                if not line_starts:
+                    line_starts = [0]
+                minimap_model = self.build_minimap_model_from_line_starts(line_starts, current_file_size)
                 self.queue_background_file_result({
                     'kind': 'virtual',
-                    'tab_id': frame_id,
-                    'file_path': file_path,
+                    'tab_id': current_tab_id,
+                    'token': current_token,
+                    'file_path': current_file_path,
                     'line_starts': line_starts,
-                    'file_size_bytes': file_size,
+                    'file_size_bytes': current_file_size,
                     'minimap_model': minimap_model,
                 })
             except Exception as exc:
                 self.queue_background_file_result({
                     'kind': 'error',
-                    'tab_id': frame_id,
-                    'file_path': file_path,
+                    'tab_id': current_tab_id,
+                    'token': current_token,
+                    'file_path': current_file_path,
                     'error': exc,
                 })
 
-        threading.Thread(target=worker, name='NotepadXLargeFileIndex', daemon=True).start()
+        threading.Thread(target=coordinator, name='NotepadXVirtualIndexCoordinator', daemon=True).start()
 
     def begin_background_text_insert(self, doc, content, total_lines_hint=None):
         doc['pending_insert_content'] = content
@@ -2839,6 +3609,8 @@ class NotepadX:
         doc['background_loading'] = False
         doc['background_load_kind'] = None
         doc['background_load_file_path'] = None
+        doc['background_load_token'] = None
+        self.close_doc_load_progress(doc)
         self.end_doc_load(doc)
         self.update_doc_file_signature(doc)
         self.configure_syntax_highlighting(doc['frame'])
@@ -2855,12 +3627,15 @@ class NotepadX:
             self.update_status()
 
     def handle_background_file_error(self, doc, exc):
+        self.cancel_doc_background_index(doc)
         doc['background_loading'] = False
         doc['background_load_kind'] = None
         doc['background_load_file_path'] = None
+        doc['background_load_token'] = None
         doc.pop('pending_insert_content', None)
         doc.pop('pending_insert_offset', None)
         doc.pop('pending_insert_batch_count', None)
+        self.close_doc_load_progress(doc)
         self.end_doc_load(doc)
         file_path = doc.get('file_path')
         messagebox.showerror(
@@ -2880,6 +3655,8 @@ class NotepadX:
             f"cleanup_failed_file_open frame={doc.get('frame')} "
             f"file_path={doc.get('file_path')} new_tab={doc.get('background_open_new_tab')}"
         )
+        self.cancel_doc_background_index(doc)
+        self.reset_virtual_backing_store(doc, remove_files=True)
         self.invalidate_minimap_cache(doc)
         if doc.get('background_open_new_tab'):
             try:
@@ -2905,6 +3682,14 @@ class NotepadX:
             doc['last_virtual_col'] = 0
             doc['pending_virtual_target_line'] = None
             doc['pending_insert_batch_count'] = 0
+            doc['background_load_token'] = None
+            doc['background_index_future'] = None
+            doc['background_index_token'] = None
+            doc['background_index_active'] = False
+            doc['background_bytes_loaded'] = 0
+            doc['background_bytes_total'] = 0
+            doc['background_lines_loaded'] = 1
+            self.close_doc_load_progress(doc)
             try:
                 doc['text'].configure(state='normal')
                 doc['text'].delete('1.0', tk.END)
@@ -2927,21 +3712,85 @@ class NotepadX:
         file_path = os.path.abspath(str(result.get('file_path') or ''))
         if not file_path or os.path.abspath(str(doc.get('file_path') or '')) != file_path:
             return
-        if result.get('kind') == 'error':
+        result_kind = str(result.get('kind') or '')
+        result_token = str(result.get('token') or '')
+        doc_token = str(doc.get('background_load_token') or '')
+        if result_token and doc_token and result_token != doc_token:
+            return
+        if result_kind in {'text_index', 'text_index_error'}:
+            index_token = str(doc.get('background_index_token') or '')
+            if index_token and result_token and result_token != index_token:
+                return
+        if result_kind == 'virtual_index_progress':
+            doc['background_bytes_loaded'] = max(0, int(result.get('bytes_loaded') or 0))
+            doc['background_bytes_total'] = max(0, int(result.get('file_size_bytes') or doc.get('background_bytes_total', 0) or 0))
+            completed_ranges = max(0, int(result.get('completed_ranges') or 0))
+            total_ranges = max(1, int(result.get('total_ranges') or 1))
+            estimated_lines = max(1, int(doc.get('background_lines_loaded', 1) or 1))
+            if completed_ranges >= total_ranges and doc.get('background_bytes_total'):
+                estimated_lines = max(estimated_lines, int(doc.get('total_file_lines', estimated_lines) or estimated_lines))
+            self.update_doc_load_progress(
+                doc,
+                loaded_bytes=doc.get('background_bytes_loaded'),
+                total_bytes=doc.get('background_bytes_total'),
+                line_count=estimated_lines
+            )
+            if str(doc['frame']) == self.notebook.select():
+                self.update_status()
+            return
+        if result_kind == 'error':
             self.handle_background_file_error(doc, result.get('error'))
             return
-        if result.get('kind') == 'virtual':
+        if result_kind == 'text_index_error':
+            if str(doc.get('background_index_token') or '') == result_token:
+                doc['background_index_future'] = None
+                doc['background_index_active'] = False
+                doc['background_index_token'] = None
+            self.log_exception("background text index", result.get('error'))
+            return
+        if result_kind == 'text_index':
+            if str(doc.get('background_index_token') or '') == result_token:
+                doc['background_index_future'] = None
+                doc['background_index_active'] = False
+                doc['background_index_token'] = None
+            total_lines = max(1, int(result.get('total_lines') or doc.get('background_lines_loaded', 1) or 1))
+            doc['background_lines_loaded'] = max(total_lines, int(doc.get('background_lines_loaded', 1) or 1))
+            sample_step = max(1, int(result.get('sample_step') or max(1, total_lines // self.minimap_max_segments)))
+            segment_max_lengths = list(result.get('segment_max_lengths') or [0])
+            doc['minimap_progressive_state'] = None
+            doc['minimap_model'] = self.create_minimap_model(total_lines, sample_step, segment_max_lengths, complete=True)
+            doc['minimap_model_dirty'] = False
+            if not doc.get('background_loading'):
+                doc['total_file_lines'] = total_lines
+                doc['window_end_line'] = max(int(doc.get('window_end_line', 1) or 1), total_lines)
+            self.update_doc_load_progress(doc, line_count=doc.get('background_lines_loaded'))
+            self.schedule_minimap_refresh(doc)
+            if str(doc['frame']) == self.notebook.select():
+                self.update_status()
+            return
+        if result_kind == 'virtual':
+            if str(doc.get('background_index_token') or '') == result_token:
+                doc['background_index_future'] = None
+                doc['background_index_active'] = False
+                doc['background_index_token'] = None
             doc['line_starts'] = result.get('line_starts') or [0]
             doc['file_size_bytes'] = int(result.get('file_size_bytes') or 0)
             doc['total_file_lines'] = max(1, len(doc['line_starts']))
+            self.initialize_virtual_backing_store(doc)
             doc['minimap_model'] = result.get('minimap_model')
             doc['minimap_model_dirty'] = not bool(doc.get('minimap_model'))
             doc['minimap_progressive_state'] = None
             doc['background_loading'] = False
             doc['background_load_kind'] = None
             doc['background_load_file_path'] = None
+            doc['background_load_token'] = None
+            doc['background_bytes_loaded'] = doc['file_size_bytes']
+            doc['background_bytes_total'] = doc['file_size_bytes']
+            doc['background_lines_loaded'] = doc['total_file_lines']
             doc['window_start_line'] = 1
             doc['window_end_line'] = 1
+            self.update_doc_load_progress(doc)
+            self.close_doc_load_progress(doc)
             self.end_doc_load(doc)
             pending_target = doc.pop('pending_virtual_target_line', None)
             if pending_target == 'end':
@@ -2954,7 +3803,36 @@ class NotepadX:
                 self.update_status()
             doc['background_open_new_tab'] = False
             return
-        if result.get('kind') == 'text':
+        if result_kind == 'text_progress':
+            self.append_background_text_chunk(
+                doc,
+                '',
+                bytes_loaded=result.get('bytes_loaded'),
+                total_bytes=result.get('file_size_bytes'),
+                total_lines_hint=result.get('total_lines_hint')
+            )
+            doc['background_open_new_tab'] = False
+            return
+        if result_kind == 'text_chunk':
+            self.append_background_text_chunk(
+                doc,
+                result.get('chunk_text') or '',
+                bytes_loaded=result.get('bytes_loaded'),
+                total_bytes=result.get('file_size_bytes'),
+                total_lines_hint=result.get('total_lines_hint')
+            )
+            doc['background_open_new_tab'] = False
+            return
+        if result_kind == 'text_complete':
+            self.finalize_background_text_load(
+                doc,
+                bytes_loaded=result.get('bytes_loaded'),
+                total_bytes=result.get('file_size_bytes'),
+                total_lines_hint=result.get('total_lines_hint')
+            )
+            doc['background_open_new_tab'] = False
+            return
+        if result_kind == 'text':
             try:
                 doc['file_size_bytes'] = int(result.get('file_size_bytes') or 0)
             except (TypeError, ValueError):
@@ -3096,6 +3974,507 @@ class NotepadX:
         if not doc:
             return None
         return doc.get('remote_shadow_path') or doc.get('file_path')
+
+    def is_virtual_editable(self, doc):
+        return bool(doc and doc.get('virtual_mode') and doc.get('virtual_editable'))
+
+    def is_doc_text_readonly(self, doc):
+        return bool(doc and (doc.get('preview_mode') or (doc.get('virtual_mode') and not self.is_virtual_editable(doc))))
+
+    def doc_has_unsaved_changes(self, doc):
+        if not doc:
+            return False
+        modified = False
+        text_widget = doc.get('text')
+        if text_widget:
+            try:
+                modified = bool(text_widget.edit_modified())
+            except tk.TclError:
+                modified = False
+        if self.is_virtual_editable(doc):
+            return bool(modified or doc.get('virtual_doc_dirty'))
+        return modified
+
+    def reset_virtual_backing_store(self, doc, remove_files=True):
+        if not doc:
+            return
+        add_buffer_path = doc.get('virtual_add_buffer_path')
+        if remove_files and add_buffer_path and os.path.exists(add_buffer_path):
+            try:
+                os.remove(add_buffer_path)
+            except OSError:
+                pass
+        doc['virtual_editable'] = False
+        doc['virtual_doc_dirty'] = False
+        doc['virtual_piece_table'] = []
+        doc['virtual_add_buffer_path'] = None
+        doc['virtual_add_buffer_size'] = 0
+        doc['virtual_revision'] = 0
+        doc['virtual_source_path'] = None
+        doc['virtual_window_start_byte'] = 0
+        doc['virtual_window_end_byte'] = 0
+        doc['virtual_hot_chunk_cache'] = OrderedDict()
+        doc['virtual_cold_chunk_cache'] = OrderedDict()
+
+    def initialize_virtual_backing_store(self, doc):
+        if not doc:
+            return
+        file_size = max(0, int(doc.get('file_size_bytes', 0) or 0))
+        self.reset_virtual_backing_store(doc, remove_files=True)
+        doc['virtual_editable'] = True
+        doc['virtual_source_path'] = self.get_doc_persistence_path(doc)
+        doc['virtual_piece_table'] = [{'source': 'file', 'start': 0, 'length': file_size}] if file_size > 0 else []
+        doc['virtual_hot_chunk_cache'] = OrderedDict()
+        doc['virtual_cold_chunk_cache'] = OrderedDict()
+
+    def clear_virtual_window_caches(self, doc):
+        if not doc:
+            return
+        doc['virtual_hot_chunk_cache'] = OrderedDict()
+        doc['virtual_cold_chunk_cache'] = OrderedDict()
+
+    def build_virtual_window_cache_key(self, doc, start_byte, end_byte):
+        return (
+            int(doc.get('virtual_revision', 0) or 0),
+            max(0, int(start_byte or 0)),
+            max(0, int(end_byte or 0)),
+        )
+
+    def store_virtual_window_cache_text(self, doc, cache_key, text_value):
+        if not doc:
+            return
+        hot_cache = doc.get('virtual_hot_chunk_cache')
+        if not isinstance(hot_cache, OrderedDict):
+            hot_cache = OrderedDict()
+            doc['virtual_hot_chunk_cache'] = hot_cache
+        hot_cache[cache_key] = text_value
+        hot_cache.move_to_end(cache_key)
+        while len(hot_cache) > self.virtual_hot_chunk_cache_entries:
+            evicted_key, evicted_text = hot_cache.popitem(last=False)
+            if not self.virtual_cold_chunk_cache_enabled:
+                continue
+            cold_cache = doc.get('virtual_cold_chunk_cache')
+            if not isinstance(cold_cache, OrderedDict):
+                cold_cache = OrderedDict()
+                doc['virtual_cold_chunk_cache'] = cold_cache
+            try:
+                cold_cache[evicted_key] = zlib.compress(evicted_text.encode('utf-8'), level=1)
+                cold_cache.move_to_end(evicted_key)
+            except Exception:
+                continue
+            while len(cold_cache) > self.virtual_cold_chunk_cache_entries:
+                cold_cache.popitem(last=False)
+
+    def get_virtual_window_cache_text(self, doc, cache_key):
+        if not doc:
+            return None
+        hot_cache = doc.get('virtual_hot_chunk_cache')
+        if isinstance(hot_cache, OrderedDict) and cache_key in hot_cache:
+            hot_cache.move_to_end(cache_key)
+            return hot_cache[cache_key]
+        cold_cache = doc.get('virtual_cold_chunk_cache')
+        if isinstance(cold_cache, OrderedDict) and cache_key in cold_cache:
+            try:
+                cached_text = zlib.decompress(cold_cache.pop(cache_key)).decode('utf-8', errors='replace')
+                self.store_virtual_window_cache_text(doc, cache_key, cached_text)
+                return cached_text
+            except Exception:
+                cold_cache.pop(cache_key, None)
+        return None
+
+    def ensure_virtual_add_buffer_path(self, doc):
+        if not doc:
+            return None
+        existing_path = doc.get('virtual_add_buffer_path')
+        if existing_path and os.path.exists(existing_path):
+            return existing_path
+        temp_dir = os.path.join(self.get_emergency_support_dir(), 'virtual-add')
+        os.makedirs(temp_dir, exist_ok=True)
+        fd, temp_path = tempfile.mkstemp(prefix='notepadx-virtual-', suffix='.bin', dir=temp_dir)
+        os.close(fd)
+        doc['virtual_add_buffer_path'] = temp_path
+        doc['virtual_add_buffer_size'] = 0
+        return temp_path
+
+    def append_virtual_add_bytes(self, doc, payload_bytes):
+        data = bytes(payload_bytes or b'')
+        if not data:
+            return None
+        add_buffer_path = self.ensure_virtual_add_buffer_path(doc)
+        start_offset = max(0, int(doc.get('virtual_add_buffer_size', 0) or 0))
+        with open(add_buffer_path, 'ab') as add_file:
+            add_file.write(data)
+            add_file.flush()
+            os.fsync(add_file.fileno())
+        doc['virtual_add_buffer_size'] = start_offset + len(data)
+        return start_offset
+
+    def iter_virtual_piece_segments(self, doc, start_byte, end_byte):
+        logical_offset = 0
+        safe_start = max(0, int(start_byte or 0))
+        safe_end = max(safe_start, int(end_byte or safe_start))
+        for piece in doc.get('virtual_piece_table') or []:
+            piece_length = max(0, int(piece.get('length', 0) or 0))
+            if piece_length <= 0:
+                continue
+            piece_end = logical_offset + piece_length
+            if piece_end <= safe_start:
+                logical_offset = piece_end
+                continue
+            if logical_offset >= safe_end:
+                break
+            local_start = max(0, safe_start - logical_offset)
+            local_end = min(piece_length, safe_end - logical_offset)
+            if local_end > local_start:
+                yield piece, local_start, local_end - local_start
+            logical_offset = piece_end
+
+    def read_virtual_byte_range_text(self, doc, start_byte, end_byte):
+        safe_start = max(0, int(start_byte or 0))
+        safe_end = max(safe_start, int(end_byte or safe_start))
+        cache_key = self.build_virtual_window_cache_key(doc, safe_start, safe_end)
+        cached_text = self.get_virtual_window_cache_text(doc, cache_key)
+        if cached_text is not None:
+            return cached_text
+
+        chunk_parts = []
+        open_handles = {}
+        try:
+            for piece, local_offset, span_length in self.iter_virtual_piece_segments(doc, safe_start, safe_end):
+                source_name = piece.get('source')
+                source_path = (doc.get('virtual_source_path') or doc.get('file_path')) if source_name == 'file' else doc.get('virtual_add_buffer_path')
+                if not source_path:
+                    continue
+                handle = open_handles.get(source_path)
+                if handle is None:
+                    handle = open(source_path, 'rb')
+                    open_handles[source_path] = handle
+                handle.seek(max(0, int(piece.get('start', 0) or 0)) + local_offset)
+                remaining = span_length
+                while remaining > 0:
+                    chunk = handle.read(min(self.file_load_chunk_size, remaining))
+                    if not chunk:
+                        break
+                    chunk_parts.append(chunk)
+                    remaining -= len(chunk)
+        finally:
+            for handle in open_handles.values():
+                try:
+                    handle.close()
+                except OSError:
+                    pass
+
+        decoded_text = b''.join(chunk_parts).decode('utf-8', errors='replace')
+        self.store_virtual_window_cache_text(doc, cache_key, decoded_text)
+        return decoded_text
+
+    def merge_virtual_piece_table(self, pieces):
+        merged = []
+        for piece in pieces or []:
+            piece_length = max(0, int(piece.get('length', 0) or 0))
+            if piece_length <= 0:
+                continue
+            normalized_piece = {
+                'source': piece.get('source'),
+                'start': max(0, int(piece.get('start', 0) or 0)),
+                'length': piece_length,
+            }
+            if (
+                merged and
+                merged[-1]['source'] == normalized_piece['source'] and
+                merged[-1]['start'] + merged[-1]['length'] == normalized_piece['start']
+            ):
+                merged[-1]['length'] += normalized_piece['length']
+            else:
+                merged.append(normalized_piece)
+        return merged
+
+    def replace_virtual_byte_range(self, doc, start_byte, end_byte, replacement_piece=None):
+        safe_start = max(0, int(start_byte or 0))
+        safe_end = max(safe_start, int(end_byte or safe_start))
+        current_pieces = list(doc.get('virtual_piece_table') or [])
+        updated_pieces = []
+        inserted = False
+        logical_offset = 0
+        for piece in current_pieces:
+            piece_length = max(0, int(piece.get('length', 0) or 0))
+            if piece_length <= 0:
+                continue
+            piece_start = logical_offset
+            piece_end = piece_start + piece_length
+            logical_offset = piece_end
+
+            if piece_end <= safe_start or piece_start >= safe_end:
+                if not inserted and piece_start >= safe_end and replacement_piece is not None:
+                    updated_pieces.append(dict(replacement_piece))
+                    inserted = True
+                updated_pieces.append(dict(piece))
+                continue
+
+            if piece_start < safe_start:
+                updated_pieces.append({
+                    'source': piece.get('source'),
+                    'start': int(piece.get('start', 0) or 0),
+                    'length': safe_start - piece_start,
+                })
+            if not inserted and replacement_piece is not None:
+                updated_pieces.append(dict(replacement_piece))
+                inserted = True
+            if piece_end > safe_end:
+                suffix_offset = safe_end - piece_start
+                updated_pieces.append({
+                    'source': piece.get('source'),
+                    'start': int(piece.get('start', 0) or 0) + suffix_offset,
+                    'length': piece_end - safe_end,
+                })
+
+        if not inserted and replacement_piece is not None:
+            updated_pieces.append(dict(replacement_piece))
+        doc['virtual_piece_table'] = self.merge_virtual_piece_table(updated_pieces)
+
+    def update_virtual_line_index_after_replace(self, doc, start_line, end_line, start_byte, old_end_byte, replacement_bytes):
+        line_starts = list(doc.get('line_starts') or [0])
+        total_lines = max(1, int(doc.get('total_file_lines', len(line_starts)) or len(line_starts)))
+        safe_start_line = max(1, min(total_lines, int(start_line or 1)))
+        safe_end_line = max(safe_start_line, min(total_lines, int(end_line or safe_start_line)))
+        start_index = safe_start_line - 1
+        next_line_index = safe_end_line
+
+        prefix = line_starts[:start_index + 1]
+        replacement_new_starts = []
+        for newline_offset, byte_value in enumerate(replacement_bytes or b''):
+            if byte_value == 10:
+                replacement_new_starts.append(start_byte + newline_offset + 1)
+
+        byte_delta = len(replacement_bytes or b'') - max(0, old_end_byte - start_byte)
+        shifted_suffix = [int(line_start) + byte_delta for line_start in line_starts[next_line_index:]]
+
+        doc['line_starts'] = prefix + replacement_new_starts + shifted_suffix
+        if not doc['line_starts']:
+            doc['line_starts'] = [0]
+        doc['file_size_bytes'] = max(0, int(doc.get('file_size_bytes', 0) or 0) + byte_delta)
+        doc['total_file_lines'] = max(1, len(doc['line_starts']))
+
+    def flush_virtual_window_edits(self, doc, force=False):
+        if not self.is_virtual_editable(doc):
+            return True
+        if not self.is_virtual_index_ready(doc):
+            return False
+        text_widget = doc.get('text')
+        if not text_widget:
+            return False
+        try:
+            window_dirty = bool(text_widget.edit_modified())
+        except tk.TclError:
+            return False
+        if not force and not window_dirty:
+            return True
+
+        start_line = max(1, int(doc.get('window_start_line', 1) or 1))
+        end_line = max(start_line, int(doc.get('window_end_line', start_line) or start_line))
+        line_starts = doc.get('line_starts') or [0]
+        if start_line - 1 >= len(line_starts):
+            return False
+        start_byte = int(line_starts[start_line - 1])
+        old_end_byte = self.get_virtual_line_end_byte(doc, end_line)
+        try:
+            replacement_text = text_widget.get('1.0', 'end-1c')
+            insert_line, insert_col = [int(part) for part in text_widget.index(tk.INSERT).split('.')]
+        except (tk.TclError, ValueError):
+            replacement_text = ''
+            insert_line = 1
+            insert_col = 0
+        replacement_bytes = replacement_text.encode('utf-8')
+        replacement_piece = None
+        replacement_piece_start = self.append_virtual_add_bytes(doc, replacement_bytes)
+        if replacement_piece_start is not None:
+            replacement_piece = {
+                'source': 'add',
+                'start': replacement_piece_start,
+                'length': len(replacement_bytes),
+            }
+
+        self.replace_virtual_byte_range(doc, start_byte, old_end_byte, replacement_piece=replacement_piece)
+        self.update_virtual_line_index_after_replace(doc, start_line, end_line, start_byte, old_end_byte, replacement_bytes)
+        doc['virtual_doc_dirty'] = True
+        doc['virtual_revision'] = int(doc.get('virtual_revision', 0) or 0) + 1
+        self.clear_virtual_window_caches(doc)
+        new_end_byte = start_byte + len(replacement_bytes)
+        doc['virtual_window_start_byte'] = start_byte
+        doc['virtual_window_end_byte'] = new_end_byte
+        new_window_line_count = max(1, replacement_bytes.count(b'\n') + 1)
+        doc['window_start_line'] = start_line
+        doc['window_end_line'] = min(doc['total_file_lines'], start_line + new_window_line_count - 1)
+        doc['last_virtual_line'] = max(1, min(doc['total_file_lines'], start_line + insert_line - 1))
+        doc['last_virtual_col'] = max(0, insert_col)
+        self.store_virtual_window_cache_text(
+            doc,
+            self.build_virtual_window_cache_key(doc, start_byte, new_end_byte),
+            replacement_text
+        )
+        doc['minimap_model'] = None
+        doc['minimap_model_dirty'] = True
+        doc['symbol_cache_signature'] = None
+        doc['symbol_cache'] = None
+        try:
+            text_widget.edit_modified(False)
+        except tk.TclError:
+            pass
+        self.refresh_tab_title(doc['frame'])
+        if str(doc['frame']) == self.notebook.select():
+            self.update_status()
+        return True
+
+    def iter_virtual_document_chunks(self, doc, chunk_size=None):
+        if not doc:
+            return
+        active_chunk_size = max(64 * 1024, int(chunk_size or self.file_load_chunk_size or 0))
+        open_handles = {}
+        try:
+            for piece in doc.get('virtual_piece_table') or []:
+                piece_length = max(0, int(piece.get('length', 0) or 0))
+                if piece_length <= 0:
+                    continue
+                source_name = piece.get('source')
+                source_path = (doc.get('virtual_source_path') or doc.get('file_path')) if source_name == 'file' else doc.get('virtual_add_buffer_path')
+                if not source_path:
+                    continue
+                handle = open_handles.get(source_path)
+                if handle is None:
+                    handle = open(source_path, 'rb')
+                    open_handles[source_path] = handle
+                handle.seek(max(0, int(piece.get('start', 0) or 0)))
+                remaining = piece_length
+                while remaining > 0:
+                    chunk = handle.read(min(active_chunk_size, remaining))
+                    if not chunk:
+                        break
+                    remaining -= len(chunk)
+                    yield chunk
+        finally:
+            for handle in open_handles.values():
+                try:
+                    handle.close()
+                except OSError:
+                    pass
+
+    def write_virtual_document_atomically(self, doc, file_path):
+        directory = os.path.dirname(file_path) or '.'
+        os.makedirs(directory, exist_ok=True)
+        target_mode = None
+        temp_path = None
+        if not self.is_windows:
+            try:
+                target_mode = stat.S_IMODE(os.stat(file_path).st_mode)
+            except OSError:
+                target_mode = 0o664
+        try:
+            fd, temp_path = tempfile.mkstemp(prefix='notepadx-save-', suffix='.tmp', dir=directory)
+            with os.fdopen(fd, 'wb') as temp_file:
+                for chunk in self.iter_virtual_document_chunks(doc):
+                    temp_file.write(chunk)
+                temp_file.flush()
+                os.fsync(temp_file.fileno())
+            os.replace(temp_path, file_path)
+            if target_mode is not None:
+                os.chmod(file_path, target_mode)
+            return True
+        finally:
+            if temp_path and os.path.exists(temp_path):
+                try:
+                    os.remove(temp_path)
+                except OSError:
+                    pass
+
+    def rebase_virtual_document_after_save(self, doc, persisted_path=None):
+        if not self.is_virtual_editable(doc):
+            return
+        base_path = persisted_path or doc.get('file_path')
+        file_size = 0
+        if base_path:
+            try:
+                file_size = os.path.getsize(base_path)
+            except OSError:
+                file_size = max(0, int(doc.get('file_size_bytes', 0) or 0))
+        add_buffer_path = doc.get('virtual_add_buffer_path')
+        if add_buffer_path and os.path.exists(add_buffer_path):
+            try:
+                os.remove(add_buffer_path)
+            except OSError:
+                pass
+        doc['virtual_add_buffer_path'] = None
+        doc['virtual_add_buffer_size'] = 0
+        doc['virtual_piece_table'] = [{'source': 'file', 'start': 0, 'length': file_size}] if file_size > 0 else []
+        doc['virtual_doc_dirty'] = False
+        doc['virtual_revision'] = int(doc.get('virtual_revision', 0) or 0) + 1
+        doc['virtual_source_path'] = base_path
+        self.clear_virtual_window_caches(doc)
+        doc['file_size_bytes'] = file_size
+        if self.is_virtual_index_ready(doc):
+            start_line = max(1, min(doc['total_file_lines'], int(doc.get('window_start_line', 1) or 1)))
+            end_line = max(start_line, min(doc['total_file_lines'], int(doc.get('window_end_line', start_line) or start_line)))
+            doc['virtual_window_start_byte'] = int((doc.get('line_starts') or [0])[start_line - 1])
+            doc['virtual_window_end_byte'] = self.get_virtual_line_end_byte(doc, end_line)
+        try:
+            doc['text'].edit_modified(False)
+        except tk.TclError:
+            pass
+
+    def save_virtual_document(self, doc, autosave=False, show_errors=True, update_recent=True):
+        if not doc:
+            return False
+        if not doc.get('file_path'):
+            if autosave:
+                return False
+            return self.save_as()
+        if not self.flush_virtual_window_edits(doc, force=True):
+            return False
+        if not autosave and not doc.get('is_remote'):
+            if not self.confirm_external_file_change(doc):
+                return False
+        try:
+            if not autosave:
+                self.create_backup_snapshot(doc)
+            if doc.get('is_remote'):
+                shadow_path = doc.get('remote_shadow_path') or doc.get('file_path')
+                if not shadow_path:
+                    raise OSError('Remote document metadata is incomplete')
+                self.write_virtual_document_atomically(doc, shadow_path)
+                remote_spec = doc.get('remote_spec')
+                scp_path = self.get_scp_executable()
+                if not remote_spec or not scp_path:
+                    raise OSError('scp is unavailable')
+                completed = subprocess.run(
+                    [scp_path, '-q', shadow_path, remote_spec],
+                    capture_output=True,
+                    text=True,
+                    creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0)
+                )
+                if completed.returncode != 0:
+                    error_detail = (completed.stderr or completed.stdout or 'Unknown scp failure').strip()
+                    raise OSError(error_detail)
+                self.rebase_virtual_document_after_save(doc, shadow_path)
+            else:
+                self.write_virtual_document_atomically(doc, doc['file_path'])
+                self.rebase_virtual_document_after_save(doc, doc['file_path'])
+        except (PermissionError, RuntimeError, ValueError, OSError) as exc:
+            if show_errors:
+                if isinstance(exc, PermissionError):
+                    self.show_filesystem_error(self.tr('save.failed_title', 'Save Failed'), doc.get('file_path'), exc)
+                elif isinstance(exc, (RuntimeError, ValueError)):
+                    messagebox.showerror(self.tr('save.failed_title', 'Save Failed'), str(exc), parent=self.root)
+                else:
+                    self.log_exception('save virtual document', exc)
+                    self.show_filesystem_error(self.tr('save.failed_title', 'Save Failed'), doc.get('file_path'), exc)
+            return False
+
+        self.update_doc_file_signature(doc)
+        if update_recent and not doc.get('is_remote'):
+            self.add_recent_file(doc['file_path'])
+        self.refresh_tab_title(doc['frame'])
+        self.update_status()
+        self.save_session()
+        return True
 
     def clear_remote_metadata(self, doc):
         if not doc:
@@ -3291,7 +4670,7 @@ class NotepadX:
     def save_document_content(self, doc, autosave=False, show_errors=True, update_recent=True):
         if not doc:
             return False
-        if doc.get('preview_mode') or doc.get('virtual_mode'):
+        if doc.get('preview_mode') or (doc.get('virtual_mode') and not self.is_virtual_editable(doc)):
             if show_errors:
                 messagebox.showinfo(
                     self.tr('large_file.title', 'Large File Mode'),
@@ -3302,6 +4681,8 @@ class NotepadX:
                     parent=self.root
                 )
             return False
+        if self.is_virtual_editable(doc):
+            return self.save_virtual_document(doc, autosave=autosave, show_errors=show_errors, update_recent=update_recent)
 
         if not doc.get('file_path'):
             if autosave:
@@ -3400,7 +4781,9 @@ class NotepadX:
         for doc in list(self.documents.values()):
             self.unregister_doc_from_shared_notes(doc)
             self.cancel_doc_autosave(doc)
+            self.cancel_doc_background_index(doc)
         self.stop_single_instance_server()
+        self.shutdown_index_process_executor()
         if self.recovery_job:
             try:
                 self.root.after_cancel(self.recovery_job)
@@ -4390,7 +5773,7 @@ class NotepadX:
         zoom_text = self.get_zoom_text()
         mode_suffix = ""
         if doc and doc.get('virtual_mode'):
-            mode_suffix = f" | {self.tr('status.mode.virtual', 'Virtual')}"
+            mode_suffix = f" | {self.tr('status.mode.virtual_editable', 'Paged') if self.is_virtual_editable(doc) else self.tr('status.mode.virtual', 'Virtual')}"
         elif doc and doc.get('preview_mode'):
             mode_suffix = f" | {self.tr('status.mode.preview', 'Preview')}"
         elif doc and doc.get('large_file_mode'):
@@ -4443,7 +5826,7 @@ class NotepadX:
             total_lines, total_chars, char_info = self.build_status_char_info_for_widget(text_widget)
         mode_suffix = ""
         if doc and doc.get('virtual_mode'):
-            mode_suffix = f" | {self.tr('status.mode.virtual', 'Virtual')}"
+            mode_suffix = f" | {self.tr('status.mode.virtual_editable', 'Paged') if self.is_virtual_editable(doc) else self.tr('status.mode.virtual', 'Virtual')}"
         elif doc and doc.get('preview_mode'):
             mode_suffix = f" | {self.tr('status.mode.preview', 'Preview')}"
         elif doc and doc.get('large_file_mode'):
@@ -9693,6 +11076,17 @@ class NotepadX:
             'remote_host': None,
             'remote_path': None,
             'remote_shadow_path': None,
+            'virtual_editable': False,
+            'virtual_doc_dirty': False,
+            'virtual_piece_table': [],
+            'virtual_add_buffer_path': None,
+            'virtual_add_buffer_size': 0,
+            'virtual_revision': 0,
+            'virtual_source_path': None,
+            'virtual_window_start_byte': 0,
+            'virtual_window_end_byte': 0,
+            'virtual_hot_chunk_cache': OrderedDict(),
+            'virtual_cold_chunk_cache': OrderedDict(),
         }
         self.compare_minimap.bind('<Button-1>', lambda e: self.on_minimap_click(e, self.compare_view))
         self.compare_minimap.bind('<B1-Motion>', lambda e: self.on_minimap_click(e, self.compare_view))
@@ -9913,7 +11307,14 @@ class NotepadX:
             'background_loading': False,
             'background_load_kind': None,
             'background_load_file_path': None,
+            'background_load_token': None,
+            'background_index_future': None,
+            'background_index_token': None,
+            'background_index_active': False,
             'background_open_new_tab': False,
+            'background_bytes_loaded': 0,
+            'background_bytes_total': 0,
+            'background_lines_loaded': 1,
             'last_virtual_line': 1,
             'last_virtual_col': 0,
             'pending_virtual_target_line': None,
@@ -9941,7 +11342,22 @@ class NotepadX:
             'remote_host': None,
             'remote_path': None,
             'remote_shadow_path': None,
+            'virtual_editable': False,
+            'virtual_doc_dirty': False,
+            'virtual_piece_table': [],
+            'virtual_add_buffer_path': None,
+            'virtual_add_buffer_size': 0,
+            'virtual_revision': 0,
+            'virtual_source_path': None,
+            'virtual_window_start_byte': 0,
+            'virtual_window_end_byte': 0,
+            'virtual_hot_chunk_cache': OrderedDict(),
+            'virtual_cold_chunk_cache': OrderedDict(),
             'display_name': None,
+            'load_progress_dialog': None,
+            'load_progress_bar': None,
+            'load_progress_status_label': None,
+            'load_progress_detail_label': None,
         }
         self.apply_syntax_tag_colors(text)
         text.tag_config('diagnostic_error', background='#51202a', foreground='#ffb3ba')
@@ -11858,6 +13274,9 @@ class NotepadX:
         else:
             end_byte = int(doc.get('file_size_bytes', 0) or 0)
 
+        if self.is_virtual_editable(doc):
+            return self.read_virtual_byte_range_text(doc, start_byte, end_byte)
+
         with open(doc['file_path'], 'rb') as f:
             f.seek(start_byte)
             data = f.read(end_byte - start_byte)
@@ -11868,6 +13287,21 @@ class NotepadX:
             return False
         total_lines = max(1, int(doc.get('total_file_lines', 1) or 1))
         target_line = max(1, min(total_lines, int(target_line or 1)))
+        if self.is_virtual_editable(doc):
+            try:
+                current_window_dirty = bool(doc['text'].edit_modified())
+            except tk.TclError:
+                current_window_dirty = False
+            if current_window_dirty:
+                predicted_start_line, predicted_end_line = self.get_virtual_window_bounds(doc, target_line)
+                if (
+                    predicted_start_line != int(doc.get('window_start_line', 0) or 0) or
+                    predicted_end_line != int(doc.get('window_end_line', 0) or 0)
+                ):
+                    if not self.flush_virtual_window_edits(doc, force=True):
+                        return False
+                    total_lines = max(1, int(doc.get('total_file_lines', 1) or 1))
+                    target_line = max(1, min(total_lines, int(target_line or 1)))
         start_line, end_line = self.get_virtual_window_bounds(doc, target_line)
         text = doc['text']
         try:
@@ -11903,6 +13337,8 @@ class NotepadX:
 
         doc['window_start_line'] = start_line
         doc['window_end_line'] = end_line
+        doc['virtual_window_start_byte'] = int((doc.get('line_starts') or [0])[start_line - 1])
+        doc['virtual_window_end_byte'] = self.get_virtual_line_end_byte(doc, end_line)
 
         local_line = max(1, target_line - start_line + 1)
         line_length = 0
@@ -12488,11 +13924,11 @@ class NotepadX:
             and not (state & 0x4)
             and not (self.autocomplete_popup_visible() and self.autocomplete_doc_id == str(tab_id))
         ):
-            if not doc.get('virtual_mode') and not doc.get('preview_mode'):
+            if not self.is_doc_text_readonly(doc):
                 self.hide_autocomplete_popup()
                 return self.handle_compare_multi_edit_newline(doc['text'])
 
-        if not doc.get('virtual_mode') and not doc.get('preview_mode'):
+        if not self.is_doc_text_readonly(doc):
             return self.handle_editable_text_keypress(event, doc['text'], doc, str(tab_id))
 
         navigation_keys = {
@@ -13128,8 +14564,8 @@ class NotepadX:
         doc['context_note_tag'] = clicked_note_tags[-1] if clicked_note_tags else None
         doc['context_target_widget'] = target_widget
 
-        is_readonly_target = bool(doc.get('preview_mode') or doc.get('virtual_mode'))
-        if is_readonly_target:
+        is_readonly_target = self.is_doc_text_readonly(doc)
+        if is_readonly_target or doc.get('virtual_mode'):
             note_state = 'disabled'
         note_action_state = 'normal' if doc.get('context_note_tag') else 'disabled'
         self.rebuild_text_context_menu(
@@ -14599,6 +16035,9 @@ class NotepadX:
         keep_loading_state = False
         self.begin_doc_load(doc)
         try:
+            self.cancel_doc_background_index(doc)
+            self.close_doc_load_progress(doc)
+            self.reset_virtual_backing_store(doc, remove_files=True)
             self.invalidate_minimap_cache(doc)
             self.clear_fold_tags(doc)
             doc['diagnostics'] = []
@@ -14609,6 +16048,13 @@ class NotepadX:
             doc['background_loading'] = False
             doc['background_load_kind'] = None
             doc['background_load_file_path'] = None
+            doc['background_load_token'] = None
+            doc['background_index_future'] = None
+            doc['background_index_token'] = None
+            doc['background_index_active'] = False
+            doc['background_bytes_loaded'] = 0
+            doc['background_bytes_total'] = 0
+            doc['background_lines_loaded'] = 1
             doc.pop('pending_insert_content', None)
             doc['pending_insert_offset'] = 0
             doc['pending_insert_batch_count'] = 0
@@ -15317,7 +16763,7 @@ class NotepadX:
     def get_doc_title(self, tab_id):
         doc = self.documents[str(tab_id)]
         title = self.get_doc_name(tab_id)
-        if doc['text'].edit_modified():
+        if self.doc_has_unsaved_changes(doc):
             title += " *"
         return title
 
@@ -15337,7 +16783,7 @@ class NotepadX:
             self.root.title(self.app_name)
             return
         title = self.get_doc_name(doc['frame'])
-        if doc['text'].edit_modified():
+        if self.doc_has_unsaved_changes(doc):
             title += " *"
         self.root.title(f"{self.app_name} - {title}")
 
@@ -15351,6 +16797,12 @@ class NotepadX:
         self.remember_doc_view_state(doc)
         doc['symbol_cache_signature'] = None
         doc['symbol_cache'] = None
+        if self.is_virtual_editable(doc):
+            self.refresh_tab_title(tab_id)
+            self.update_line_number_gutter(doc)
+            if str(tab_id) == self.notebook.select():
+                self.update_status()
+            return
         is_large_file = bool(doc.get('large_file_mode'))
         if is_large_file:
             try:
@@ -15607,7 +17059,7 @@ class NotepadX:
                 parent=self.root
             )
             return "break"
-        if doc.get('preview_mode') or doc.get('virtual_mode'):
+        if doc.get('preview_mode') or (doc.get('virtual_mode') and not self.is_virtual_editable(doc)):
             local_path = doc.get('file_path')
             if not local_path or not os.path.exists(local_path):
                 messagebox.showinfo(
@@ -15622,7 +17074,7 @@ class NotepadX:
             doc = self.documents.get(str(tab_id))
             if not doc or not doc.get('file_path'):
                 return "break"
-        elif doc['text'].edit_modified() and not (doc.get('preview_mode') or doc.get('virtual_mode')):
+        elif self.doc_has_unsaved_changes(doc) and not self.is_doc_text_readonly(doc):
             if not self.save_document_content(doc, autosave=False, show_errors=True, update_recent=True):
                 return "break"
 
@@ -15659,7 +17111,7 @@ class NotepadX:
             return None
         menu = self.tab_context_menu or self.create_tab_context_menu()
         menu.delete(0, tk.END)
-        save_disabled = bool(doc.get('preview_mode') or doc.get('virtual_mode'))
+        save_disabled = bool(doc.get('preview_mode') or (doc.get('virtual_mode') and not self.is_virtual_editable(doc)))
         has_local_path = bool(doc.get('file_path') and os.path.exists(doc.get('file_path')))
 
         menu.add_command(label=self.tr('tab.menu.save', 'Save'), state='disabled' if save_disabled else 'normal', command=lambda current=tab_id: self.run_tab_menu_action(current, self.save))
@@ -15720,6 +17172,9 @@ class NotepadX:
     def dispose_doc_resources(self, doc):
         if not doc:
             return
+        self.cancel_doc_background_index(doc)
+        self.reset_virtual_backing_store(doc, remove_files=True)
+        self.close_doc_load_progress(doc)
         self.cancel_text_theme_effect_job(doc)
         self.cancel_doc_autosave(doc)
         syntax_job = doc.get('syntax_job')
@@ -15771,6 +17226,13 @@ class NotepadX:
         doc['background_loading'] = False
         doc['background_load_kind'] = None
         doc['background_load_file_path'] = None
+        doc['background_load_token'] = None
+        doc['background_index_future'] = None
+        doc['background_index_token'] = None
+        doc['background_index_active'] = False
+        doc['background_bytes_loaded'] = 0
+        doc['background_bytes_total'] = 0
+        doc['background_lines_loaded'] = 1
 
         frame = doc.get('frame')
         if frame:
@@ -17600,7 +19062,7 @@ class NotepadX:
         doc = self.get_current_doc()
         if not doc:
             return "break"
-        if doc.get('preview_mode') or doc.get('virtual_mode'):
+        if doc.get('preview_mode') or (doc.get('virtual_mode') and not self.is_virtual_editable(doc)):
             messagebox.showinfo(
                 self.tr('run.title', 'Save and Run'),
                 self.tr('run.large_file_unavailable', 'Save and Run is not available for buffered large-file tabs.'),
@@ -17686,13 +19148,13 @@ class NotepadX:
 
         for tab_id in list(self.notebook.tabs()):
             doc = self.documents.get(str(tab_id))
-            if not doc or doc.get('preview_mode') or doc.get('virtual_mode'):
+            if not doc or doc.get('preview_mode') or (doc.get('virtual_mode') and not self.is_virtual_editable(doc)):
                 continue
 
             self.notebook.select(tab_id)
             self.set_active_document(tab_id)
 
-            if doc['file_path'] or doc['text'].edit_modified():
+            if doc['file_path'] or self.doc_has_unsaved_changes(doc):
                 if not self.save():
                     if original_tab in self.notebook.tabs():
                         self.notebook.select(original_tab)
@@ -17712,7 +19174,7 @@ class NotepadX:
         doc = self.get_current_doc()
         if not doc:
             return False
-        if doc.get('preview_mode') or doc.get('virtual_mode'):
+        if doc.get('preview_mode') or (doc.get('virtual_mode') and not self.is_virtual_editable(doc)):
             messagebox.showinfo(
                 self.tr('large_file.title', 'Large File Mode'),
                 self.tr('large_file.save_as_disabled', 'Save As is disabled for buffered large-file tabs.'),
@@ -17746,13 +19208,17 @@ class NotepadX:
         if not output_path:
             return "break"
         try:
-            if doc.get('virtual_mode') or doc.get('preview_mode'):
+            if doc.get('preview_mode') or (doc.get('virtual_mode') and not self.is_virtual_editable(doc)):
                 with open(doc['file_path'], 'rb') as src, open(output_path, 'wb') as dst:
                     while True:
                         chunk = src.read(self.file_load_chunk_size)
                         if not chunk:
                             break
                         dst.write(chunk)
+            elif self.is_virtual_editable(doc):
+                if not self.flush_virtual_window_edits(doc, force=True):
+                    return "break"
+                self.write_virtual_document_atomically(doc, output_path)
             else:
                 self.write_file_atomically(output_path, doc['text'].get('1.0', tk.END).rstrip('\n'))
             messagebox.showinfo(
@@ -17907,7 +19373,7 @@ class NotepadX:
         return "break"
 
     def confirm_close_tab(self, doc):
-        if not doc['text'].edit_modified():
+        if not self.doc_has_unsaved_changes(doc):
             return True
 
         self.notebook.select(doc['frame'])
@@ -17927,7 +19393,7 @@ class NotepadX:
 
     def current_doc_is_large_readonly(self):
         doc = self.get_current_doc()
-        return bool(doc and (doc.get('preview_mode') or doc.get('virtual_mode')))
+        return bool(doc and self.is_doc_text_readonly(doc))
 
     # ─── Undo / Clipboard wrappers ───────────────────────────────
     def undo(self, event=None):
@@ -17994,7 +19460,7 @@ class NotepadX:
 
         compare_widget = self.get_compare_text_widget()
         doc = self.get_doc_for_text_widget(target)
-        if doc and (doc.get('preview_mode') or doc.get('virtual_mode')):
+        if doc and self.is_doc_text_readonly(doc):
             return "break"
 
         try:
@@ -18072,7 +19538,7 @@ class NotepadX:
             return "break"
 
         doc = self.get_doc_for_text_widget(target)
-        if doc and (doc.get('preview_mode') or doc.get('virtual_mode')):
+        if doc and self.is_doc_text_readonly(doc):
             return "break"
 
         try:
@@ -18297,6 +19763,7 @@ class NotepadX:
         dialog.grab_set()
 
 if __name__ == "__main__":
+    multiprocessing.freeze_support()
     raw_args = get_process_launch_arguments()
     isolated_mode = '--isolated' in {arg.lower() for arg in raw_args}
     startup_files = [arg for arg in raw_args if arg.lower() != '--isolated']
