@@ -156,6 +156,31 @@ It can also run shell commands from the current document directory. `cls` or `cl
 - It includes status bar, numbered lines, autocomplete, spell check, auto-pair, compare multi-edit, minimap, breadcrumbs, diagnostics, autosave, word wrap, Markdown preview, sync page navigation, sound, and `Edit with Notepad-X`
 - `Settings > Hotkey Settings` opens the built-in shortcut editor so you can rebind feature hotkeys without editing config files
 
+## Supported Languages
+
+Notepad-X currently ships with 20 bundled language files:
+
+- Arabic (United Arab Emirates) - `ar_AE`
+- Arabic (Egypt) - `ar_EG`
+- Arabic (Morocco) - `ar_MA`
+- Arabic (Saudi Arabia) - `ar_SA`
+- Bengali (Bangladesh) - `bn_BD`
+- Chinese (Simplified, China) - `zh_CN`
+- Dutch (Netherlands) - `nl_NL`
+- English (United States) - `en_us`
+- French (Canada) - `fr_CA`
+- German (Germany) - `de_DE`
+- Hebrew (Israel) - `he_IL`
+- Hindi (India) - `hi_IN`
+- Indonesian (Indonesia) - `id_ID`
+- Italian (Italy) - `it_IT`
+- Japanese (Japan) - `ja_JP`
+- Portuguese (Brazil) - `pt_BR`
+- Russian (Russia) - `ru_RU`
+- Spanish (Latin America) - `es_419`
+- Spanish (Spain) - `es_ES`
+- Ukrainian (Ukraine) - `uk_UA`
+
 ## Main Shortcuts
 
 - `Ctrl+W` Open
