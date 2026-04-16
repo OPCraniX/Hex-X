@@ -983,7 +983,7 @@ class NotepadX:
         self.isolated_session = isolated_session
         self.startup_files = list(startup_files or [])
         self.init_config()
-        self.root.title(self.app_name)
+        self.root.title(self.format_window_title())
         self.init_runtime()
         self.init_ui()
         if not self._shutdown_requested:
@@ -997,6 +997,7 @@ class NotepadX:
     def init_config(self):
         self.is_windows = os.name == 'nt'
         self.is_linux = sys.platform.startswith('linux')
+        self.is_running_as_administrator = self.detect_running_as_administrator()
         self.app_version = "v1.0.8"
         self.resource_dir = self.get_resource_dir()
         self.app_dir = self.get_app_dir()
@@ -1878,6 +1879,19 @@ class NotepadX:
         os.makedirs(self.logs_dir, exist_ok=True)
         self.crash_log_path = os.path.join(self.logs_dir, "Notepad-X.crash.log")
         self.startup_trace_path = os.path.join(self.logs_dir, "Notepad-X.startup.trace.log")
+
+    def detect_running_as_administrator(self):
+        if self.is_windows:
+            try:
+                return bool(ctypes.windll.shell32.IsUserAnAdmin())
+            except Exception:
+                return False
+        if hasattr(os, 'geteuid'):
+            try:
+                return os.geteuid() == 0
+            except Exception:
+                return False
+        return False
 
     def get_locale_dir(self, config_dir):
         return os.path.join(config_dir, 'language')
@@ -17333,7 +17347,7 @@ class NotepadX:
             self.text = None
             self.current_file = None
             self.syntax_mode_selection.set('auto')
-            self.root.title(self.app_name)
+            self.root.title(self.format_window_title())
             self.update_breadcrumbs()
             return
         self.text = doc['text']
@@ -17399,12 +17413,20 @@ class NotepadX:
     def update_window_title(self):
         doc = self.get_current_doc()
         if not doc:
-            self.root.title(self.app_name)
+            self.root.title(self.format_window_title())
             return
         title = self.get_doc_name(doc['frame'])
         if self.doc_has_unsaved_changes(doc):
             title += " *"
-        self.root.title(f"{self.app_name} - {title}")
+        self.root.title(self.format_window_title(title))
+
+    def format_window_title(self, document_title=None):
+        title = self.app_name
+        if document_title:
+            title = f"{title} - {document_title}"
+        if getattr(self, 'is_running_as_administrator', False):
+            title = f"Administrator: {title}"
+        return title
 
     def on_text_modified(self, tab_id):
         if str(tab_id) not in self.documents:
