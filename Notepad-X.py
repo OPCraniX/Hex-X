@@ -7,6 +7,8 @@ import colorsys
 import os
 import sys
 import ctypes
+import importlib
+import importlib.util
 import json
 import ast
 import bisect
@@ -28,6 +30,7 @@ import socket
 import threading
 import multiprocessing
 import webbrowser
+import shlex
 import gc
 import zlib
 import xml.etree.ElementTree as ET
@@ -86,6 +89,9 @@ DEFAULT_LOCALE_STRINGS = {
     "app.compare_title": "Compare With Tab",
     "about.heading": "Notepad-X",
     "about.tagline": "Built because Microsoft forgot what Notepad was supposed to be.",
+    "about.requirements": "Requierments:",
+    "about.requirement.install_failed_title": "Install Package",
+    "about.requirement.install_failed": "Notepad-X could not open pip for {package}.\n\n{error_detail}",
     "about.icon_placeholder": "[Icon]",
     "about.pong.title": "Pong-X",
     "about.pong.info": "Player 1 keys: W & S Player 2 keys: Up & Down, Press Up/Down once to start PVP. Press R to restart.",
@@ -952,6 +958,19 @@ def scan_newline_start_offsets_range_worker(file_path, start_offset, end_offset,
 
 
 class NotepadX:
+    ABOUT_REQUIREMENTS = (
+        {'label': 'Python 3', 'commands': ('py', 'python', 'python3')},
+        {'label': 'pip', 'commands': ('pip', 'pip3')},
+        {'label': 'tkinter', 'module': 'tkinter'},
+        {'label': 'idlelib', 'module': 'idlelib.colorizer'},
+        {'label': 'cryptography', 'module': 'cryptography', 'pip': 'cryptography'},
+        {'label': 'pyspellchecker', 'module': 'spellchecker', 'pip': 'pyspellchecker'},
+        {'label': 'Pillow', 'module': 'PIL', 'pip': 'Pillow'},
+        {'label': 'git', 'commands': ('git',)},
+        {'label': 'scp', 'commands': ('scp',)},
+        {'label': 'PowerShell', 'commands': ('pwsh', 'powershell')},
+    )
+
     def __init__(self, isolated_session=False, startup_files=None):
         self.root = tk.Tk()
         try:
@@ -18536,6 +18555,145 @@ class NotepadX:
             self.text.focus_set()
         return "break"
 
+    def add_about_requirements_section(self, parent):
+        requirements_frame = tk.Frame(parent, bg=self.bg_color)
+        requirements_frame.pack(pady=(0, 12))
+        requirement_rows = self.wrap_about_requirements()
+
+        for row_index, row in enumerate(requirement_rows):
+            row_frame = tk.Frame(requirements_frame, bg=self.bg_color)
+            row_frame.pack(anchor='center', pady=(0 if row_index == 0 else 1, 0))
+            if row_index == 0:
+                tk.Label(
+                    row_frame,
+                    text=f"{self.tr('about.requirements', 'Requierments:')} ",
+                    bg=self.bg_color,
+                    fg='#9aa0a6',
+                    font=('Segoe UI', 9, 'bold')
+                ).pack(side='left')
+
+            for requirement_index, requirement in row:
+                installed = self.is_about_requirement_available(requirement)
+                can_install_with_pip = bool(requirement.get('pip'))
+                label = tk.Label(
+                    row_frame,
+                    text=requirement.get('label', ''),
+                    bg=self.bg_color,
+                    fg='#7ee787' if installed else '#f85149',
+                    font=('Segoe UI', 9) if installed or not can_install_with_pip else ('Segoe UI', 9, 'underline'),
+                    cursor='hand2' if not installed and can_install_with_pip else 'arrow'
+                )
+                label.pack(side='left')
+                if not installed and can_install_with_pip:
+                    label.bind(
+                        '<Button-1>',
+                        lambda _event, req=requirement, owner=parent.winfo_toplevel(): self.open_pip_install_for_requirement(req, owner)
+                    )
+                if requirement_index < len(self.ABOUT_REQUIREMENTS) - 1:
+                    tk.Label(
+                        row_frame,
+                        text=', ',
+                        bg=self.bg_color,
+                        fg='#9aa0a6',
+                        font=('Segoe UI', 9)
+                    ).pack(side='left')
+
+    def wrap_about_requirements(self):
+        max_line_chars = 54
+        rows = []
+        row = []
+        row_chars = len(self.tr('about.requirements', 'Requierments:')) + 1
+        for requirement_index, requirement in enumerate(self.ABOUT_REQUIREMENTS):
+            label = str(requirement.get('label', ''))
+            token_chars = len(label) + (2 if row else 0)
+            if row and row_chars + token_chars > max_line_chars:
+                rows.append(row)
+                row = []
+                row_chars = 0
+                token_chars = len(label)
+            row.append((requirement_index, requirement))
+            row_chars += token_chars
+        if row:
+            rows.append(row)
+        return rows
+
+    def is_python_package_installed(self, module_name):
+        if not module_name:
+            return False
+        try:
+            importlib.invalidate_caches()
+            return importlib.util.find_spec(module_name) is not None
+        except (ImportError, AttributeError, ValueError):
+            return False
+
+    def is_about_requirement_available(self, requirement):
+        module_name = requirement.get('module')
+        if module_name:
+            return self.is_python_package_installed(module_name)
+        command_names = requirement.get('commands') or ()
+        return any(shutil.which(command_name) for command_name in command_names)
+
+    def get_pip_python_executable(self):
+        executable = sys.executable or shutil.which('python') or shutil.which('python3') or 'python'
+        if self.is_windows and os.path.basename(executable).lower() in {'pythonw.exe', 'pythonw'}:
+            console_python = os.path.join(os.path.dirname(executable), 'python.exe')
+            if os.path.exists(console_python):
+                executable = console_python
+        return executable
+
+    def open_pip_install_for_requirement(self, requirement, parent=None):
+        package_name = requirement.get('pip') or requirement.get('label')
+        if not package_name:
+            return
+        command_args = [self.get_pip_python_executable(), '-m', 'pip', 'install', package_name]
+        try:
+            if self.is_windows:
+                subprocess.Popen(
+                    ['cmd.exe', '/k', subprocess.list2cmdline(command_args)],
+                    cwd=self.resource_dir
+                )
+                return
+            if sys.platform == 'darwin':
+                command_text = " ".join(shlex.quote(str(part)) for part in command_args)
+                script = f'tell application "Terminal" to do script {json.dumps(command_text)}'
+                subprocess.Popen(['osascript', '-e', script], cwd=self.resource_dir)
+                return
+            if self.open_pip_install_terminal(command_args):
+                return
+            subprocess.Popen(command_args, cwd=self.resource_dir)
+        except Exception as exc:
+            self.log_exception("open pip package installer", exc)
+            messagebox.showerror(
+                self.tr('about.requirement.install_failed_title', 'Install Package'),
+                self.tr(
+                    'about.requirement.install_failed',
+                    'Notepad-X could not open pip for {package}.\n\n{error_detail}',
+                    package=package_name,
+                    error_detail=str(exc)
+                ),
+                parent=parent or self.root
+            )
+
+    def open_pip_install_terminal(self, command_args):
+        command_text = " ".join(shlex.quote(str(part)) for part in command_args)
+        shell_text = f'{command_text}; printf "\\n"; read -r -p "Press Enter to close..."'
+        terminal_commands = (
+            ('x-terminal-emulator', ['x-terminal-emulator', '-e', 'bash', '-lc', shell_text]),
+            ('gnome-terminal', ['gnome-terminal', '--', 'bash', '-lc', shell_text]),
+            ('konsole', ['konsole', '-e', 'bash', '-lc', shell_text]),
+            ('xfce4-terminal', ['xfce4-terminal', '-e', f'bash -lc {shlex.quote(shell_text)}']),
+            ('xterm', ['xterm', '-e', 'bash', '-lc', shell_text]),
+        )
+        for executable, args in terminal_commands:
+            if not shutil.which(executable):
+                continue
+            try:
+                subprocess.Popen(args, cwd=self.resource_dir)
+                return True
+            except OSError:
+                continue
+        return False
+
     def show_about_dialog(self):
         dialog = self.create_toplevel(self.root)
         dialog.title(self.tr('app.about_title', 'About Notepad-X'))
@@ -18571,7 +18729,9 @@ class NotepadX:
             bg=self.bg_color,
             fg=self.fg_color,
             font=('Segoe UI', 16, 'bold')
-        ).pack(pady=(0, 16))
+        ).pack(pady=(0, 8))
+
+        self.add_about_requirements_section(content)
 
         repo_link = tk.Label(
             content,
