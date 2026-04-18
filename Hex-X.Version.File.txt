@@ -15,13 +15,13 @@ VSVersionInfo(
         '040904B0',
         [
           StringStruct('CompanyName', 'OPCraniX'),
-          StringStruct('FileDescription', 'Notepad-X'),
+          StringStruct('FileDescription', 'Hex-X'),
           StringStruct('FileVersion', '1.0.8.0'),
-          StringStruct('InternalName', 'Notepad-X'),
-          StringStruct('OriginalFilename', 'Notepad-X.exe'),
-          StringStruct('ProductName', 'Notepad-X'),
+          StringStruct('InternalName', 'Hex-X'),
+          StringStruct('OriginalFilename', 'Hex-X.exe'),
+          StringStruct('ProductName', 'Hex-X'),
           StringStruct('ProductVersion', '1.0.8.0'),
-          StringStruct('Comments', 'Tabbed desktop text editor for plain text, code, shared notes, and large files.'),
+          StringStruct('Comments', 'Tabbed desktop hex editor for binary files, shared notes, and large files.'),
           StringStruct('LegalCopyright', 'GPL-2.0 license'),
         ]
       )

@@ -1,0 +1,110 @@
+Hex-X Help
+
+Overview
+Hex-X is a tabbed desktop hex editor for inspecting and editing binary files. Each tab shows an offset column, sixteen hexadecimal bytes per row, and an ASCII preview pane.
+
+Quick Start
+- Ctrl+W opens a file.
+- Ctrl+T opens a new empty binary tab.
+- Ctrl+S saves the current tab.
+- Ctrl+Shift+Q saves the current tab under a new name.
+- Ctrl+F opens Find.
+- Ctrl+G opens Go To Offset.
+- Ctrl+Q compares the current tab with another open tab.
+- Ctrl+Shift+K opens the command panel.
+- Ctrl+Shift+X closes panels before exiting the app.
+
+Hex Grid
+- The left column shows offsets ending in `h`.
+- The middle grid shows hexadecimal bytes.
+- The right pane shows printable ASCII characters; non-printable bytes appear as dots.
+- Typing a hex digit in the byte grid edits the selected nibble.
+- Typing a printable character in the ASCII pane writes that character byte.
+- Delete replaces the current byte with `00`.
+- Backspace moves to the previous byte.
+- Paste accepts hex bytes, a copied Hex-X dump, or plain clipboard text encoded as UTF-8.
+
+Opening Files
+- Hex-X opens files as raw bytes instead of decoding them as text.
+- Files up to 32 MiB are fully editable.
+- Larger files open as a read-only preview of the first 4 MiB so the UI stays responsive.
+- Remote files opened over SSH are fetched into a local shadow copy and pushed back on save.
+
+Saving
+- Save writes the current byte buffer back to disk.
+- Save As writes the buffer to a new path.
+- Save Copy As writes a separate binary copy without moving the tab.
+- Preview tabs for very large files cannot be saved until opened as an editable file size.
+
+Navigation
+- Go To Offset accepts decimal offsets, `0x` hex offsets, and offsets ending in `h`.
+- Top and Bottom jump to the first and last loaded byte.
+- The optional offset gutter mirrors the row offsets beside the editor.
+- The minimap gives a compact overview of the loaded bytes.
+
+Find
+- Find searches the visible hex dump text, so you can search offsets, hex byte sequences, or ASCII text.
+- F3 moves to the next match.
+- Shift+F3 moves to the previous match.
+
+Compare
+- Compare opens another tab on the right for side-by-side inspection.
+- Hex tabs are treated as structured binary views, so compare editing is kept conservative.
+- Sync page navigation can keep PgUp and PgDn movement aligned between panes.
+
+Notes
+- Notes can be attached to selections and exported.
+- Shared note sidecars use Hex-X sidecar files next to the edited file.
+- Older Hex-X sidecar files are still recognized for compatibility.
+
+Command Panel
+- Built-in commands begin with `:`.
+- Useful commands include:
+  `:open [path]`
+  `:remote user@host:/path/file`
+  `:recent [list|N|clear]`
+  `:new-tab`
+  `:close-tab`
+  `:save`
+  `:save-all`
+  `:save-as`
+  `:save-copy`
+  `:find`
+  `:find-next`
+  `:find-prev`
+  `:goto-offset`
+  `:compare`
+  `:close-compare`
+  `:theme [list|create|name]`
+  `:minimap on|off`
+  `:breadcrumbs on|off`
+  `:autosave on|off`
+  `:help`
+  `:about`
+
+Settings
+- Offset Gutter shows or hides the row offset gutter.
+- Minimap shows or hides the right-side overview.
+- Breadcrumbs show or hide file/location context.
+- Auto Save controls automatic recovery snapshots.
+- Edit with Hex-X registers or removes OS shell integration for supported binary file types.
+
+Keyboard Shortcuts
+- Ctrl+W: Open
+- Ctrl+Alt+O: Open Remote
+- Ctrl+T: New Tab
+- Ctrl+Shift+T: Close Tab
+- Ctrl+S: Save
+- Ctrl+Shift+S: Save All
+- Ctrl+Shift+Q: Save As
+- Ctrl+Alt+S: Save Copy As
+- Ctrl+F: Find
+- F3: Find Next
+- Shift+F3: Find Previous
+- Ctrl+G: Go To Offset
+- Ctrl+Q: Compare Tabs
+- Ctrl+Plus: Zoom In
+- Ctrl+Minus: Zoom Out
+- Ctrl+Shift+K: Command Panel
+- F1: Help Contents
+- Shift+F1: About Hex-X

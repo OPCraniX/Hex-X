@@ -11,7 +11,7 @@ Security fixes are provided for:
 
 ## Reporting a Vulnerability
 
-If you find a security issue in Notepad-X:
+If you find a security issue in Hex-X:
 
 1. Do not post the details in a public issue.
 2. Use GitHub's private vulnerability reporting for this repository if it is available.
@@ -35,16 +35,16 @@ Please allow reasonable time for review and remediation before any public disclo
 
 ## Current Security Focus
 
-The current Notepad-X security model focuses on:
+The current Hex-X security model focuses on:
 
-- atomic file replacement for normal saves
+- atomic file replacement for binary saves
 - atomic writes for session, recovery, editor identity, note sidecars, and JSON note exports
 - validation and sanitization of local support files before trusting them
-- safer handling of malformed, oversized, unusual-encoding, and binary-like files
+- safer handling of malformed, oversized, and unusual binary files
 - conflict detection before overwriting files that changed on disk
-- text-only file handling with no automatic execution of scripts or markup
+- no automatic execution of edited file contents
 - non-destructive recovery that restores content into tabs instead of overwriting user files
 - user-visible permission and filesystem errors
 - stale editor cleanup for shared note tracking
 
-Notepad-X is a local desktop text editor and is not intended to provide anti-tamper, DRM, sandboxing, or high-assurance runtime integrity protection.
+Hex-X is a local desktop hex editor and is not intended to provide anti-tamper, DRM, sandboxing, malware analysis isolation, or high-assurance runtime integrity protection.

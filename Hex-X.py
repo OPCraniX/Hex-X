@@ -72,10 +72,9 @@ except ImportError:
     ColorDelegator = None
     Percolator = None
 
-try:
-    from spellchecker import SpellChecker
-except ImportError:
-    SpellChecker = None
+# Hex-X does not need a spell checker; keep the symbol defined so older
+# session/settings code can safely fall back without importing the package.
+SpellChecker = None
 
 
 class EncryptedFileOpenCancelled(OSError):
@@ -83,15 +82,15 @@ class EncryptedFileOpenCancelled(OSError):
 
 
 DEFAULT_LOCALE_STRINGS = {
-    "app.name": "Notepad-X",
-    "app.about_title": "About Notepad-X",
-    "app.help_title": "Notepad-X Help",
+    "app.name": "Hex-X",
+    "app.about_title": "About Hex-X",
+    "app.help_title": "Hex-X Help",
     "app.compare_title": "Compare With Tab",
-    "about.heading": "Notepad-X",
-    "about.tagline": "Built because Microsoft forgot what Notepad was supposed to be.",
+    "about.heading": "Hex-X",
+    "about.tagline": "A focused binary hex editor.",
     "about.requirements": "Requierments:",
     "about.requirement.install_failed_title": "Install Package",
-    "about.requirement.install_failed": "Notepad-X could not open pip for {package}.\n\n{error_detail}",
+    "about.requirement.install_failed": "Hex-X could not open pip for {package}.\n\n{error_detail}",
     "about.icon_placeholder": "[Icon]",
     "about.pong.title": "Pong-X",
     "about.pong.info": "Player 1 keys: W & S Player 2 keys: Up & Down, Press Up/Down once to start PVP. Press R to restart.",
@@ -119,21 +118,21 @@ DEFAULT_LOCALE_STRINGS = {
     "context.add_note": "Add note",
     "context.respond": "Respond",
     "context.remove_note": "Remove note",
-    "context.add_to_dictionary": "Add to Dictionary",
-    "context.no_suggestions": "No suggestions",
+    "context.add_to_dictionary": "Add Byte Note",
+    "context.no_suggestions": "No byte actions",
     "menu.file": "File",
     "menu.file.open": "Open",
-    "menu.file.open_project": "Open Project",
+    "menu.file.open_project": "Open Folder Files",
     "menu.file.open_remote": "Open Remote (SSH)",
-    "menu.file.grab_git": "Grab Git",
+    "menu.file.grab_git": "Open Binary Set",
     "menu.file.recent": "Recent",
     "menu.file.new_tab": "New Tab",
     "menu.file.close_tab": "Close Tab",
     "menu.file.save": "Save",
     "menu.file.save_all": "Save All",
     "menu.file.save_as": "Save As",
-    "menu.file.save_and_run": "Save and Run",
-    "menu.file.save_as_encrypted": "Save As Encrypted",
+    "menu.file.save_and_run": "Run File",
+    "menu.file.save_as_encrypted": "Save Encrypted Copy",
     "menu.file.print": "Print",
     "menu.file.export_notes": "Export Notes",
     "menu.file.exit": "Exit",
@@ -156,7 +155,7 @@ DEFAULT_LOCALE_STRINGS = {
     "menu.edit.expand_all_folds": "Expand All Folds",
     "menu.edit.cycle_notes": "Cycle Notes",
     "menu.edit.filter_notes": "Filter Notes",
-    "menu.edit.goto_line": "Go To Line",
+    "menu.edit.goto_line": "Go To Offset",
     "menu.edit.top_of_document": "Top of Document",
     "menu.edit.bottom_of_document": "Bottom of Document",
     "menu.edit.sync_page_navigation": "Sync PgUp/PgDn in Compare/Preview",
@@ -168,16 +167,16 @@ DEFAULT_LOCALE_STRINGS = {
     "menu.view.full_screen": "Full Screen",
     "menu.view.switch_tab": "Switch Tab",
     "menu.view.status_bar": "Status Bar",
-    "menu.view.numbered_lines": "Numbered Lines",
-    "menu.view.autocomplete": "Autocomplete",
-    "menu.view.spell_check": "Spell Check",
-    "menu.view.edit_with_notepadx": "Edit with Notepad-X",
-    "menu.view.word_wrap": "Word Wrap",
+    "menu.view.numbered_lines": "Offset Gutter",
+    "menu.view.autocomplete": "Byte Suggestions",
+    "menu.view.spell_check": "Byte Check",
+    "menu.view.edit_with_hexx": "Edit with Hex-X",
+    "menu.view.word_wrap": "Wrap Rows",
     "menu.view.sound": "Sound",
-    "menu.view.preview_markdown": "Preview Markdown",
-    "menu.view.syntax_theme": "Syntax Theme",
+    "menu.view.preview_markdown": "Preview Pane",
+    "menu.view.syntax_theme": "Color Theme",
     "menu.view.create_theme": "Create Theme",
-    "menu.view.syntax_mode": "Syntax Mode",
+    "menu.view.syntax_mode": "Byte View Mode",
     "menu.view.currently_editing": "Currently Editing",
     "menu.view.compare_tabs": "Compare Tabs",
     "menu.view.close_compare_tabs": "Close Compare Tabs",
@@ -193,7 +192,7 @@ DEFAULT_LOCALE_STRINGS = {
     "menu.settings.hotkeys": "Hotkey Settings",
     "menu.help": "Help",
     "menu.help.contents": "Help Contents",
-    "menu.help.about": "About Notepad-X",
+    "menu.help.about": "About Hex-X",
     "symbol.navigator.title": "Symbols",
     "symbol.navigator.project_title": "Project Symbols",
     "symbol.navigator.no_symbols": "No symbols were found for this scope.",
@@ -244,16 +243,16 @@ DEFAULT_LOCALE_STRINGS = {
     "note.color.prompt": "Color:",
     "panel.currently_editing.title": "Currently Editing",
     "panel.currently_editing.unsaved": "Save this tab to track currently editing IDs.",
-    "panel.currently_editing.none": "No active editing IDs for this file.",
-    "status.initial": "Ln 1 of 1, Col 1 | 0 characters | UTF-8 | Normal",
+    "panel.currently_editing.none": "No active editing IDs for this binary file.",
+    "status.initial": "Offset 0x00000000 | 0 bytes | Hex | Normal",
     "status.resource_initial": " | CPU: 0.0% Memory: 0MB",
     "status.synced": "| Notes Synced",
-    "status.line": "Ln",
+    "status.line": "Row",
     "status.col": "Col",
     "status.of": "of",
-    "status.characters": "characters",
+    "status.characters": "bytes",
     "status.bytes": "bytes",
-    "status.encoding": "UTF-8",
+    "status.encoding": "Hex",
     "status.mode.normal": "Normal",
     "status.mode.virtual": "Virtual",
     "status.mode.preview": "Preview",
@@ -270,7 +269,7 @@ DEFAULT_LOCALE_STRINGS = {
     "compare.header": "Comparing with: {title}",
     "markdown.preview.header": "Markdown Preview: {title}",
     "markdown.preview.empty": "Nothing to preview.",
-    "find.panel.find": "Find:",
+    "find.panel.find": "Find bytes/text:",
     "find.panel.find_next": "Find Next",
     "find.panel.browse": "Browse",
     "find.panel.find_in_label": "Find In:",
@@ -279,44 +278,44 @@ DEFAULT_LOCALE_STRINGS = {
     "find.panel.instance_plural": "instances",
     "find.in.title": "Find In Files",
     "find.in.choose_directory": "Choose a folder to search",
-    "find.in.query_required": "Enter some text in Find In first.",
+    "find.in.query_required": "Enter a byte pattern or ASCII text in Find In first.",
     "find.in.directory_required": "Choose a folder with Browse first.",
     "find.in.searching_prompt": "Searching:\n{directory}\n\nPlease wait...",
     "find.in.results_summary": "Found {match_count} {instance_word} across {file_count} matching file(s).\nDirectory: {directory}\nScanned {scanned_count} supported files.",
     "find.in.no_matches": "No matching files were found for \"{query}\" in:\n{directory}",
-    "find.in.search_failed": "Notepad-X could not search:\n{directory}\n\n{error_detail}",
+    "find.in.search_failed": "Hex-X could not search:\n{directory}\n\n{error_detail}",
     "find.in.column.instances": "Instances",
     "find.in.column.file": "File",
     "find.in.open_selected": "Open Selected",
     "find.in.select_results": "Select one or more results to open.",
-    "replace.panel.replace_with": "Replace with:",
-    "replace.panel.replace_all": "Replace All",
+    "replace.panel.replace_with": "Replace with bytes/text:",
+    "replace.panel.replace_all": "Replace Bytes",
     "replace_all.title": "Replace All",
     "replace_all.completed": "Replaced {count} occurrence(s).",
-    "large_file.title": "Large File Mode",
+    "large_file.title": "Large Binary Preview",
     "large_file.find_unavailable": "Find is not available in buffered large-file mode yet.",
-    "large_file.loading": "Loading large file...",
+    "large_file.loading": "Loading bytes...",
     "large_file.indexing": "Indexing large file...",
-    "large_file.buffering_title": "Buffering Large File",
+    "large_file.buffering_title": "Loading Binary File",
     "large_file.buffering_prompt": "Loading:\n{file_path}",
     "large_file.buffering_status": "{percent}% ({loaded} / {total})",
-    "large_file.buffering_lines": "Buffered {line_count} lines",
-    "large_file.replace_unavailable": "Replace is not available in buffered large-file mode.",
-    "large_file.save_run_unavailable": "Save and Run is not available for buffered large-file tabs.",
-    "large_file.save_disabled": "This tab is opened in buffered large-file mode. Editing and saving are disabled for the full file view.",
-    "large_file.save_as_disabled": "Save As is disabled for buffered large-file tabs.",
-    "large_file.encryption_disabled": "Encryption is not available for buffered large-file or preview tabs.",
-    "spellcheck.unavailable_title": "Spell Check Unavailable",
-    "spellcheck.unavailable_message": "Spell check needs pyspellchecker and the bundled English dictionary. Rebuild Notepad-X if the menu shows enabled but no words are marked.",
+    "large_file.buffering_lines": "Buffered {line_count} rows",
+    "large_file.replace_unavailable": "Replace is not available in Hex-X.",
+    "large_file.save_run_unavailable": "Run is not available in Hex-X.",
+    "large_file.save_disabled": "This tab is a read-only preview of a large binary file. Editing and saving are disabled.",
+    "large_file.save_as_disabled": "Save As is disabled for read-only preview tabs.",
+    "large_file.encryption_disabled": "Saving is disabled for read-only preview tabs.",
+    "spellcheck.unavailable_title": "Spell Check Removed",
+    "spellcheck.unavailable_message": "Spell check is not available in Hex-X.",
     "file.open_failed_title": "Open Failed",
-    "file.open_failed_message": "Notepad-X could not open:\n{file_path}\n\n{error_detail}",
+    "file.open_failed_message": "Hex-X could not open:\n{file_path}\n\n{error_detail}",
     "file.missing_title": "File Missing",
     "file.missing_message": "That file could not be found.",
     "file.changed_title": "File Changed on Disk",
     "file.changed_message": "This file changed on disk after it was opened.\n\nOverwrite the newer disk version with your current editor contents?",
     "file.reload_title": "Reload File",
-    "file.reload_message": "Do you want Notepad-X to reload the file from disk instead?",
-    "filesystem.access_error": "Notepad-X could not access:\n{location}\n\n{error_detail}",
+    "file.reload_message": "Do you want Hex-X to reload the file from disk instead?",
+    "filesystem.access_error": "Hex-X could not access:\n{location}\n\n{error_detail}",
     "filesystem.unknown_path": "that path",
     "save.title": "Save",
     "save.close_prompt": "Save changes to {file_name} before closing?",
@@ -330,18 +329,18 @@ DEFAULT_LOCALE_STRINGS = {
     "print.unsafe_path": "That file path could not be sent to the print command safely.",
     "print.unavailable": "Print is not available on this platform.",
     "print.windows_failed_code": "Windows print action failed with code {code}",
-    "app.crash_title": "Notepad-X Crash",
+    "app.crash_title": "Hex-X Crash",
     "app.crash_message": "An unexpected error occurred.\nA crash log was written to:\n{crash_log_path}",
     "recover.tabs_title": "Recover Tabs",
-    "recover.tabs_message": "Notepad-X found unsaved tabs from a previous crash. Restore them?",
-    "help.open_failed": "Unable to open the Notepad-X help file.",
-    "help.not_found": "Notepad-X help file not found.",
+    "recover.tabs_message": "Hex-X found unsaved tabs from a previous crash. Restore them?",
+    "help.open_failed": "Unable to open the Hex-X help file.",
+    "help.not_found": "Hex-X help file not found.",
     "theme.save_failed_title": "Save Theme Failed",
     "code_notes.title": "Code Notes",
-    "shell_integration.update_failed": "Notepad-X could not update the OS shell integration.\n\n{error_detail}",
-    "shell_integration.generic_name": "Text Editor",
-    "shell_integration.desktop_comment": "Edit text files with Notepad-X",
-    "shell_integration.app_description": "Edit supported text and code files with Notepad-X.",
+    "shell_integration.update_failed": "Hex-X could not update the OS shell integration.\n\n{error_detail}",
+    "shell_integration.generic_name": "Hex Editor",
+    "shell_integration.desktop_comment": "Edit binary files with Hex-X",
+    "shell_integration.app_description": "Inspect and edit files as hexadecimal bytes with Hex-X.",
     "shell_integration.error.unsafe_windows_executable": "Unsafe executable path for Windows shell integration.",
     "shell_integration.error.unsafe_windows_script": "Unsafe interpreter or script path for Windows shell integration.",
     "shell_integration.error.unsafe_linux_executable": "Unsafe executable path for Linux desktop integration.",
@@ -357,8 +356,8 @@ DEFAULT_LOCALE_STRINGS = {
     "export.notes.markdown.color": "Color",
     "export.notes.markdown.selected_text_heading": "Selected Text",
     "export.notes.markdown.code_note_heading": "Code Note",
-    "filetype.all_supported": "All Supported",
-    "filetype.text_document": "Text Document",
+    "filetype.all_supported": "Binary / Hex Files",
+    "filetype.text_document": "Binary File",
     "filetype.markdown": "Markdown",
     "filetype.git_ignore": "Git Ignore",
     "filetype.python": "Python",
@@ -398,20 +397,22 @@ DEFAULT_LOCALE_STRINGS = {
     "filetype.smalltalk": "Smalltalk",
     "filetype.tex": "TeX",
     "filetype.all_files": "All Files",
-    "filetype.encrypted": "Notepad-X Encrypted",
+    "filetype.executables": "Executables",
+    "filetype.images": "Disk / ROM Images",
+    "filetype.encrypted": "Hex-X Encrypted",
     "font.title": "Font",
     "font.family": "Font:",
     "font.size": "Size:",
     "font.preview": "AaBbYyZz 0123456789",
     "font.invalid_size_title": "Invalid Size",
     "font.invalid_size_message": "Choose a valid font size.",
-    "goto_line.title": "Go To Line",
-    "goto_line.prompt": "Line Number:",
+    "goto_line.title": "Go To Offset",
+    "goto_line.prompt": "Offset (hex or decimal):",
     "goto_line.invalid_title": "Invalid",
-    "goto_line.invalid_range": "Line number out of range.",
-    "goto_line.invalid_number": "Enter a valid number.",
+    "goto_line.invalid_range": "Offset out of range.",
+    "goto_line.invalid_number": "Enter a valid hex or decimal offset.",
     "encryption.unavailable_title": "Encryption Unavailable",
-    "encryption.unavailable_message": "Encrypted save/open needs the 'cryptography' Python package.\n\nInstall it on this machine to use Notepad-X encrypted files.",
+    "encryption.unavailable_message": "Encrypted save/open needs the 'cryptography' Python package.\n\nInstall it on this machine to use Hex-X encrypted files.",
     "encryption.save_title": "Save Encrypted Copy As",
     "encryption.encrypt_file": "Encrypt file",
     "encryption.passphrase": "Passphrase:",
@@ -425,7 +426,7 @@ DEFAULT_LOCALE_STRINGS = {
     "encryption.error.cryptography_required": "The cryptography package is required for encrypted files.",
     "encryption.error.passphrase_required": "A passphrase is required.",
     "encryption.error.missing_salt": "Encrypted file is missing its salt.",
-    "encryption.error.scrypt_memory": "Notepad-X could not derive the encryption key because the scrypt memory limit was exceeded on this machine.",
+    "encryption.error.scrypt_memory": "Hex-X could not derive the encryption key because the scrypt memory limit was exceeded on this machine.",
     "encryption.error.header_incomplete": "Encrypted file header is incomplete.",
     "encryption.error.header_invalid": "Encrypted file header is invalid.",
     "encryption.error.unsupported_settings": "Unsupported encrypted file settings.",
@@ -527,7 +528,7 @@ DEFAULT_LOCALE_STRINGS = {
     "accel.create_theme": "Ctrl+Alt+T",
     "accel.zoom_in": "Ctrl+Plus",
     "accel.zoom_out": "Ctrl+Minus",
-    "accel.edit_with_notepadx": "Ctrl+Alt+X",
+    "accel.edit_with_hexx": "Ctrl+Alt+X",
     "accel.sound": "Ctrl+Alt+Shift+M",
     "accel.numbered_lines": "Ctrl+Alt+L",
     "accel.autocomplete": "Ctrl+Alt+A",
@@ -542,7 +543,7 @@ DEFAULT_LOCALE_STRINGS = {
     "accel.hotkey_settings": "Ctrl+Alt+K",
     "accel.help_contents": "F1",
     "accel.about": "Shift+F1",
-    "grab_git.title": "Grab Git",
+    "grab_git.title": "Open Binary Set",
     "grab_git.prompt": "Enter the GitHub project as:\nusername/project",
     "grab_git.invalid": "Enter the project as username/project.\n\nExample:\nopenai/openai-python",
     "grab_git.git_missing": "Git could not be found on this system.",
@@ -550,7 +551,7 @@ DEFAULT_LOCALE_STRINGS = {
     "grab_git.exists": "That destination folder already exists.\nChoose another location or remove the existing folder first.",
     "grab_git.downloading": "Downloading Project",
     "grab_git.downloading_prompt": "Downloading:\n{repo_identifier}\n\nPlease wait...",
-    "grab_git.clone_failed": "Notepad-X could not download that GitHub project.\n\n{error_detail}",
+    "grab_git.clone_failed": "Hex-X could not download that GitHub project.\n\n{error_detail}",
     "grab_git.not_found": "GitHub could not find \"{repo_identifier}\".\n\nCheck the username/project and try again.",
     "grab_git.private_repo": "That GitHub project could not be downloaded.\n\nIt may be private or require authentication.",
     "grab_git.no_files": "The project downloaded successfully, but no matching files were found to open.",
@@ -559,12 +560,12 @@ DEFAULT_LOCALE_STRINGS = {
     "grab_git.open_prompt": "Downloaded project root:\n{root_dir}\n\nSelect one or more files to open.",
     "grab_git.select_files": "Select one or more files to open.",
     "grab_git.open_selected": "Open Selected",
-    "run.title": "Save and Run",
-    "run.unsupported": "Save and Run is not available for this file type yet.",
-    "run.large_file_unavailable": "Save and Run is not available for buffered large-file tabs.",
+    "run.title": "Run File",
+    "run.unsupported": "Run is not available for this binary file type.",
+    "run.large_file_unavailable": "Run is not available for binary preview tabs.",
     "run.unsafe_path": "That file path could not be sent to a runtime safely.",
-    "run.runtime_missing": "Notepad-X could not find a runtime for {language} on this system.",
-    "run.open_browser_failed": "Notepad-X could not open this file in your browser.",
+    "run.runtime_missing": "Hex-X could not find a runtime for {language} on this system.",
+    "run.open_browser_failed": "Hex-X could not open this file in your browser.",
     "locale.language.en": "English",
     "locale.language.ar": "Arabic",
     "locale.language.bn": "Bengali",
@@ -665,37 +666,37 @@ REGION_DISPLAY_NAMES = {
 }
 
 
-def get_notepadx_app_dir():
+def get_hexx_app_dir():
     if getattr(sys, 'frozen', False):
         return os.path.dirname(os.path.abspath(sys.executable))
     return os.path.dirname(os.path.abspath(__file__))
 
 
-def get_notepadx_instance_scope_dir(app_dir):
+def get_hexx_instance_scope_dir(app_dir):
     try:
         candidate_dir = os.path.abspath(str(app_dir))
     except Exception:
         return str(app_dir)
     parent_dir = os.path.dirname(candidate_dir)
     if os.path.basename(candidate_dir).lower() == 'output':
-        if os.path.exists(os.path.join(parent_dir, 'Notepad-X.py')):
+        if os.path.exists(os.path.join(parent_dir, 'Hex-X.py')):
             return parent_dir
     return candidate_dir
 
 
-def is_notepadx_support_file_path(file_path):
+def is_hexx_support_file_path(file_path):
     try:
         candidate_name = os.path.basename(str(file_path)).lower()
     except Exception:
         return False
     return (
-        candidate_name.endswith('.notepadx.notes.json')
-        or candidate_name.endswith('.notepadx.editors.json')
-        or candidate_name == 'notepad-x.recovery.json'
-        or candidate_name == 'notepad-x.crash.log'
-        or candidate_name == 'notepad-x.startup.trace.log'
-        or (candidate_name.startswith('notepad-x.') and candidate_name.endswith('.session.json'))
-        or (candidate_name.startswith('notepad-x.') and candidate_name.endswith('.editor.json'))
+        candidate_name.endswith('.hexx.notes.json')
+        or candidate_name.endswith('.hexx.editors.json')
+        or candidate_name == 'hex-x.recovery.json'
+        or candidate_name == 'hex-x.crash.log'
+        or candidate_name == 'hex-x.startup.trace.log'
+        or (candidate_name.startswith('hex-x.') and candidate_name.endswith('.session.json'))
+        or (candidate_name.startswith('hex-x.') and candidate_name.endswith('.editor.json'))
     )
 
 
@@ -786,17 +787,17 @@ def normalize_startup_path_argument(raw_path, base_dir=None):
     return None
 
 
-def get_notepadx_single_instance_port(app_dir):
-    scope_dir = get_notepadx_instance_scope_dir(app_dir)
+def get_hexx_single_instance_port(app_dir):
+    scope_dir = get_hexx_instance_scope_dir(app_dir)
     seed = (
-        f"NotepadX::{os.path.normcase(os.path.abspath(scope_dir))}::"
+        f"HexX::{os.path.normcase(os.path.abspath(scope_dir))}::"
         f"{os.environ.get('USERNAME') or os.environ.get('USER') or 'user'}"
     )
     seed_hash = hashlib.sha256(seed.encode('utf-8')).hexdigest()
     return 43000 + (int(seed_hash[:8], 16) % 10000)
 
 
-def send_files_to_running_notepadx(app_dir, startup_files):
+def send_files_to_running_hexx(app_dir, startup_files):
     normalized_files = []
     seen_files = set()
     for raw_path in startup_files or []:
@@ -822,7 +823,7 @@ def send_files_to_running_notepadx(app_dir, startup_files):
     client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     client.settimeout(0.6)
     try:
-        client.connect(('127.0.0.1', get_notepadx_single_instance_port(app_dir)))
+        client.connect(('127.0.0.1', get_hexx_single_instance_port(app_dir)))
         client.sendall(payload)
         return True
     except OSError:
@@ -957,14 +958,13 @@ def scan_newline_start_offsets_range_worker(file_path, start_offset, end_offset,
     }
 
 
-class NotepadX:
+class HexX:
     ABOUT_REQUIREMENTS = (
         {'label': 'Python 3', 'commands': ('py', 'python', 'python3')},
         {'label': 'pip', 'commands': ('pip', 'pip3')},
         {'label': 'tkinter', 'module': 'tkinter'},
         {'label': 'idlelib', 'module': 'idlelib.colorizer'},
         {'label': 'cryptography', 'module': 'cryptography', 'pip': 'cryptography'},
-        {'label': 'pyspellchecker', 'module': 'spellchecker', 'pip': 'pyspellchecker'},
         {'label': 'Pillow', 'module': 'PIL', 'pip': 'Pillow'},
         {'label': 'git', 'commands': ('git',)},
         {'label': 'scp', 'commands': ('scp',)},
@@ -979,7 +979,7 @@ class NotepadX:
             pass
         self._shutdown_requested = False
         self.main_loop_started = False
-        self.root.title(DEFAULT_LOCALE_STRINGS.get('app.name', 'Notepad-X'))
+        self.root.title(DEFAULT_LOCALE_STRINGS.get('app.name', 'Hex-X'))
         self.isolated_session = isolated_session
         self.startup_files = list(startup_files or [])
         self.init_config()
@@ -1002,9 +1002,9 @@ class NotepadX:
         self.resource_dir = self.get_resource_dir()
         self.app_dir = self.get_app_dir()
         self.machine_profile_slug = self.get_machine_profile_slug()
-        self.repo_url = "https://github.com/OPCraniX/Notepad-X"
-        self.app_user_model_id = "OPCraniX.Notepad-X"
-        self.icon_path = self.resolve_gfx_path("Notepad-X.ico")
+        self.repo_url = "https://github.com/OPCraniX/Hex-X"
+        self.app_user_model_id = "OPCraniX.Hex-X"
+        self.icon_path = self.resolve_gfx_path("Hex-X.ico")
         self.splash_path = self.resolve_gfx_path("splash.png")
         self.splash_max_width = 430
         self.splash_max_height = 645
@@ -1085,12 +1085,41 @@ class NotepadX:
         self.locale_code = 'en_us'
         self.locale_path = self.get_locale_file_path(self.locale_code, locale_dir=self.locale_dir)
         self.locale_strings = self.load_locale_strings(self.locale_path)
-        self.app_name = self.tr('app.name', 'Notepad-X')
+        self.locale_strings.update({
+            'app.name': 'Hex-X',
+            'app.about_title': 'About Hex-X',
+            'app.help_title': 'Hex-X Help',
+            'about.heading': 'Hex-X',
+            'about.tagline': 'A focused binary hex editor.',
+            'menu.help.about': 'About Hex-X',
+            'menu.view.edit_with_hexx': 'Edit with Hex-X',
+            'menu.edit.goto_line': 'Go To Offset',
+            'menu.view.numbered_lines': 'Offset Gutter',
+            'goto_line.title': 'Go To Offset',
+            'goto_line.prompt': 'Offset (hex or decimal):',
+            'goto_line.invalid_range': 'Offset out of range.',
+            'goto_line.invalid_number': 'Enter a valid hex or decimal offset.',
+            'status.encoding': 'Hex',
+            'about.requirement.install_failed': 'Hex-X could not open pip for {package}.\n\n{error_detail}',
+            'app.crash_title': 'Hex-X Crash',
+            'file.reload_message': 'Do you want Hex-X to reload the file from disk instead?',
+            'filesystem.access_error': 'Hex-X could not access:\n{location}\n\n{error_detail}',
+            'find.in.search_failed': 'Hex-X could not search:\n{directory}\n\n{error_detail}',
+            'help.open_failed': 'Unable to open the Hex-X help file.',
+            'help.not_found': 'Hex-X help file not found.',
+            'recover.tabs_message': 'Hex-X found unsaved tabs from a previous crash. Restore them?',
+            'shell_integration.generic_name': 'Hex Editor',
+            'shell_integration.desktop_comment': 'Edit binary files with Hex-X',
+            'shell_integration.app_description': 'Edit supported binary files with Hex-X.',
+            'shell_integration.update_failed': 'Hex-X could not update the OS shell integration.\n\n{error_detail}',
+            'tab.menu.new_window': 'Open in New Hex-X Window',
+        })
+        self.app_name = self.tr('app.name', 'Hex-X')
         self.session_path = self.build_session_path(config_dir)
         self.editor_identity_path = self.build_editor_identity_path(config_dir)
-        self.recovery_path = os.path.join(self.app_dir, "Notepad-X.recovery.json")
+        self.recovery_path = os.path.join(self.app_dir, "Hex-X.recovery.json")
         self.refresh_log_paths()
-        self.help_path = os.path.join(self.resource_dir, "Notepad-X-help.txt")
+        self.help_path = os.path.join(self.resource_dir, "Hex-X-help.txt")
         self.note_color_labels = {
             'yellow': self.tr('note.filter.yellow', 'Yellow'),
             'green': self.tr('note.filter.green', 'Green'),
@@ -1120,13 +1149,19 @@ class NotepadX:
         self.live_find_max_matches_typing = 150
         self.intellisense_max_project_files = 24
         self.intellisense_max_suggestions = 28
+        self.hex_editor_mode = True
+        self.hex_bytes_per_row = 16
+        self.hex_header_lines = 1
+        self.hex_field_width = (self.hex_bytes_per_row * 3) - 1
+        self.max_editable_hex_file_bytes = 32 * 1024 * 1024
+        self.hex_preview_bytes = 4 * 1024 * 1024
         self.spellcheck_delay_ms = 260
         self.spellcheck_max_chars = 250000
         self.spellcheck_max_words = 8000
         self.spellcheck_token_pattern = re.compile(r"[A-Za-z]+(?:'[A-Za-z]+)?")
         self.spellcheck_skip_neighbor_chars = set('_/\\.@#:-')
         self.spellcheck_custom_words = {
-            'notepad', 'notepadx', 'github', 'gitignore', 'gitattributes', 'grab',
+            'hexx', 'github', 'gitignore', 'gitattributes', 'grab',
             'lolcat', 'codex', 'pyspellchecker', 'plaintext', 'utf', 'npxe', 'npx',
             'json', 'yaml', 'toml', 'xml', 'html', 'css', 'javascript', 'typescript',
             'python', 'java', 'powershell', 'markdown', 'autocomplete'
@@ -1164,7 +1199,7 @@ class NotepadX:
         self.log_error_level_pattern = re.compile(r'^\s*(?:\[[^\]]+\]\s*)?(?:error|fatal|critical)\b[:\s-]*(.*)$', re.IGNORECASE)
         self.log_warning_level_pattern = re.compile(r'^\s*(?:\[[^\]]+\]\s*)?(?:warn(?:ing)?)\b[:\s-]*(.*)$', re.IGNORECASE)
         self.single_instance_host = '127.0.0.1'
-        self.single_instance_port = get_notepadx_single_instance_port(self.app_dir)
+        self.single_instance_port = get_hexx_single_instance_port(self.app_dir)
         self.single_instance_server = None
         self.single_instance_listener_thread = None
         self.single_instance_running = False
@@ -1188,19 +1223,19 @@ class NotepadX:
         self.currently_editing_measure_font = None
         self.min_font_size = 6
         self.max_font_size = 32
-        self.word_wrap_enabled = tk.BooleanVar(value=True)
+        self.word_wrap_enabled = tk.BooleanVar(value=False)
         self.sound_enabled = tk.BooleanVar(value=True)
         self.status_bar_enabled = tk.BooleanVar(value=True)
-        self.numbered_lines_enabled = tk.BooleanVar(value=True)
-        self.autocomplete_enabled = tk.BooleanVar(value=True)
+        self.numbered_lines_enabled = tk.BooleanVar(value=False)
+        self.autocomplete_enabled = tk.BooleanVar(value=False)
         self.spell_check_enabled = tk.BooleanVar(value=SpellChecker is not None)
         self.edit_with_shell_enabled = tk.BooleanVar(value=False)
-        self.auto_pair_enabled = tk.BooleanVar(value=True)
+        self.auto_pair_enabled = tk.BooleanVar(value=False)
         self.compare_multi_edit_enabled = tk.BooleanVar(value=False)
         self.command_panel_enabled = tk.BooleanVar(value=True)
         self.minimap_enabled = tk.BooleanVar(value=True)
         self.breadcrumbs_enabled = tk.BooleanVar(value=True)
-        self.diagnostics_enabled = tk.BooleanVar(value=True)
+        self.diagnostics_enabled = tk.BooleanVar(value=False)
         self.autosave_enabled = tk.BooleanVar(value=True)
         self.find_in_selected_directory = ""
         self.note_filter = tk.StringVar(value='all')
@@ -1586,7 +1621,7 @@ class NotepadX:
             }
             self.queue_background_file_result(payload)
 
-        threading.Thread(target=coordinator, name='NotepadXIndexCoordinator', daemon=True).start()
+        threading.Thread(target=coordinator, name='HexXIndexCoordinator', daemon=True).start()
         return True
 
     def format_byte_size(self, size_bytes):
@@ -1863,10 +1898,10 @@ class NotepadX:
         base_dir = os.environ.get('LOCALAPPDATA') or os.path.expanduser('~')
         if self.is_linux:
             base_dir = os.environ.get('XDG_STATE_HOME') or os.path.join(os.path.expanduser('~'), '.local', 'state')
-        return os.path.join(base_dir, 'Notepad-X')
+        return os.path.join(base_dir, 'Hex-X')
 
     def get_emergency_support_dir(self):
-        return os.path.join(tempfile.gettempdir(), 'Notepad-X')
+        return os.path.join(tempfile.gettempdir(), 'Hex-X')
 
     def get_config_dir(self, base_dir):
         return os.path.join(base_dir, 'cfg')
@@ -1877,8 +1912,8 @@ class NotepadX:
     def refresh_log_paths(self):
         self.logs_dir = self.get_logs_dir(self.app_dir)
         os.makedirs(self.logs_dir, exist_ok=True)
-        self.crash_log_path = os.path.join(self.logs_dir, "Notepad-X.crash.log")
-        self.startup_trace_path = os.path.join(self.logs_dir, "Notepad-X.startup.trace.log")
+        self.crash_log_path = os.path.join(self.logs_dir, "Hex-X.crash.log")
+        self.startup_trace_path = os.path.join(self.logs_dir, "Hex-X.startup.trace.log")
 
     def detect_running_as_administrator(self):
         if self.is_windows:
@@ -1903,7 +1938,7 @@ class NotepadX:
         candidates = []
         base_dirs = [
             getattr(self, 'resource_dir', None),
-            get_notepadx_app_dir(),
+            get_hexx_app_dir(),
             os.path.dirname(os.path.abspath(sys.executable)) if getattr(sys, 'frozen', False) else None,
         ]
         for base_dir in base_dirs:
@@ -2714,7 +2749,36 @@ class NotepadX:
         self.locale_code = target_code
         self.locale_path = target_path
         self.locale_strings = self.load_locale_strings(self.locale_path)
-        self.app_name = self.tr('app.name', 'Notepad-X')
+        self.locale_strings.update({
+            'app.name': 'Hex-X',
+            'app.about_title': 'About Hex-X',
+            'app.help_title': 'Hex-X Help',
+            'about.heading': 'Hex-X',
+            'about.tagline': 'A focused binary hex editor.',
+            'menu.help.about': 'About Hex-X',
+            'menu.view.edit_with_hexx': 'Edit with Hex-X',
+            'menu.edit.goto_line': 'Go To Offset',
+            'menu.view.numbered_lines': 'Offset Gutter',
+            'goto_line.title': 'Go To Offset',
+            'goto_line.prompt': 'Offset (hex or decimal):',
+            'goto_line.invalid_range': 'Offset out of range.',
+            'goto_line.invalid_number': 'Enter a valid hex or decimal offset.',
+            'status.encoding': 'Hex',
+            'about.requirement.install_failed': 'Hex-X could not open pip for {package}.\n\n{error_detail}',
+            'app.crash_title': 'Hex-X Crash',
+            'file.reload_message': 'Do you want Hex-X to reload the file from disk instead?',
+            'filesystem.access_error': 'Hex-X could not access:\n{location}\n\n{error_detail}',
+            'find.in.search_failed': 'Hex-X could not search:\n{directory}\n\n{error_detail}',
+            'help.open_failed': 'Unable to open the Hex-X help file.',
+            'help.not_found': 'Hex-X help file not found.',
+            'recover.tabs_message': 'Hex-X found unsaved tabs from a previous crash. Restore them?',
+            'shell_integration.generic_name': 'Hex Editor',
+            'shell_integration.desktop_comment': 'Edit binary files with Hex-X',
+            'shell_integration.app_description': 'Edit supported binary files with Hex-X.',
+            'shell_integration.update_failed': 'Hex-X could not update the OS shell integration.\n\n{error_detail}',
+            'tab.menu.new_window': 'Open in New Hex-X Window',
+        })
+        self.app_name = self.tr('app.name', 'Hex-X')
         self.font_family = self.resolve_locale_font_family(self.locale_code)
         self.note_color_labels = {
             'yellow': self.tr('note.filter.yellow', 'Yellow'),
@@ -2727,7 +2791,7 @@ class NotepadX:
         if hasattr(self, 'menu'):
             self.create_menu()
         if hasattr(self, 'status'):
-            self.status.config(text=self.tr('status.initial', "Ln 1 of 1, Col 1 | 0 characters | UTF-8 | Normal"))
+            self.status.config(text=self.tr('status.initial', "Offset 0x00000000 | 0 bytes | Hex | Normal"))
             self.status.config(anchor=self.ui_anchor_start())
         if hasattr(self, 'status_tail'):
             self.status_tail.config(text=self.tr('status.resource_initial', " | CPU: 0.0% Memory: 0MB"))
@@ -2772,25 +2836,25 @@ class NotepadX:
         return safe_slug or 'default'
 
     def build_session_path(self, config_dir):
-        base_name = f"Notepad-X.{self.machine_profile_slug}.session.json"
+        base_name = f"Hex-X.{self.machine_profile_slug}.session.json"
         if self.isolated_session:
-            base_name = f"Notepad-X.{self.machine_profile_slug}.{os.getpid()}.session.json"
+            base_name = f"Hex-X.{self.machine_profile_slug}.{os.getpid()}.session.json"
         return os.path.join(config_dir, base_name)
 
     def build_editor_identity_path(self, config_dir):
-        base_name = f"Notepad-X.{self.machine_profile_slug}.editor.json"
+        base_name = f"Hex-X.{self.machine_profile_slug}.editor.json"
         if self.isolated_session:
-            base_name = f"Notepad-X.{self.machine_profile_slug}.{os.getpid()}.editor.json"
+            base_name = f"Hex-X.{self.machine_profile_slug}.{os.getpid()}.editor.json"
         return os.path.join(config_dir, base_name)
 
     def get_linux_desktop_entry_path(self):
         applications_dir = os.path.join(os.path.expanduser('~'), '.local', 'share', 'applications')
-        return os.path.join(applications_dir, 'notepad-x.desktop')
+        return os.path.join(applications_dir, 'hex-x.desktop')
 
     def directory_is_writable(self, directory):
         try:
             os.makedirs(directory, exist_ok=True)
-            fd, temp_path = tempfile.mkstemp(prefix='notepadx-write-test-', suffix='.tmp', dir=directory)
+            fd, temp_path = tempfile.mkstemp(prefix='hexx-write-test-', suffix='.tmp', dir=directory)
             os.close(fd)
             os.remove(temp_path)
             return True
@@ -2818,7 +2882,7 @@ class NotepadX:
         self.migrate_language_files(config_dir=config_dir, locale_dir=self.locale_dir)
         self.session_path = self.build_session_path(config_dir)
         self.editor_identity_path = self.build_editor_identity_path(config_dir)
-        self.recovery_path = os.path.join(self.app_dir, "Notepad-X.recovery.json")
+        self.recovery_path = os.path.join(self.app_dir, "Hex-X.recovery.json")
         self.refresh_log_paths()
 
     def move_support_paths_to_emergency_dir(self):
@@ -2832,7 +2896,7 @@ class NotepadX:
         self.migrate_language_files(config_dir=config_dir, locale_dir=self.locale_dir)
         self.session_path = self.build_session_path(config_dir)
         self.editor_identity_path = self.build_editor_identity_path(config_dir)
-        self.recovery_path = os.path.join(self.app_dir, "Notepad-X.recovery.json")
+        self.recovery_path = os.path.join(self.app_dir, "Hex-X.recovery.json")
         self.refresh_log_paths()
 
     def utc_timestamp(self):
@@ -3025,7 +3089,7 @@ class NotepadX:
 
     def create_encryption_header(self, original_name=None, salt=None):
         return {
-            'format': 'Notepad-X Encrypted',
+            'format': 'Hex-X Encrypted',
             'version': self.encryption_version,
             'cipher': 'AES-256-GCM',
             'kdf': 'scrypt',
@@ -3067,7 +3131,7 @@ class NotepadX:
                 raise RuntimeError(
                     self.tr(
                         'encryption.error.scrypt_memory',
-                        'Notepad-X could not derive the encryption key because the scrypt memory limit was exceeded on this machine.'
+                        'Hex-X could not derive the encryption key because the scrypt memory limit was exceeded on this machine.'
                     )
                 ) from exc
             raise
@@ -3098,7 +3162,7 @@ class NotepadX:
         nonce_end = nonce_start + self.encryption_nonce_length
         nonce = payload_bytes[nonce_start:nonce_end]
         ciphertext = payload_bytes[nonce_end:]
-        if not isinstance(header, dict) or header.get('format') != 'Notepad-X Encrypted':
+        if not isinstance(header, dict) or header.get('format') != 'Hex-X Encrypted':
             raise ValueError(self.tr('encryption.error.header_invalid', 'Encrypted file header is invalid.'))
         if header.get('cipher') != 'AES-256-GCM' or header.get('kdf') != 'scrypt':
             raise ValueError(self.tr('encryption.error.unsupported_settings', 'Unsupported encrypted file settings.'))
@@ -3118,7 +3182,7 @@ class NotepadX:
             self.tr('encryption.unavailable_title', 'Encryption Unavailable'),
             self.tr(
                 'encryption.unavailable_message',
-                "Encrypted save/open needs the 'cryptography' Python package.\n\nInstall it on this machine to use Notepad-X encrypted files."
+                "Encrypted save/open needs the 'cryptography' Python package.\n\nInstall it on this machine to use Hex-X encrypted files."
             ),
             parent=parent or self.root
         )
@@ -3318,6 +3382,347 @@ class NotepadX:
         doc['total_file_lines'] = max(1, int(text.index('end-1c').split('.')[0]))
         doc['window_end_line'] = doc['total_file_lines']
 
+    def get_hex_data_start_col(self):
+        return len(f"{0:08X}h:  ")
+
+    def get_hex_ascii_start_col(self):
+        return self.get_hex_data_start_col() + self.hex_field_width + len("  ; ")
+
+    def get_hex_header_text(self):
+        byte_columns = ' '.join(f"{index:02X}" for index in range(self.hex_bytes_per_row))
+        return f"Offset(h)   {byte_columns}   ASCII"
+
+    def format_hex_dump_row(self, offset, chunk):
+        safe_offset = max(0, int(offset or 0))
+        safe_chunk = bytes(chunk or b'')
+        hex_field = ' '.join(f"{byte:02X}" for byte in safe_chunk).ljust(self.hex_field_width)
+        ascii_field = ''.join(chr(byte) if 32 <= byte <= 126 else '.' for byte in safe_chunk)
+        return f"{safe_offset:08X}h:  {hex_field}  ; {ascii_field}"
+
+    def format_hex_dump(self, payload_bytes, preview_notice=None):
+        data = bytes(payload_bytes or b'')
+        lines = [self.get_hex_header_text()]
+        for offset in range(0, len(data), self.hex_bytes_per_row):
+            lines.append(self.format_hex_dump_row(offset, data[offset:offset + self.hex_bytes_per_row]))
+        if preview_notice:
+            lines.append(f"; {preview_notice}")
+        return '\n'.join(lines)
+
+    def parse_hex_dump_text(self, content, strict=True):
+        data = bytearray()
+        for line_number, raw_line in enumerate(str(content or '').splitlines(), start=1):
+            line = raw_line.rstrip('\r\n')
+            stripped = line.strip()
+            if not stripped:
+                continue
+            if line_number == 1 and 'offset' in stripped.lower() and 'ascii' in stripped.lower():
+                continue
+            if stripped.startswith(';'):
+                continue
+
+            byte_area = line
+            if ':' in line:
+                prefix, remainder = line.split(':', 1)
+                if re.fullmatch(r'\s*[0-9A-Fa-f]+h?\s*', prefix):
+                    byte_area = remainder
+            if ';' in byte_area:
+                byte_area = byte_area.split(';', 1)[0]
+            elif '|' in byte_area:
+                byte_area = byte_area.split('|', 1)[0]
+
+            tokens = re.findall(r'(?<![0-9A-Fa-f])([0-9A-Fa-f]{2})(?![0-9A-Fa-f])', byte_area)
+            if not tokens:
+                if strict and not set(stripped) <= {'-', '=', ' '}:
+                    raise ValueError(f"Line {line_number} does not contain any hex bytes.")
+                continue
+            for token in tokens[:self.hex_bytes_per_row]:
+                data.append(int(token, 16))
+        return bytes(data)
+
+    def render_hex_document(self, doc, payload_bytes=b'', mark_modified=False, total_size=None, preview_notice=None):
+        if not doc:
+            return
+        text = doc.get('text')
+        if not text:
+            return
+        data = bytearray(payload_bytes or b'')
+        doc['hex_mode'] = True
+        doc['hex_bytes'] = data
+        doc['file_size_bytes'] = len(data) if total_size is None else max(0, int(total_size or 0))
+        doc['line_starts'] = None
+        doc['window_start_line'] = 1
+        doc['last_virtual_line'] = 1
+        doc['last_virtual_col'] = 0
+        doc['pending_virtual_target_line'] = None
+        doc['suspend_modified_events'] = True
+        try:
+            text.configure(state='normal')
+            text.delete('1.0', tk.END)
+            text.insert('1.0', self.format_hex_dump(data, preview_notice=preview_notice))
+            doc['total_file_lines'] = max(1, int(text.index('end-1c').split('.')[0]))
+            doc['window_end_line'] = doc['total_file_lines']
+            text.tag_remove('sel', '1.0', tk.END)
+            if data:
+                text.mark_set(tk.INSERT, f"{self.hex_header_lines + 1}.{self.get_hex_data_start_col()}")
+            else:
+                text.mark_set(tk.INSERT, '1.0')
+            text.see(tk.INSERT)
+        finally:
+            doc['suspend_modified_events'] = False
+        text.edit_modified(bool(mark_modified))
+
+    def get_hex_document_bytes_from_editor(self, doc):
+        if not doc:
+            return b''
+        text = doc.get('text')
+        if not text:
+            return bytes(doc.get('hex_bytes') or b'')
+        payload = self.parse_hex_dump_text(text.get('1.0', 'end-1c'), strict=True)
+        doc['hex_bytes'] = bytearray(payload)
+        doc['file_size_bytes'] = len(payload)
+        return payload
+
+    def get_hex_data_bytearray(self, doc):
+        if not doc:
+            return bytearray()
+        data = doc.get('hex_bytes')
+        if isinstance(data, bytearray):
+            return data
+        if isinstance(data, bytes):
+            data = bytearray(data)
+            doc['hex_bytes'] = data
+            return data
+        try:
+            data = bytearray(self.parse_hex_dump_text(doc['text'].get('1.0', 'end-1c'), strict=False))
+        except Exception:
+            data = bytearray()
+        doc['hex_bytes'] = data
+        return data
+
+    def get_hex_nibble_location(self, doc, index=None):
+        if not doc or not doc.get('hex_mode'):
+            return None
+        text = doc.get('text')
+        if not text:
+            return None
+        try:
+            resolved = text.index(index or tk.INSERT)
+            line_text, col_text = resolved.split('.', 1)
+            line_number = int(line_text)
+            col = int(col_text)
+        except (tk.TclError, ValueError, IndexError):
+            return None
+        data_line = line_number - self.hex_header_lines - 1
+        if data_line < 0:
+            return None
+        hex_start = self.get_hex_data_start_col()
+        hex_end = hex_start + self.hex_field_width
+        if col < hex_start or col >= hex_end:
+            return None
+        relative = col - hex_start
+        byte_in_row = relative // 3
+        nibble = relative % 3
+        if nibble > 1:
+            byte_in_row += 1
+            nibble = 0
+        byte_offset = data_line * self.hex_bytes_per_row + byte_in_row
+        if byte_offset >= len(self.get_hex_data_bytearray(doc)):
+            return None
+        return line_number, byte_offset, nibble
+
+    def get_hex_ascii_location(self, doc, index=None):
+        if not doc or not doc.get('hex_mode'):
+            return None
+        text = doc.get('text')
+        if not text:
+            return None
+        try:
+            resolved = text.index(index or tk.INSERT)
+            line_text, col_text = resolved.split('.', 1)
+            line_number = int(line_text)
+            col = int(col_text)
+        except (tk.TclError, ValueError, IndexError):
+            return None
+        data_line = line_number - self.hex_header_lines - 1
+        if data_line < 0:
+            return None
+        ascii_start = self.get_hex_ascii_start_col()
+        byte_in_row = col - ascii_start
+        if byte_in_row < 0 or byte_in_row >= self.hex_bytes_per_row:
+            return None
+        byte_offset = data_line * self.hex_bytes_per_row + byte_in_row
+        if byte_offset >= len(self.get_hex_data_bytearray(doc)):
+            return None
+        return line_number, byte_offset
+
+    def get_hex_byte_offset_for_index(self, doc, index=None, default_to_end=False):
+        nibble_location = self.get_hex_nibble_location(doc, index)
+        if nibble_location:
+            return nibble_location[1]
+        ascii_location = self.get_hex_ascii_location(doc, index)
+        if ascii_location:
+            return ascii_location[1]
+        data = self.get_hex_data_bytearray(doc)
+        return len(data) if default_to_end else None
+
+    def set_hex_insert_for_offset(self, doc, byte_offset, nibble=0, ascii_pane=False):
+        if not doc:
+            return
+        text = doc.get('text')
+        data = self.get_hex_data_bytearray(doc)
+        if not text or not data:
+            return
+        safe_offset = max(0, min(int(byte_offset or 0), len(data) - 1))
+        line_number = self.hex_header_lines + 1 + (safe_offset // self.hex_bytes_per_row)
+        byte_in_row = safe_offset % self.hex_bytes_per_row
+        if ascii_pane:
+            col = self.get_hex_ascii_start_col() + byte_in_row
+        else:
+            col = self.get_hex_data_start_col() + (byte_in_row * 3) + max(0, min(1, int(nibble or 0)))
+        try:
+            text.mark_set(tk.INSERT, f"{line_number}.{col}")
+            text.see(tk.INSERT)
+        except tk.TclError:
+            pass
+
+    def refresh_hex_data_line(self, doc, line_number, caret_offset=None, nibble=0, ascii_pane=False):
+        if not doc:
+            return
+        text = doc.get('text')
+        data = self.get_hex_data_bytearray(doc)
+        if not text:
+            return
+        data_line = int(line_number or 1) - self.hex_header_lines - 1
+        if data_line < 0:
+            return
+        row_offset = data_line * self.hex_bytes_per_row
+        row_text = self.format_hex_dump_row(row_offset, data[row_offset:row_offset + self.hex_bytes_per_row])
+        doc['suspend_modified_events'] = True
+        try:
+            text.delete(f"{line_number}.0", f"{line_number}.end")
+            text.insert(f"{line_number}.0", row_text)
+        finally:
+            doc['suspend_modified_events'] = False
+        if caret_offset is not None:
+            self.set_hex_insert_for_offset(doc, caret_offset, nibble=nibble, ascii_pane=ascii_pane)
+        text.edit_modified(True)
+        doc['hex_bytes_dirty'] = True
+        self.refresh_tab_title(doc['frame'])
+        self.update_status()
+        self.schedule_recovery_save()
+
+    def replace_hex_nibble_at_insert(self, doc, char):
+        data = self.get_hex_data_bytearray(doc)
+        if not data:
+            data.append((int(char, 16) << 4) & 0xF0)
+            self.render_hex_document(doc, data, mark_modified=True)
+            self.set_hex_insert_for_offset(doc, 0, nibble=1)
+            self.refresh_tab_title(doc['frame'])
+            self.update_status()
+            self.schedule_recovery_save()
+            return "break"
+        location = self.get_hex_nibble_location(doc)
+        if not location:
+            try:
+                current_line = int(doc['text'].index(tk.INSERT).split('.', 1)[0])
+                data_line = current_line - self.hex_header_lines - 1
+                target_offset = data_line * self.hex_bytes_per_row if data_line >= 0 else 0
+            except (tk.TclError, ValueError, IndexError):
+                target_offset = 0
+            self.set_hex_insert_for_offset(doc, min(len(data) - 1, max(0, target_offset)))
+            return "break"
+        line_number, byte_offset, nibble = location
+        value = int(char, 16)
+        current_byte = data[byte_offset]
+        if nibble == 0:
+            data[byte_offset] = ((value << 4) | (current_byte & 0x0F)) & 0xFF
+            next_offset = byte_offset
+            next_nibble = 1
+        else:
+            data[byte_offset] = ((current_byte & 0xF0) | value) & 0xFF
+            next_offset = min(len(data) - 1, byte_offset + 1)
+            next_nibble = 0
+        self.refresh_hex_data_line(doc, line_number, caret_offset=next_offset, nibble=next_nibble)
+        return "break"
+
+    def replace_hex_ascii_at_insert(self, doc, char):
+        location = self.get_hex_ascii_location(doc)
+        if not location:
+            return "break"
+        line_number, byte_offset = location
+        data = self.get_hex_data_bytearray(doc)
+        data[byte_offset] = ord(char[0]) & 0xFF
+        next_offset = min(len(data) - 1, byte_offset + 1)
+        self.refresh_hex_data_line(doc, line_number, caret_offset=next_offset, ascii_pane=True)
+        return "break"
+
+    def paste_hex_clipboard(self, doc, target):
+        try:
+            clipboard_text = self.root.clipboard_get()
+        except tk.TclError:
+            return "break"
+        payload = self.parse_hex_dump_text(clipboard_text, strict=False)
+        if not payload and clipboard_text:
+            payload = str(clipboard_text).encode('utf-8', errors='replace')
+        if not payload:
+            return "break"
+        data = self.get_hex_data_bytearray(doc)
+        start_offset = self.get_hex_byte_offset_for_index(doc, default_to_end=True)
+        end_offset = start_offset + len(payload)
+        try:
+            sel_start = target.index('sel.first')
+            sel_end = target.index('sel.last')
+            selected_start = self.get_hex_byte_offset_for_index(doc, sel_start)
+            selected_end = self.get_hex_byte_offset_for_index(doc, sel_end)
+            if selected_start is not None and selected_end is not None:
+                start_offset = min(selected_start, selected_end)
+                end_offset = max(selected_start, selected_end) + 1
+        except tk.TclError:
+            pass
+        if start_offset > len(data):
+            data.extend(b'\x00' * (start_offset - len(data)))
+        data[start_offset:end_offset] = payload
+        self.render_hex_document(doc, data, mark_modified=True)
+        if data:
+            self.set_hex_insert_for_offset(doc, min(len(data) - 1, start_offset + len(payload) - 1), nibble=1)
+        self.refresh_tab_title(doc['frame'])
+        self.update_status()
+        self.schedule_recovery_save()
+        return "break"
+
+    def handle_hex_text_keypress(self, event, doc):
+        state = int(getattr(event, 'state', 0) or 0)
+        keysym = str(getattr(event, 'keysym', '') or '')
+        char = str(getattr(event, 'char', '') or '')
+
+        if (state & 0x4) or (state & 0x20000):
+            return None
+        if self.is_shift_selection_navigation(event):
+            return None
+        if keysym in {'Up', 'Down', 'Left', 'Right', 'Prior', 'Next', 'Home', 'End', 'Escape'}:
+            return None
+        if keysym in {'Return', 'KP_Enter', 'Tab'}:
+            return "break"
+        if keysym == 'BackSpace':
+            offset = self.get_hex_byte_offset_for_index(doc)
+            if offset is not None and offset > 0:
+                self.set_hex_insert_for_offset(doc, offset - 1, nibble=1)
+            return "break"
+        if keysym == 'Delete':
+            location = self.get_hex_nibble_location(doc) or self.get_hex_ascii_location(doc)
+            if location:
+                line_number = location[0]
+                byte_offset = location[1]
+                data = self.get_hex_data_bytearray(doc)
+                data[byte_offset] = 0
+                self.refresh_hex_data_line(doc, line_number, caret_offset=byte_offset)
+            return "break"
+        if len(char) == 1 and char in '0123456789abcdefABCDEF':
+            return self.replace_hex_nibble_at_insert(doc, char.upper())
+        if len(char) == 1 and ord(char) >= 32:
+            return self.replace_hex_ascii_at_insert(doc, char)
+        return "break"
+
     def queue_background_file_result(self, result):
         with self.background_file_lock:
             self.background_file_results.append(result)
@@ -3474,7 +3879,7 @@ class NotepadX:
                     'error': exc,
                 })
 
-        threading.Thread(target=worker, name='NotepadXLargeFileLoad', daemon=True).start()
+        threading.Thread(target=worker, name='HexXLargeFileLoad', daemon=True).start()
 
     def count_pending_background_stream_chunks(self, tab_id, load_token):
         target_tab_id = str(tab_id or '')
@@ -3636,7 +4041,7 @@ class NotepadX:
                         'error': exc,
                     })
 
-            threading.Thread(target=worker, name='NotepadXLargeFileIndex', daemon=True).start()
+            threading.Thread(target=worker, name='HexXLargeFileIndex', daemon=True).start()
             return
 
         worker_count = self.get_background_index_worker_count(file_size)
@@ -3682,7 +4087,7 @@ class NotepadX:
                         'error': inner_exc,
                     })
 
-            threading.Thread(target=fallback_worker, name='NotepadXLargeFileIndexFallback', daemon=True).start()
+            threading.Thread(target=fallback_worker, name='HexXLargeFileIndexFallback', daemon=True).start()
             return
 
         doc['background_index_future'] = list(futures)
@@ -3734,7 +4139,7 @@ class NotepadX:
                     'error': exc,
                 })
 
-        threading.Thread(target=coordinator, name='NotepadXVirtualIndexCoordinator', daemon=True).start()
+        threading.Thread(target=coordinator, name='HexXVirtualIndexCoordinator', daemon=True).start()
 
     def begin_background_text_insert(self, doc, content, total_lines_hint=None):
         doc['pending_insert_content'] = content
@@ -3820,7 +4225,7 @@ class NotepadX:
             self.tr('file.open_failed_title', 'Open Failed'),
             self.tr(
                 'file.open_failed_message',
-                'Notepad-X could not open:\n{file_path}\n\n{error_detail}',
+                'Hex-X could not open:\n{file_path}\n\n{error_detail}',
                 file_path=file_path,
                 error_detail=exc
             ),
@@ -4037,7 +4442,7 @@ class NotepadX:
         nonce = os.urandom(self.encryption_nonce_length)
         ciphertext = AESGCM(key).encrypt(nonce, plaintext_bytes, self.encryption_magic)
         payload_bytes = self.build_encrypted_payload(encryption_header, nonce, ciphertext)
-        if not self.write_binary_atomically(file_path, payload_bytes, 'notepadx-encrypted-', 'write encrypted file'):
+        if not self.write_binary_atomically(file_path, payload_bytes, 'hexx-encrypted-', 'write encrypted file'):
             raise OSError(
                 self.tr(
                     'encryption.error.write_failed',
@@ -4120,7 +4525,7 @@ class NotepadX:
             return True
         refreshed = messagebox.askyesno(
             self.tr('file.reload_title', 'Reload File'),
-            self.tr('file.reload_message', 'Do you want Notepad-X to reload the file from disk instead?'),
+            self.tr('file.reload_message', 'Do you want Hex-X to reload the file from disk instead?'),
             parent=self.root
         )
         if refreshed:
@@ -4140,7 +4545,7 @@ class NotepadX:
         location = os.path.abspath(file_path) if file_path else self.tr('filesystem.unknown_path', 'that path')
         messagebox.showerror(
             title,
-            self.tr('filesystem.access_error', 'Notepad-X could not access:\n{location}\n\n{error_detail}', location=location, error_detail=exc),
+            self.tr('filesystem.access_error', 'Hex-X could not access:\n{location}\n\n{error_detail}', location=location, error_detail=exc),
             parent=self.root
         )
 
@@ -4268,7 +4673,7 @@ class NotepadX:
             return existing_path
         temp_dir = os.path.join(self.get_emergency_support_dir(), 'virtual-add')
         os.makedirs(temp_dir, exist_ok=True)
-        fd, temp_path = tempfile.mkstemp(prefix='notepadx-virtual-', suffix='.bin', dir=temp_dir)
+        fd, temp_path = tempfile.mkstemp(prefix='hexx-virtual-', suffix='.bin', dir=temp_dir)
         os.close(fd)
         doc['virtual_add_buffer_path'] = temp_path
         doc['virtual_add_buffer_size'] = 0
@@ -4547,7 +4952,7 @@ class NotepadX:
             except OSError:
                 target_mode = 0o664
         try:
-            fd, temp_path = tempfile.mkstemp(prefix='notepadx-save-', suffix='.tmp', dir=directory)
+            fd, temp_path = tempfile.mkstemp(prefix='hexx-save-', suffix='.tmp', dir=directory)
             with os.fdopen(fd, 'wb') as temp_file:
                 for chunk in self.iter_virtual_document_chunks(doc):
                     temp_file.write(chunk)
@@ -4757,7 +5162,7 @@ class NotepadX:
             self.log_exception('open remote file', exc)
             messagebox.showerror(
                 self.tr('menu.file.open', 'Open'),
-                f'Notepad-X could not fetch the remote file.\n\n{exc}',
+                f'Hex-X could not fetch the remote file.\n\n{exc}',
                 parent=self.root
             )
             return False
@@ -4845,6 +5250,27 @@ class NotepadX:
             raise OSError(error_detail)
         return True
 
+    def save_remote_binary_document(self, doc, payload_bytes):
+        remote_spec = doc.get('remote_spec')
+        shadow_path = doc.get('remote_shadow_path') or doc.get('file_path')
+        if not remote_spec or not shadow_path:
+            raise OSError('Remote document metadata is incomplete')
+        scp_path = self.get_scp_executable()
+        if not scp_path:
+            raise OSError('scp is unavailable')
+        if not self.write_binary_atomically(shadow_path, bytes(payload_bytes or b''), 'hexx-remote-', 'write remote binary file'):
+            raise OSError('Could not write the remote shadow file.')
+        completed = subprocess.run(
+            [scp_path, '-q', shadow_path, remote_spec],
+            capture_output=True,
+            text=True,
+            creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0)
+        )
+        if completed.returncode != 0:
+            error_detail = (completed.stderr or completed.stdout or 'Unknown scp failure').strip()
+            raise OSError(error_detail)
+        return True
+
     def save_document_content(self, doc, autosave=False, show_errors=True, update_recent=True):
         if not doc:
             return False
@@ -4872,25 +5298,37 @@ class NotepadX:
                 return False
 
         try:
-            text_content = doc['text'].get('1.0', tk.END).rstrip('\n')
-            if doc.get('is_remote'):
-                if not autosave:
-                    self.create_backup_snapshot(doc)
-                self.save_remote_document(doc, text_content)
-            elif doc.get('encrypted_file'):
-                if not autosave:
-                    self.create_backup_snapshot(doc)
-                self.write_encrypted_text_file(
-                    doc['file_path'],
-                    text_content,
-                    header=doc.get('encryption_header'),
-                    key=doc.get('encryption_key'),
-                    original_name=doc.get('file_path')
-                )
+            if doc.get('hex_mode'):
+                payload_bytes = self.get_hex_document_bytes_from_editor(doc)
+                if doc.get('is_remote'):
+                    if not autosave:
+                        self.create_backup_snapshot(doc)
+                    self.save_remote_binary_document(doc, payload_bytes)
+                else:
+                    if not autosave:
+                        self.create_backup_snapshot(doc)
+                    if not self.write_binary_atomically(doc['file_path'], payload_bytes, 'hexx-save-', 'write binary file'):
+                        raise OSError(f"Could not write binary file: {doc['file_path']}")
             else:
-                if not autosave:
-                    self.create_backup_snapshot(doc)
-                self.write_file_atomically(doc['file_path'], text_content)
+                text_content = doc['text'].get('1.0', tk.END).rstrip('\n')
+                if doc.get('is_remote'):
+                    if not autosave:
+                        self.create_backup_snapshot(doc)
+                    self.save_remote_document(doc, text_content)
+                elif doc.get('encrypted_file'):
+                    if not autosave:
+                        self.create_backup_snapshot(doc)
+                    self.write_encrypted_text_file(
+                        doc['file_path'],
+                        text_content,
+                        header=doc.get('encryption_header'),
+                        key=doc.get('encryption_key'),
+                        original_name=doc.get('file_path')
+                    )
+                else:
+                    if not autosave:
+                        self.create_backup_snapshot(doc)
+                    self.write_file_atomically(doc['file_path'], text_content)
         except (PermissionError, RuntimeError, ValueError, OSError) as exc:
             if show_errors:
                 if isinstance(exc, PermissionError):
@@ -4903,6 +5341,7 @@ class NotepadX:
             return False
 
         doc['text'].edit_modified(False)
+        doc['hex_bytes_dirty'] = False
         self.update_doc_file_signature(doc)
         if update_recent and not doc.get('is_remote'):
             self.add_recent_file(doc['file_path'])
@@ -5161,9 +5600,9 @@ class NotepadX:
         if self.is_windows and self.winmm:
             sound_path = sound_path.replace('"', '""')
             try:
-                self.winmm.mciSendStringW('close notepadx_note', None, 0, None)
-                self.winmm.mciSendStringW(f'open "{sound_path}" type mpegvideo alias notepadx_note', None, 0, None)
-                self.winmm.mciSendStringW('play notepadx_note from 0', None, 0, None)
+                self.winmm.mciSendStringW('close hexx_note', None, 0, None)
+                self.winmm.mciSendStringW(f'open "{sound_path}" type mpegvideo alias hexx_note', None, 0, None)
+                self.winmm.mciSendStringW('play hexx_note from 0', None, 0, None)
             except Exception:
                 pass
             return
@@ -5249,7 +5688,7 @@ class NotepadX:
             return
         try:
             messagebox.showerror(
-                self.tr('app.crash_title', 'Notepad-X Crash'),
+                self.tr('app.crash_title', 'Hex-X Crash'),
                 self.tr(
                     'app.crash_message',
                     'An unexpected error occurred.\nA crash log was written to:\n{crash_log_path}',
@@ -5282,7 +5721,7 @@ class NotepadX:
         return []
 
     def generate_editor_id(self):
-        seed = f"notepad-x-{os.getpid()}-{datetime.now().timestamp()}-{secrets.token_hex(16)}"
+        seed = f"hex-x-{os.getpid()}-{datetime.now().timestamp()}-{secrets.token_hex(16)}"
         return hashlib.md5(seed.encode('utf-8')).hexdigest()
 
     def persist_editor_identity(self):
@@ -5295,7 +5734,7 @@ class NotepadX:
                         'editor_id': self.editor_id,
                         'known_editor_ids': known_ids
                     },
-                    'notepadx-editor-',
+                    'hexx-editor-',
                     'persist editor identity'
                 ):
                     return
@@ -5499,8 +5938,8 @@ class NotepadX:
         self.schedule_window_layout_save()
         return None
 
-    def is_notepadx_support_file(self, file_path):
-        return is_notepadx_support_file_path(file_path)
+    def is_hexx_support_file(self, file_path):
+        return is_hexx_support_file_path(file_path)
 
     def start_single_instance_server(self):
         if self.isolated_session:
@@ -5561,7 +6000,7 @@ class NotepadX:
 
         self.single_instance_listener_thread = threading.Thread(
             target=listen,
-            name='NotepadXSingleInstanceListener',
+            name='HexXSingleInstanceListener',
             daemon=True
         )
         self.single_instance_listener_thread.start()
@@ -5840,7 +6279,7 @@ class NotepadX:
 
         self.status = tk.Label(
             self.status_left,
-            text=self.tr('status.initial', "Ln 1 of 1, Col 1 | 0 characters | UTF-8 | Normal"),
+            text=self.tr('status.initial', "Offset 0x00000000 | 0 bytes | Hex | Normal"),
             anchor=self.ui_anchor_start(),
             bg='#2d2d2d',
             fg='#d4d4d4',
@@ -5960,14 +6399,14 @@ class NotepadX:
                 selected_count=f"{selected_count:,}",
                 of_label=self.tr('status.of', 'of'),
                 total_chars=f"{total_chars:,}",
-                characters_label=self.tr('status.characters', 'characters')
+                characters_label=self.tr('status.characters', 'bytes')
             )
         else:
             char_info = self.tr(
                 'status.char_count',
                 '{total_chars} {characters_label}',
                 total_chars=f"{total_chars:,}",
-                characters_label=self.tr('status.characters', 'characters')
+                characters_label=self.tr('status.characters', 'bytes')
             )
         return total_lines, total_chars, char_info
 
@@ -5975,6 +6414,28 @@ class NotepadX:
         row, col = text_widget.index(tk.INSERT).split('.')
         row = int(row)
         col = int(col) + 1
+
+        if doc and doc.get('hex_mode'):
+            data = self.get_hex_data_bytearray(doc)
+            total_bytes = max(len(data), int(doc.get('file_size_bytes', 0) or 0))
+            byte_offset = self.get_hex_byte_offset_for_index(doc)
+            if byte_offset is None:
+                byte_offset = 0
+            byte_offset = max(0, min(byte_offset, max(0, total_bytes - 1)))
+            row = (byte_offset // self.hex_bytes_per_row) + 1 if total_bytes else 0
+            col = (byte_offset % self.hex_bytes_per_row) if total_bytes else 0
+            char_info = self.tr(
+                'status.byte_count',
+                '{total_bytes} {bytes_label}',
+                total_bytes=f"{total_bytes:,}",
+                bytes_label=self.tr('status.bytes', 'bytes')
+            )
+            zoom_text = self.get_zoom_text()
+            mode_suffix = f" | {self.tr('status.mode.preview', 'Preview')}" if doc.get('preview_mode') else ""
+            return (
+                f"Offset 0x{byte_offset:08X} | Byte {byte_offset + 1 if total_bytes else 0} of {total_bytes:,} "
+                f"| Row {row}, +{col:X} | {char_info} | {self.tr('status.encoding', 'Hex')} | {zoom_text}{mode_suffix}"
+            )
 
         if doc and doc.get('virtual_mode'):
             total_lines = max(1, int(doc.get('total_file_lines', 1) or 1))
@@ -6021,7 +6482,7 @@ class NotepadX:
             col_label=self.tr('status.col', 'Col'),
             col=col,
             char_info=char_info,
-            encoding=self.tr('status.encoding', 'UTF-8'),
+            encoding=self.tr('status.encoding', 'Hex'),
             zoom_text=zoom_text,
             mode_suffix=mode_suffix
         )
@@ -6030,6 +6491,22 @@ class NotepadX:
         row, col = text_widget.index(tk.INSERT).split('.')
         row = int(row)
         col = int(col) + 1
+
+        if doc and doc.get('hex_mode'):
+            data = self.get_hex_data_bytearray(doc)
+            total_bytes = max(len(data), int(doc.get('file_size_bytes', 0) or 0))
+            byte_offset = self.get_hex_byte_offset_for_index(doc)
+            if byte_offset is None:
+                byte_offset = 0
+            byte_offset = max(0, min(byte_offset, max(0, total_bytes - 1)))
+            char_info = self.tr(
+                'status.byte_count',
+                '{total_bytes} {bytes_label}',
+                total_bytes=f"{total_bytes:,}",
+                bytes_label=self.tr('status.bytes', 'bytes')
+            )
+            mode_suffix = f" | {self.tr('status.mode.preview', 'Preview')}" if doc.get('preview_mode') else ""
+            return f"Offset 0x{byte_offset:08X} | {char_info}{mode_suffix}"
 
         if doc and doc.get('virtual_mode'):
             total_lines = max(1, int(doc.get('total_file_lines', 1) or 1))
@@ -6084,7 +6561,7 @@ class NotepadX:
         status_main_text = self.build_editor_status_text(current_doc, self.text)
         editor_label_text = ""
         if current_doc and current_doc.get('file_path'):
-            editor_label_text = self.tr('status.editor_id', ' | ID: {editor_id}', editor_id=f"Notepad-X-{self.editor_id}")
+            editor_label_text = self.tr('status.editor_id', ' | ID: {editor_id}', editor_id=f"Hex-X-{self.editor_id}")
         shared_notes_tail = ""
         if current_doc and current_doc.get('file_path'):
             unread_count = self.get_unread_note_count(current_doc)
@@ -6217,6 +6694,11 @@ class NotepadX:
         return self.gutter_font
 
     def get_display_line_number(self, doc, local_line):
+        if doc.get('hex_mode'):
+            if int(local_line or 1) <= self.hex_header_lines:
+                return ''
+            offset = (int(local_line) - self.hex_header_lines - 1) * self.hex_bytes_per_row
+            return f"{offset:08X}h"
         if doc.get('virtual_mode'):
             return doc.get('window_start_line', 1) + local_line - 1
         return local_line
@@ -6932,9 +7414,7 @@ class NotepadX:
                 'File',
                 [
                     ':open [path]',
-                    ':open-project [path]',
                     ':remote user@host:/path/file',
-                    ':grab-git',
                     ':recent [list|N|clear]',
                     ':new-tab',
                     ':close-tab',
@@ -6942,8 +7422,6 @@ class NotepadX:
                     ':save-all',
                     ':save-as',
                     ':save-copy',
-                    ':save-run',
-                    ':save-encrypted',
                     ':print',
                     ':export-notes',
                     ':exit',
@@ -6961,18 +7439,8 @@ class NotepadX:
                     ':find',
                     ':find-next',
                     ':find-prev',
-                    ':replace',
                     ':command-panel',
-                    ':symbols',
-                    ':project-symbols',
-                    ':fold',
-                    ':fold-all',
-                    ':unfold-all',
-                    ':lint',
-                    ':date',
-                    ':time-date',
                     ':font',
-                    ':language [list|code]',
                 ],
             ),
             (
@@ -6983,32 +7451,24 @@ class NotepadX:
                     ':currently-editing',
                     ':cycle-notes',
                     ':note-filter [list|all|unread|yellow|green|red|blue]',
-                    ':goto-line',
+                    ':goto-offset',
                     ':top',
                     ':bottom',
                     ':theme [list|create|name]',
-                    ':syntax-mode [list|auto|plain|python|c|cpp|rust|java|javascript|html|php|xml|sql]',
                     ':compare',
                     ':close-compare',
-                    ':preview [on|off]',
                 ],
             ),
             (
                 'Settings',
                 [
-                    ':edit-with-notepad-x on|off',
+                    ':edit-with-hex-x on|off',
                     ':sound on|off',
                     ':status-bar on|off',
                     ':numbered-lines on|off',
-                    ':autocomplete on|off',
-                    ':spell-check on|off',
-                    ':auto-pair on|off',
-                    ':compare-multi-edit on|off',
                     ':minimap on|off',
                     ':breadcrumbs on|off',
-                    ':diagnostics on|off',
                     ':autosave on|off',
-                    ':word-wrap on|off',
                     ':sync-page-navigation on|off',
                 ],
             ),
@@ -7390,20 +7850,20 @@ class NotepadX:
         theme_names = self.get_available_syntax_theme_names()
         if not argument or normalized in {'list', 'ls'}:
             current_theme = self.syntax_theme.get()
-            lines = [f"Current syntax theme: {self.get_syntax_theme_label(current_theme)}", "Available syntax themes:"]
+            lines = [f"Current color theme: {self.get_syntax_theme_label(current_theme)}", "Available color themes:"]
             for theme_name in theme_names:
                 lines.append(f"- {self.get_syntax_theme_label(theme_name)} ({theme_name})")
             return "\n".join(lines) + "\n"
         if normalized in {'create', 'new', 'newtheme'}:
             self.show_create_theme_dialog()
-            return "Opened syntax theme creator.\n"
+            return "Opened color theme creator.\n"
         for theme_name in theme_names:
             if normalized in {
                 self.normalize_named_command_value(theme_name),
                 self.normalize_named_command_value(self.get_syntax_theme_label(theme_name)),
             }:
                 self.set_syntax_theme(theme_name)
-                return f"Syntax theme set to {self.get_syntax_theme_label(theme_name)}.\n"
+                return f"Color theme set to {self.get_syntax_theme_label(theme_name)}.\n"
         return "Usage: :theme [list|create|name]\n"
 
     def run_named_syntax_mode_command(self, argument_text):
@@ -7457,6 +7917,17 @@ class NotepadX:
 
         if command_name in {'help', '?'}:
             return self.get_named_command_help_text()
+        unavailable_in_hex = {
+            'open-project', 'project-open', 'grab-git', 'git', 'save-run', 'run',
+            'save-encrypted', 'save-as-encrypted', 'replace', 'symbols',
+            'project-symbols', 'fold', 'fold-all', 'collapse-all', 'unfold-all',
+            'expand-all', 'lint', 'date', 'insert-date', 'time-date', 'datetime',
+            'insert-time-date', 'language', 'syntax-mode', 'mode', 'preview',
+            'markdown-preview', 'autocomplete', 'spell-check', 'auto-pair',
+            'compare-multi-edit', 'diagnostics', 'word-wrap'
+        }
+        if command_name in unavailable_in_hex:
+            return "That command is not available in Hex-X.\n"
         if command_name in {'open', 'file-open'}:
             argument = self.strip_named_command_argument(argument_text)
             if not argument:
@@ -7518,7 +7989,7 @@ class NotepadX:
             return "Opened Export Notes.\n"
         if command_name in {'exit', 'quit'}:
             self.root.after_idle(self.exit_app)
-            return "Closing Notepad-X.\n"
+            return "Closing Hex-X.\n"
         if command_name == 'undo':
             self.undo()
             return "Undid the last change.\n"
@@ -7536,7 +8007,7 @@ class NotepadX:
             return "Pasted clipboard contents.\n"
         if command_name in {'select-all', 'selectall'}:
             self.select_all()
-            return "Selected all text.\n"
+            return "Selected all bytes.\n"
         if command_name == 'find':
             self.show_find_panel()
             return "Opened Find panel.\n"
@@ -7603,9 +8074,9 @@ class NotepadX:
             return "Jumped to the next note.\n"
         if command_name in {'note-filter', 'filter-notes'}:
             return self.run_named_note_filter_command(argument_text)
-        if command_name in {'goto-line', 'line'}:
+        if command_name in {'goto-offset', 'goto-line', 'line', 'offset'}:
             self.goto_line_dialog()
-            return "Opened Go To Line.\n"
+            return "Opened Go To Offset.\n"
         if command_name in {'top', 'document-top'}:
             self.goto_document_start()
             return "Moved to top of document.\n"
@@ -7614,14 +8085,6 @@ class NotepadX:
             return "Moved to bottom of document.\n"
         if command_name == 'theme':
             return self.run_named_theme_command(argument_text)
-        if command_name in {'syntax-mode', 'mode'}:
-            return self.run_named_syntax_mode_command(argument_text)
-        if command_name in {'preview', 'markdown-preview'}:
-            if argument_text:
-                return self.run_named_toggle_command('preview', argument_text, self.markdown_preview_enabled, self.toggle_markdown_preview, 'Markdown preview')
-            self.markdown_preview_enabled.set(not self.markdown_preview_enabled.get())
-            self.toggle_markdown_preview()
-            return self.format_named_toggle_state('Markdown preview', bool(self.markdown_preview_enabled.get()))
         if command_name == 'compare':
             self.show_split_compare()
             return "Opened compare picker.\n"
@@ -7633,18 +8096,12 @@ class NotepadX:
         toggle_commands = {
             'autosave': (self.autosave_enabled, self.save_session, self.tr('menu.settings.autosave', 'Auto Save')),
             'minimap': (self.minimap_enabled, self.toggle_minimap, self.tr('menu.settings.minimap', 'Minimap')),
-            'diagnostics': (self.diagnostics_enabled, self.toggle_diagnostics, self.tr('menu.settings.diagnostics', 'Diagnostics')),
-            'edit-with-notepad-x': (self.edit_with_shell_enabled, self.toggle_edit_with_shell, self.tr('menu.view.edit_with_notepadx', 'Edit with Notepad-X')),
-            'edit-with-shell': (self.edit_with_shell_enabled, self.toggle_edit_with_shell, self.tr('menu.view.edit_with_notepadx', 'Edit with Notepad-X')),
+            'edit-with-hex-x': (self.edit_with_shell_enabled, self.toggle_edit_with_shell, self.tr('menu.view.edit_with_hexx', 'Edit with Hex-X')),
+            'edit-with-shell': (self.edit_with_shell_enabled, self.toggle_edit_with_shell, self.tr('menu.view.edit_with_hexx', 'Edit with Hex-X')),
             'sound': (self.sound_enabled, self.toggle_sound, self.tr('menu.view.sound', 'Sound')),
             'status-bar': (self.status_bar_enabled, self.toggle_status_bar, self.tr('menu.view.status_bar', 'Status Bar')),
             'numbered-lines': (self.numbered_lines_enabled, self.toggle_numbered_lines, self.tr('menu.view.numbered_lines', 'Numbered Lines')),
-            'autocomplete': (self.autocomplete_enabled, self.toggle_autocomplete, self.tr('menu.view.autocomplete', 'Autocomplete')),
-            'spell-check': (self.spell_check_enabled, self.toggle_spell_check, self.tr('menu.view.spell_check', 'Spell Check')),
-            'auto-pair': (self.auto_pair_enabled, self.save_session, self.tr('menu.settings.auto_pair', 'Auto Pair Brackets/Quotes')),
-            'compare-multi-edit': (self.compare_multi_edit_enabled, self.save_session, self.tr('menu.settings.compare_multi_edit', 'Compare Multi-Edit')),
             'breadcrumbs': (self.breadcrumbs_enabled, self.toggle_breadcrumbs, self.tr('menu.settings.breadcrumbs', 'Breadcrumbs')),
-            'word-wrap': (self.word_wrap_enabled, self.toggle_word_wrap, self.tr('menu.view.word_wrap', 'Word Wrap')),
             'sync-page-navigation': (self.sync_page_navigation_enabled, self.save_session, self.tr('menu.edit.sync_page_navigation', 'Sync PgUp/PgDn in Compare')),
         }
         if command_name in toggle_commands:
@@ -7655,7 +8112,7 @@ class NotepadX:
             return "Opened help contents.\n"
         if command_name == 'about':
             self.show_about_dialog()
-            return "Opened About Notepad-X.\n"
+            return "Opened About Hex-X.\n"
         return None
 
     def finish_shell_command(self, command_text, result):
@@ -7736,7 +8193,7 @@ class NotepadX:
                 result['stderr'] = str(exc)
             self.root.after(0, lambda current=command_text, payload=result: self.finish_shell_command(current, payload))
 
-        self.command_runner_thread = threading.Thread(target=worker, name='NotepadXCommandPanel', daemon=True)
+        self.command_runner_thread = threading.Thread(target=worker, name='HexXCommandPanel', daemon=True)
         self.command_runner_thread.start()
         self.append_command_output(f"$ {command_text}\n[running in {cwd}]\n")
         return "break"
@@ -9903,7 +10360,7 @@ class NotepadX:
                     self.tr('find.in.title', 'Find In Files'),
                     self.tr(
                         'find.in.search_failed',
-                        'Notepad-X could not search:\n{directory}\n\n{error_detail}',
+                        'Hex-X could not search:\n{directory}\n\n{error_detail}',
                         directory=directory,
                         error_detail=str(result['error']).replace('{', '{{').replace('}', '}}')
                     ),
@@ -9933,7 +10390,7 @@ class NotepadX:
                 int(result.get('total_matches') or 0)
             )
 
-        threading.Thread(target=worker, name='NotepadXFindInFiles', daemon=True).start()
+        threading.Thread(target=worker, name='HexXFindInFiles', daemon=True).start()
         progress_dialog.after(120, finish_search)
 
     def choose_find_in_directory_and_search(self):
@@ -10215,7 +10672,7 @@ class NotepadX:
 
     def get_hotkey_definitions(self):
         t = self.tr
-        return OrderedDict([
+        definitions = OrderedDict([
             ('open', {'section': t('menu.file', 'File'), 'label': t('menu.file.open', 'Open'), 'default': t('accel.open', 'Ctrl+W'), 'handler': lambda event=None: self.open_file(event)}),
             ('open_project', {'section': t('menu.file', 'File'), 'label': t('menu.file.open_project', 'Open Project'), 'default': t('accel.open_project', 'Ctrl+Shift+W'), 'handler': lambda event=None: self.open_project(event)}),
             ('open_remote', {'section': t('menu.file', 'File'), 'label': t('menu.file.open_remote', 'Open Remote (SSH)'), 'default': t('accel.open_remote', 'Ctrl+Alt+O'), 'handler': lambda event=None: self.open_remote_file_dialog(event)}),
@@ -10248,7 +10705,7 @@ class NotepadX:
             ('switch_tab', {'section': t('menu.view', 'View'), 'label': t('menu.view.switch_tab', 'Switch Tab'), 'default': t('accel.switch_tab', 'Ctrl+Tab'), 'handler': lambda event=None: self.switch_tab_right(event)}),
             ('currently_editing', {'section': t('menu.view', 'View'), 'label': t('menu.view.currently_editing', 'Currently Editing'), 'default': t('accel.currently_editing', 'Ctrl+Shift+C'), 'handler': lambda event=None: self.toggle_currently_editing_panel(event)}),
             ('cycle_notes', {'section': t('menu.view', 'View'), 'label': t('menu.edit.cycle_notes', 'Cycle Notes'), 'default': t('accel.cycle_notes', 'F4'), 'handler': lambda event=None: self.goto_next_note(event)}),
-            ('goto_line', {'section': t('menu.view', 'View'), 'label': t('menu.edit.goto_line', 'Go To Line'), 'default': t('accel.goto_line', 'Ctrl+G'), 'handler': lambda event=None: self.goto_line_dialog(event)}),
+            ('goto_line', {'section': t('menu.view', 'View'), 'label': t('menu.edit.goto_line', 'Go To Offset'), 'default': t('accel.goto_line', 'Ctrl+G'), 'handler': lambda event=None: self.goto_line_dialog(event)}),
             ('top_of_document', {'section': t('menu.view', 'View'), 'label': t('menu.edit.top_of_document', 'Top of Document'), 'default': t('accel.top_of_document', 'Ctrl+PgUp'), 'handler': lambda event=None: self.goto_document_start(event)}),
             ('bottom_of_document', {'section': t('menu.view', 'View'), 'label': t('menu.edit.bottom_of_document', 'Bottom of Document'), 'default': t('accel.bottom_of_document', 'Ctrl+PgDn'), 'handler': lambda event=None: self.goto_document_end(event)}),
             ('create_theme', {'section': t('menu.view', 'View'), 'label': t('menu.view.create_theme', 'Create Theme'), 'default': t('accel.create_theme', 'Ctrl+Alt+T'), 'handler': lambda event=None: self.show_create_theme_dialog()}),
@@ -10256,7 +10713,7 @@ class NotepadX:
             ('preview_markdown', {'section': t('menu.view', 'View'), 'label': t('menu.view.preview_markdown', 'Preview Markdown'), 'default': t('accel.preview_markdown', 'Ctrl+Shift+P'), 'handler': lambda event=None: self.toggle_boolean_hotkey(self.markdown_preview_enabled, self.toggle_markdown_preview)}),
             ('zoom_in', {'section': t('menu.view', 'View'), 'label': t('menu.view.zoom_in', 'Zoom In'), 'default': t('accel.zoom_in', 'Ctrl+Plus'), 'handler': lambda event=None: self.zoom_in(event)}),
             ('zoom_out', {'section': t('menu.view', 'View'), 'label': t('menu.view.zoom_out', 'Zoom Out'), 'default': t('accel.zoom_out', 'Ctrl+Minus'), 'handler': lambda event=None: self.zoom_out(event)}),
-            ('edit_with_notepadx', {'section': t('menu.settings', 'Settings'), 'label': t('menu.view.edit_with_notepadx', 'Edit with Notepad-X'), 'default': t('accel.edit_with_notepadx', 'Ctrl+Alt+X'), 'handler': lambda event=None: self.toggle_boolean_hotkey(self.edit_with_shell_enabled, self.toggle_edit_with_shell)}),
+            ('edit_with_hexx', {'section': t('menu.settings', 'Settings'), 'label': t('menu.view.edit_with_hexx', 'Edit with Hex-X'), 'default': t('accel.edit_with_hexx', 'Ctrl+Alt+X'), 'handler': lambda event=None: self.toggle_boolean_hotkey(self.edit_with_shell_enabled, self.toggle_edit_with_shell)}),
             ('sound', {'section': t('menu.settings', 'Settings'), 'label': t('menu.view.sound', 'Sound'), 'default': t('accel.sound', 'Ctrl+Alt+Shift+M'), 'handler': lambda event=None: self.toggle_boolean_hotkey(self.sound_enabled, self.toggle_sound)}),
             ('status_bar', {'section': t('menu.settings', 'Settings'), 'label': t('menu.view.status_bar', 'Status Bar'), 'default': t('accel.status_bar', 'Ctrl+B'), 'handler': lambda event=None: self.toggle_boolean_hotkey(self.status_bar_enabled, self.toggle_status_bar)}),
             ('numbered_lines', {'section': t('menu.settings', 'Settings'), 'label': t('menu.view.numbered_lines', 'Numbered Lines'), 'default': t('accel.numbered_lines', 'Ctrl+Alt+L'), 'handler': lambda event=None: self.toggle_boolean_hotkey(self.numbered_lines_enabled, self.toggle_numbered_lines)}),
@@ -10272,8 +10729,21 @@ class NotepadX:
             ('sync_page_navigation', {'section': t('menu.settings', 'Settings'), 'label': t('menu.edit.sync_page_navigation', 'Sync PgUp/PgDn in Compare'), 'default': t('accel.sync_page_navigation', 'Ctrl+Alt+Y'), 'handler': lambda event=None: self.toggle_boolean_hotkey(self.sync_page_navigation_enabled, self.save_session)}),
             ('hotkey_settings', {'section': t('menu.settings', 'Settings'), 'label': t('menu.settings.hotkeys', 'Hotkey Settings'), 'default': t('accel.hotkey_settings', 'Ctrl+Alt+K'), 'handler': lambda event=None: self.show_hotkey_config_dialog()}),
             ('help_contents', {'section': t('menu.help', 'Help'), 'label': t('menu.help.contents', 'Help Contents'), 'default': t('accel.help_contents', 'F1'), 'handler': lambda event=None: self.show_help_contents()}),
-            ('about', {'section': t('menu.help', 'Help'), 'label': t('menu.help.about', 'About Notepad-X'), 'default': t('accel.about', 'Shift+F1'), 'handler': lambda event=None: self.show_about_dialog()}),
+            ('about', {'section': t('menu.help', 'Help'), 'label': t('menu.help.about', 'About Hex-X'), 'default': t('accel.about', 'Shift+F1'), 'handler': lambda event=None: self.show_about_dialog()}),
         ])
+        if getattr(self, 'hex_editor_mode', False):
+            allowed_actions = {
+                'open', 'open_remote', 'new_tab', 'close_tab', 'save', 'save_all', 'save_as',
+                'save_copy_as', 'print', 'export_notes', 'exit', 'find', 'find_next',
+                'find_previous', 'command_panel', 'font', 'fullscreen', 'switch_tab',
+                'currently_editing', 'cycle_notes', 'goto_line', 'top_of_document',
+                'bottom_of_document', 'create_theme', 'compare_tabs', 'zoom_in', 'zoom_out',
+                'edit_with_hexx', 'sound', 'status_bar', 'numbered_lines', 'minimap',
+                'breadcrumbs', 'autosave', 'sync_page_navigation', 'hotkey_settings',
+                'help_contents', 'about'
+            }
+            return OrderedDict((key, value) for key, value in definitions.items() if key in allowed_actions)
+        return definitions
 
     def toggle_boolean_hotkey(self, variable, callback):
         variable.set(not bool(variable.get()))
@@ -10858,8 +11328,8 @@ class NotepadX:
             except tk.TclError:
                 continue
             if title in {
-                self.tr('app.help_title', 'Notepad-X Help'),
-                self.tr('app.about_title', 'About Notepad-X')
+                self.tr('app.help_title', 'Hex-X Help'),
+                self.tr('app.about_title', 'About Hex-X')
             }:
                 try:
                     widget.destroy()
@@ -10978,31 +11448,14 @@ class NotepadX:
 
     def get_linux_mime_types(self):
         return [
-            'text/plain',
-            'text/markdown',
-            'application/json',
-            'text/x-python',
-            'text/x-csrc',
-            'text/x-chdr',
-            'text/x-c++src',
-            'text/x-c++hdr',
-            'text/x-java',
-            'application/javascript',
-            'text/javascript',
-            'text/html',
-            'application/xhtml+xml',
-            'text/css',
-            'application/xml',
-            'text/xml',
-            'application/x-shellscript',
-            'text/x-script.python',
-            'text/x-script.sh',
-            'text/x-php',
-            'text/x-sql',
-            'text/x-diff',
-            'text/x-patch',
-            'text/x-tex',
-            'text/x-csharp',
+            'application/octet-stream',
+            'application/x-executable',
+            'application/vnd.microsoft.portable-executable',
+            'application/x-dosexec',
+            'application/x-msdownload',
+            'application/x-sharedlib',
+            'application/x-iso9660-image',
+            'application/x-raw-disk-image',
         ]
 
     def set_edit_with_shell_linux(self, enabled):
@@ -11015,18 +11468,18 @@ class NotepadX:
                 '[Desktop Entry]',
                 'Type=Application',
                 'Version=1.0',
-                f'Name={self.tr("app.name", "Notepad-X")}',
-                f'GenericName={self.tr("shell_integration.generic_name", "Text Editor")}',
-                f'Comment={self.tr("shell_integration.desktop_comment", "Edit text files with Notepad-X")}',
+                f'Name={self.tr("app.name", "Hex-X")}',
+                f'GenericName={self.tr("shell_integration.generic_name", "Hex Editor")}',
+                f'Comment={self.tr("shell_integration.desktop_comment", "Edit binary files with Hex-X")}',
                 f'Exec={self.get_linux_open_command()}',
                 'Terminal=false',
-                'Categories=Utility;TextEditor;',
+                'Categories=Utility;Development;',
                 f'Icon={icon_path}',
                 f'MimeType={";".join(self.get_linux_mime_types())};',
-                'Actions=EditWithNotepadX;',
+                'Actions=EditWithHexX;',
                 '',
-                '[Desktop Action EditWithNotepadX]',
-                f'Name={self.tr("menu.view.edit_with_notepadx", "Edit with Notepad-X")}',
+                '[Desktop Action EditWithHexX]',
+                f'Name={self.tr("menu.view.edit_with_hexx", "Edit with Hex-X")}',
                 f'Exec={self.get_linux_open_command()}',
                 'Terminal=false',
                 '',
@@ -11072,8 +11525,8 @@ class NotepadX:
         if getattr(sys, 'frozen', False):
             executable_name = os.path.basename(os.path.abspath(sys.executable))
         else:
-            executable_name = 'Notepad-X.exe'
-        executable_name = os.path.basename(str(executable_name).strip()) or 'Notepad-X.exe'
+            executable_name = 'Hex-X.exe'
+        executable_name = os.path.basename(str(executable_name).strip()) or 'Hex-X.exe'
         if not executable_name.lower().endswith('.exe'):
             executable_name += '.exe'
         return executable_name
@@ -11100,15 +11553,15 @@ class NotepadX:
             raise OSError(self.tr('shell_integration.error.unsafe_icon_shell', 'Unsafe icon path for Windows shell integration.'))
         open_command = self.get_windows_open_command()
         app_key = rf"Software\Classes\Applications\{self.get_windows_application_registration_name()}"
-        if self.get_registry_string_value(winreg.HKEY_CURRENT_USER, app_key, 'ApplicationName') != 'Notepad-X':
+        if self.get_registry_string_value(winreg.HKEY_CURRENT_USER, app_key, 'ApplicationName') != 'Hex-X':
             return False
-        if self.get_registry_string_value(winreg.HKEY_CURRENT_USER, app_key, 'FriendlyAppName') != 'Notepad-X':
+        if self.get_registry_string_value(winreg.HKEY_CURRENT_USER, app_key, 'FriendlyAppName') != 'Hex-X':
             return False
         if self.get_registry_string_value(
             winreg.HKEY_CURRENT_USER,
             app_key,
             'ApplicationDescription'
-        ) != self.tr('shell_integration.app_description', 'Edit supported text and code files with Notepad-X.'):
+        ) != self.tr('shell_integration.app_description', 'Edit supported binary files with Hex-X.'):
             return False
         if self.get_registry_string_value(winreg.HKEY_CURRENT_USER, rf"{app_key}\DefaultIcon") != icon_source:
             return False
@@ -11118,12 +11571,12 @@ class NotepadX:
         ) != open_command:
             return False
         supported_types_key = rf"{app_key}\SupportedTypes"
-        menu_label = self.tr('menu.view.edit_with_notepadx', 'Edit with Notepad-X')
+        menu_label = self.tr('menu.view.edit_with_hexx', 'Edit with Hex-X')
         extensions = self.get_edit_with_shell_extensions()
         for extension in extensions:
             if self.get_registry_string_value(winreg.HKEY_CURRENT_USER, supported_types_key, extension) is None:
                 return False
-            menu_key = rf"Software\Classes\SystemFileAssociations\{extension}\shell\EditWithNotepadX"
+            menu_key = rf"Software\Classes\SystemFileAssociations\{extension}\shell\EditWithHexX"
             if self.get_registry_string_value(winreg.HKEY_CURRENT_USER, menu_key, 'MUIVerb') != menu_label:
                 return False
             if self.get_registry_string_value(winreg.HKEY_CURRENT_USER, menu_key, 'Icon') != icon_source:
@@ -11144,14 +11597,14 @@ class NotepadX:
             if not self.path_looks_safe_for_shell(icon_source):
                 raise OSError(self.tr('shell_integration.error.unsafe_icon_registration', 'Unsafe icon path for Windows application registration.'))
             with winreg.CreateKey(winreg.HKEY_CURRENT_USER, app_key) as key:
-                winreg.SetValueEx(key, 'ApplicationName', 0, winreg.REG_SZ, 'Notepad-X')
-                winreg.SetValueEx(key, 'FriendlyAppName', 0, winreg.REG_SZ, 'Notepad-X')
+                winreg.SetValueEx(key, 'ApplicationName', 0, winreg.REG_SZ, 'Hex-X')
+                winreg.SetValueEx(key, 'FriendlyAppName', 0, winreg.REG_SZ, 'Hex-X')
                 winreg.SetValueEx(
                     key,
                     'ApplicationDescription',
                     0,
                     winreg.REG_SZ,
-                    self.tr('shell_integration.app_description', 'Edit supported text and code files with Notepad-X.')
+                    self.tr('shell_integration.app_description', 'Edit supported binary files with Hex-X.')
                 )
             with winreg.CreateKey(winreg.HKEY_CURRENT_USER, rf"{app_key}\DefaultIcon") as icon_key:
                 winreg.SetValueEx(icon_key, '', 0, winreg.REG_SZ, icon_source)
@@ -11168,13 +11621,13 @@ class NotepadX:
     def set_edit_with_shell_for_extension(self, extension, enabled):
         if not self.is_windows or winreg is None or not extension:
             return
-        menu_key = rf"Software\Classes\SystemFileAssociations\{extension}\shell\EditWithNotepadX"
+        menu_key = rf"Software\Classes\SystemFileAssociations\{extension}\shell\EditWithHexX"
         if enabled:
             icon_source = os.path.abspath(sys.executable if getattr(sys, 'frozen', False) else self.icon_path)
             if not self.path_looks_safe_for_shell(icon_source):
                 raise OSError(self.tr('shell_integration.error.unsafe_icon_shell', 'Unsafe icon path for Windows shell integration.'))
             with winreg.CreateKey(winreg.HKEY_CURRENT_USER, menu_key) as key:
-                winreg.SetValueEx(key, 'MUIVerb', 0, winreg.REG_SZ, self.tr('menu.view.edit_with_notepadx', 'Edit with Notepad-X'))
+                winreg.SetValueEx(key, 'MUIVerb', 0, winreg.REG_SZ, self.tr('menu.view.edit_with_hexx', 'Edit with Hex-X'))
                 winreg.SetValueEx(key, 'Icon', 0, winreg.REG_SZ, icon_source)
             with winreg.CreateKey(winreg.HKEY_CURRENT_USER, rf"{menu_key}\command") as command_key:
                 winreg.SetValueEx(command_key, '', 0, winreg.REG_SZ, self.get_windows_open_command())
@@ -11195,7 +11648,7 @@ class NotepadX:
         except OSError:
             pass
         for extension in self.get_edit_with_shell_extensions():
-            menu_key = rf"Software\Classes\SystemFileAssociations\{extension}\shell\EditWithNotepadX"
+            menu_key = rf"Software\Classes\SystemFileAssociations\{extension}\shell\EditWithHexX"
             try:
                 with winreg.OpenKey(winreg.HKEY_CURRENT_USER, menu_key, 0, winreg.KEY_READ):
                     return True
@@ -11241,10 +11694,10 @@ class NotepadX:
             self.log_exception("sync edit with shell menu", exc)
             if show_errors:
                 messagebox.showerror(
-                    self.tr('menu.view.edit_with_notepadx', 'Edit with Notepad-X'),
+                    self.tr('menu.view.edit_with_hexx', 'Edit with Hex-X'),
                     self.tr(
                         'shell_integration.update_failed',
-                        'Notepad-X could not update the OS shell integration.\n\n{error_detail}',
+                        'Hex-X could not update the OS shell integration.\n\n{error_detail}',
                         error_detail=exc
                     ),
                     parent=self.root
@@ -12089,7 +12542,13 @@ class NotepadX:
             'load_progress_bar': None,
             'load_progress_status_label': None,
             'load_progress_detail_label': None,
+            'hex_mode': True,
+            'hex_bytes': bytearray(),
+            'hex_bytes_dirty': False,
         }
+        if self.hex_editor_mode:
+            initial_bytes = self.parse_hex_dump_text(content, strict=False) if content else b''
+            self.render_hex_document(self.documents[str(tab_frame)], initial_bytes, mark_modified=bool(content))
         self.apply_syntax_tag_colors(text)
         text.tag_config('diagnostic_error', background='#51202a', foreground='#ffb3ba')
         text.tag_config('diagnostic_warning', background='#4b3a14', foreground='#ffd479')
@@ -12181,6 +12640,8 @@ class NotepadX:
             pass
 
     def get_syntax_mode(self, doc):
+        if doc.get('hex_mode'):
+            return None
         if doc['large_file_mode'] or doc['virtual_mode'] or doc['preview_mode']:
             return None
 
@@ -12539,7 +13000,7 @@ class NotepadX:
         symbols = self.get_symbols_for_scope(doc, project_scope=project_scope)
         if not symbols:
             messagebox.showinfo(
-                self.tr('app.name', 'Notepad-X'),
+                self.tr('app.name', 'Hex-X'),
                 self.tr('symbol.navigator.no_symbols', 'No symbols were found for this scope.'),
                 parent=self.root
             )
@@ -12700,7 +13161,7 @@ class NotepadX:
         return regions
 
     def get_fold_regions(self, doc):
-        if not doc or doc.get('preview_mode') or doc.get('virtual_mode') or doc.get('large_file_mode'):
+        if not doc or doc.get('hex_mode') or doc.get('preview_mode') or doc.get('virtual_mode') or doc.get('large_file_mode'):
             return []
         text_widget = doc.get('text')
         if not text_widget:
@@ -12732,12 +13193,12 @@ class NotepadX:
     def invalidate_fold_regions(self, doc):
         if not doc:
             return
-        if doc.get('large_file_mode'):
+        if doc.get('hex_mode') or doc.get('large_file_mode'):
             doc['fold_ranges'] = []
             doc['fold_ranges_dirty'] = False
             return
         doc['fold_ranges_dirty'] = True
-        if doc.get('preview_mode') or doc.get('virtual_mode'):
+        if doc.get('hex_mode') or doc.get('preview_mode') or doc.get('virtual_mode'):
             doc['fold_ranges'] = []
 
     def invalidate_collapsed_fold_regions(self, doc, clear_cache=False):
@@ -12750,7 +13211,7 @@ class NotepadX:
     def get_cached_fold_regions(self, doc, force=False):
         if not doc:
             return []
-        if doc.get('preview_mode') or doc.get('virtual_mode'):
+        if doc.get('hex_mode') or doc.get('preview_mode') or doc.get('virtual_mode'):
             doc['fold_ranges'] = []
             doc['fold_ranges_dirty'] = False
             return []
@@ -13059,6 +13520,9 @@ class NotepadX:
     def schedule_diagnostics(self, doc):
         if not doc:
             return
+        if doc.get('hex_mode'):
+            doc['diagnostics'] = []
+            return
         existing_job = doc.get('diagnostic_job')
         if existing_job:
             try:
@@ -13081,7 +13545,7 @@ class NotepadX:
         if not self.diagnostics_enabled.get() and not force:
             self.schedule_minimap_refresh(doc)
             return []
-        if doc.get('preview_mode') or doc.get('virtual_mode') or doc.get('large_file_mode'):
+        if doc.get('hex_mode') or doc.get('preview_mode') or doc.get('virtual_mode') or doc.get('large_file_mode'):
             self.schedule_minimap_refresh(doc)
             return []
 
@@ -13352,7 +13816,7 @@ class NotepadX:
         if notify:
             messagebox.showinfo(
                 self.tr('spellcheck.unavailable_title', 'Spell Check Unavailable'),
-                self.tr('spellcheck.unavailable_message', 'Spell check needs pyspellchecker and the bundled English dictionary. Rebuild Notepad-X if the menu shows enabled but no words are marked.'),
+                self.tr('spellcheck.unavailable_message', 'Spell check needs pyspellchecker and the bundled English dictionary. Rebuild Hex-X if the menu shows enabled but no words are marked.'),
                 parent=self.root
             )
         return False
@@ -13387,6 +13851,8 @@ class NotepadX:
 
     def doc_supports_spellcheck(self, doc):
         if not doc or not self.spell_check_enabled.get():
+            return False
+        if doc.get('hex_mode'):
             return False
         if doc.get('virtual_mode') or doc.get('preview_mode') or doc.get('large_file_mode'):
             return False
@@ -14134,6 +14600,13 @@ class NotepadX:
             except tk.TclError:
                 pass
             self.ensure_virtual_line_visible(doc)
+        if doc.get('hex_mode'):
+            if event_type in {'4', '5', '6', 'Motion', 'ButtonPress', 'ButtonRelease'}:
+                self.hide_autocomplete_popup()
+            self.update_line_number_gutter(doc)
+            self.schedule_minimap_refresh(doc)
+            self.update_status()
+            return
         if self.is_shift_selection_navigation(event):
             self.hide_autocomplete_popup()
         elif event_type in {'4', '5', '6', 'Motion', 'ButtonPress', 'ButtonRelease'}:
@@ -14654,6 +15127,9 @@ class NotepadX:
             self.hide_autocomplete_popup()
             return
 
+        if doc.get('hex_mode'):
+            return self.handle_hex_text_keypress(event, doc)
+
         if (
             event.keysym in {'Return', 'KP_Enter'}
             and not (state & 0x4)
@@ -14693,10 +15169,10 @@ class NotepadX:
             and not (state & 0x4)
             and not (self.autocomplete_popup_visible() and self.autocomplete_doc_id == (str(compare_doc['frame']) if compare_doc else None))
         ):
-            if source_doc and not source_doc.get('virtual_mode') and not source_doc.get('preview_mode'):
+            if source_doc and not source_doc.get('hex_mode') and not source_doc.get('virtual_mode') and not source_doc.get('preview_mode'):
                 self.hide_autocomplete_popup()
                 return self.handle_compare_multi_edit_newline(compare_doc['text'])
-        if source_doc and not source_doc.get('virtual_mode') and not source_doc.get('preview_mode'):
+        if source_doc and not source_doc.get('hex_mode') and not source_doc.get('virtual_mode') and not source_doc.get('preview_mode'):
             compare_doc_id = str(compare_doc['frame']) if compare_doc else None
             return self.handle_editable_text_keypress(event, compare_doc['text'], compare_doc, compare_doc_id)
 
@@ -14747,7 +15223,7 @@ class NotepadX:
             return
 
         source_doc = self.documents.get(self.compare_source_tab) if self.compare_source_tab else None
-        if not source_doc or source_doc.get('virtual_mode') or source_doc.get('preview_mode'):
+        if not source_doc or source_doc.get('hex_mode') or source_doc.get('virtual_mode') or source_doc.get('preview_mode'):
             compare_text.edit_modified(False)
             return
 
@@ -14959,7 +15435,7 @@ class NotepadX:
 
         target_widget = doc.get('context_target_widget') or doc.get('text')
         word_info = None
-        if not is_readonly_target and isinstance(target_widget, tk.Text):
+        if not is_readonly_target and not doc.get('hex_mode') and isinstance(target_widget, tk.Text):
             word_info = self.get_misspelled_word_info_at_index(target_widget, word_index, doc=doc)
 
         if word_info:
@@ -14983,7 +15459,8 @@ class NotepadX:
             )
             menu.add_separator()
 
-        menu.add_command(label=self.tr('context.cut', 'Cut'), state='disabled' if is_readonly_target else 'normal', command=lambda frame=action_target: self.run_context_menu_widget_action(frame, self.cut))
+        cut_state = 'disabled' if is_readonly_target or doc.get('hex_mode') else 'normal'
+        menu.add_command(label=self.tr('context.cut', 'Cut'), state=cut_state, command=lambda frame=action_target: self.run_context_menu_widget_action(frame, self.cut))
         menu.add_command(label=self.tr('context.copy', 'Copy'), command=lambda frame=action_target: self.run_context_menu_widget_action(frame, self.copy))
         menu.add_command(label=self.tr('context.paste', 'Paste'), state='disabled' if is_readonly_target else 'normal', command=lambda frame=action_target: self.run_context_menu_widget_action(frame, self.paste))
         menu.add_separator()
@@ -15672,7 +16149,7 @@ class NotepadX:
                             markdown_parts.append(f"\n\n  {response.get('text', '')}\n")
                 self.write_file_atomically(output_path, ''.join(markdown_parts))
             else:
-                if not self.write_json_atomically(output_path, note_rows, 'notepadx-export-', 'export notes report'):
+                if not self.write_json_atomically(output_path, note_rows, 'hexx-export-', 'export notes report'):
                     raise OSError(output_path)
             messagebox.showinfo(
                 self.tr('menu.file.export_notes', 'Export Notes'),
@@ -16065,10 +16542,10 @@ class NotepadX:
                 pass
 
     def get_notes_sidecar_path(self, file_path):
-        return self.resolve_sidecar_path(file_path, ".notepadx.notes.json")
+        return self.resolve_sidecar_path(file_path, ".hexx.notes.json")
 
     def get_editors_sidecar_path(self, file_path):
-        return self.resolve_sidecar_path(file_path, ".notepadx.editors.json")
+        return self.resolve_sidecar_path(file_path, ".hexx.editors.json")
 
     def get_notes_sidecar_signature(self, sidecar_path):
         variant_paths = [path for path in self.get_sidecar_variants(sidecar_path) if os.path.exists(path)]
@@ -16175,17 +16652,17 @@ class NotepadX:
         used_numbers = set()
         for entry in editors:
             label = entry.get('label') or ''
-            match = re.fullmatch(r'Notepad-X-(\d+)', label)
+            match = re.fullmatch(r'(?:Hex-X|Hex-X)-(\d+)', label)
             if match:
                 used_numbers.add(int(match.group(1)))
 
         label_number = 1
         while label_number in used_numbers:
             label_number += 1
-        return f"Notepad-X-{label_number}"
+        return f"Hex-X-{label_number}"
 
     def get_doc_editor_label(self, doc):
-        return doc.get('note_editor_label') or 'Notepad-X'
+        return doc.get('note_editor_label') or 'Hex-X'
 
     def refresh_doc_shared_editor_state(self, doc, force_write=False):
         if not doc or not doc.get('file_path') or doc.get('virtual_mode') or doc.get('preview_mode'):
@@ -16510,7 +16987,7 @@ class NotepadX:
         payload = {
             'notes': self.dedupe_notes_payload(notes_payload)
         }
-        if not self.write_json_atomically(sidecar_path, payload, 'notepadx-notes-', 'write shared notes'):
+        if not self.write_json_atomically(sidecar_path, payload, 'hexx-notes-', 'write shared notes'):
             raise OSError(f"Could not write note sidecar: {sidecar_path}")
         self.cleanup_duplicate_sidecar_variants(sidecar_path)
         self.show_support_file(sidecar_path)
@@ -16563,7 +17040,7 @@ class NotepadX:
             'active_editors': len(sanitized_editors),
             'editors': sanitized_editors
         }
-        if not self.write_json_atomically(sidecar_path, payload, 'notepadx-editors-', 'write shared editors'):
+        if not self.write_json_atomically(sidecar_path, payload, 'hexx-editors-', 'write shared editors'):
             raise OSError(f"Could not write editor sidecar: {sidecar_path}")
         self.cleanup_duplicate_sidecar_variants(sidecar_path)
         self.show_support_file(sidecar_path)
@@ -16808,66 +17285,33 @@ class NotepadX:
             file_size = os.path.getsize(file_path)
             doc['file_size_bytes'] = file_size
 
-            encrypted_result = self.read_encrypted_text_file(file_path) if self.file_looks_encrypted(file_path) else None
-            if encrypted_result is not None:
-                plaintext, encryption_header, encryption_key = encrypted_result
-                plaintext_size = len(plaintext.encode('utf-8'))
-                doc['file_size_bytes'] = plaintext_size
-                self.set_large_file_mode(doc, plaintext_size >= self.large_file_threshold_bytes)
-                doc['preview_mode'] = False
-                doc['virtual_mode'] = False
-                self.insert_text_content(doc, plaintext)
-                doc['encrypted_file'] = True
-                doc['encryption_header'] = encryption_header
-                doc['encryption_key'] = encryption_key
-            else:
-                self.set_large_file_mode(doc, file_size >= self.large_file_threshold_bytes)
-                doc['preview_mode'] = self.is_probably_binary_file(file_path)
-                doc['virtual_mode'] = (
-                    file_size > self.max_editable_large_file_bytes and
-                    not doc['preview_mode']
-                )
-
+            self.set_large_file_mode(doc, file_size >= self.large_file_threshold_bytes)
+            doc['hex_mode'] = True
+            doc['virtual_mode'] = False
+            doc['preview_mode'] = file_size > self.max_editable_hex_file_bytes
+            read_size = self.hex_preview_bytes if doc['preview_mode'] else file_size
+            with open(file_path, 'rb') as source_file:
+                payload = source_file.read(read_size)
+            preview_notice = None
             if doc['preview_mode']:
-                with open(file_path, 'rb') as f:
-                    preview_bytes = f.read(self.huge_file_preview_bytes)
-                preview_text = preview_bytes.decode('utf-8', errors='replace')
-                text.insert(tk.END, preview_text)
-                doc['line_starts'] = None
-                doc['total_file_lines'] = max(1, int(text.index('end-1c').split('.')[0]))
-                doc['window_start_line'] = 1
-                doc['window_end_line'] = doc['total_file_lines']
-            elif doc['virtual_mode']:
-                self.start_background_virtual_index(doc, file_path)
-                self.refresh_tab_title(doc['frame'])
-                if str(doc['frame']) == self.notebook.select():
-                    self.update_status()
-                keep_loading_state = True
-                return True
-            else:
-                if not doc['encrypted_file'] and file_size >= self.large_file_threshold_bytes:
-                    self.start_background_text_load(doc, file_path)
-                    self.refresh_tab_title(doc['frame'])
-                    if str(doc['frame']) == self.notebook.select():
-                        self.update_status()
-                    keep_loading_state = True
-                    return True
-                if not doc['encrypted_file']:
-                    self.insert_text_content(doc, '')
-                    text.delete('1.0', tk.END)
-                    with open(file_path, 'r', encoding='utf-8', errors='replace') as f:
-                        while True:
-                            chunk = f.read(self.file_load_chunk_size)
-                            if not chunk:
-                                break
-                            text.insert(tk.END, chunk)
-                            if doc['large_file_mode']:
-                                self.root.update_idletasks()
-                    doc['total_file_lines'] = max(1, int(text.index('end-1c').split('.')[0]))
-                    doc['window_end_line'] = doc['total_file_lines']
+                preview_notice = self.tr(
+                    'hex.preview_notice',
+                    'Previewing first {shown} of {total}; save is disabled for this oversized file.',
+                    shown=self.format_byte_size(len(payload)),
+                    total=self.format_byte_size(file_size)
+                )
+            self.render_hex_document(
+                doc,
+                payload,
+                mark_modified=False,
+                total_size=file_size,
+                preview_notice=preview_notice
+            )
 
             text.edit_modified(False)
             text.mark_set(tk.INSERT, '1.0')
+            if payload:
+                text.mark_set(tk.INSERT, f"{self.hex_header_lines + 1}.{self.get_hex_data_start_col()}")
             text.tag_remove('sel', '1.0', tk.END)
             text.see('1.0')
             doc['last_insert_index'] = '1.0'
@@ -16904,7 +17348,7 @@ class NotepadX:
                 self.tr('file.open_failed_title', 'Open Failed'),
                 self.tr(
                     'file.open_failed_message',
-                    'Notepad-X could not open:\n{file_path}\n\n{error_detail}',
+                    'Hex-X could not open:\n{file_path}\n\n{error_detail}',
                     file_path=file_path,
                     error_detail=exc
                 ),
@@ -17008,6 +17452,15 @@ class NotepadX:
             content = doc['text'].get('1.0', 'end-1c')
             modified = bool(doc['text'].edit_modified())
             file_path = doc.get('file_path')
+            if doc.get('hex_mode'):
+                try:
+                    recovered_bytes = self.parse_hex_dump_text(content, strict=False)
+                except Exception:
+                    recovered_bytes = b''
+                if file_path and not modified:
+                    continue
+                if not file_path and not recovered_bytes and not modified:
+                    continue
             if file_path:
                 if not modified:
                     continue
@@ -17047,6 +17500,14 @@ class NotepadX:
             return
         self.invalidate_minimap_cache(doc)
         doc['diagnostics'] = []
+        if doc.get('hex_mode'):
+            recovered_bytes = self.parse_hex_dump_text(content, strict=False)
+            self.render_hex_document(doc, recovered_bytes, mark_modified=modified)
+            self.refresh_tab_title(doc['frame'])
+            self.update_doc_file_signature(doc)
+            self.update_line_number_gutter(doc)
+            self.schedule_minimap_refresh(doc)
+            return
         doc['suspend_modified_events'] = True
         try:
             text.delete('1.0', tk.END)
@@ -17075,7 +17536,7 @@ class NotepadX:
             return
         for attempt in range(2):
             try:
-                if self.write_json_atomically(self.recovery_path, recovery, 'notepadx-recovery-', 'persist recovery state'):
+                if self.write_json_atomically(self.recovery_path, recovery, 'hexx-recovery-', 'persist recovery state'):
                     return
                 raise PermissionError(self.recovery_path)
             except PermissionError as exc:
@@ -17100,7 +17561,7 @@ class NotepadX:
             return
         if not messagebox.askyesno(
             self.tr('recover.tabs_title', 'Recover Tabs'),
-            self.tr('recover.tabs_message', 'Notepad-X found unsaved tabs from a previous crash. Restore them?'),
+            self.tr('recover.tabs_message', 'Hex-X found unsaved tabs from a previous crash. Restore them?'),
             parent=self.root
         ):
             return
@@ -17259,7 +17720,7 @@ class NotepadX:
 
         for attempt in range(2):
             try:
-                if self.write_json_atomically(self.session_path, session, 'notepadx-session-', 'save session'):
+                if self.write_json_atomically(self.session_path, session, 'hexx-session-', 'save session'):
                     return
                 raise PermissionError(self.session_path)
             except PermissionError as exc:
@@ -17311,7 +17772,11 @@ class NotepadX:
         self.status_bar_enabled.set(bool(session.get('status_bar_enabled', True)))
         self.numbered_lines_enabled.set(bool(session.get('numbered_lines_enabled', True)))
         self.autocomplete_enabled.set(bool(session.get('autocomplete_enabled', True)))
-        self.spell_check_enabled.set(bool(session.get('spell_check_enabled', SpellChecker is not None)) and self.ensure_spellcheck_available(notify=False))
+        self.spell_check_enabled.set(False)
+        self.autocomplete_enabled.set(False)
+        self.auto_pair_enabled.set(False)
+        self.diagnostics_enabled.set(False)
+        self.word_wrap_enabled.set(False)
         self.auto_pair_enabled.set(bool(session.get('auto_pair_enabled', True)))
         self.compare_multi_edit_enabled.set(bool(session.get('compare_multi_edit_enabled', False)))
         self.markdown_preview_enabled.set(bool(session.get('markdown_preview_enabled', False)))
@@ -17546,6 +18011,18 @@ class NotepadX:
         self.remember_doc_view_state(doc)
         doc['symbol_cache_signature'] = None
         doc['symbol_cache'] = None
+        if doc.get('hex_mode'):
+            doc['hex_bytes_dirty'] = True
+            self.schedule_doc_autosave(doc)
+            self.update_line_number_gutter(doc)
+            self.schedule_minimap_refresh(doc)
+            self.refresh_tab_title(tab_id)
+            self.schedule_recovery_save()
+            if self.compare_active and self.compare_source_tab == str(tab_id) and not self.compare_view.get('pushing_to_source'):
+                self.schedule_compare_refresh()
+            if str(tab_id) == self.notebook.select():
+                self.update_status()
+            return
         if self.is_virtual_editable(doc):
             self.refresh_tab_title(tab_id)
             self.update_line_number_gutter(doc)
@@ -17871,7 +18348,7 @@ class NotepadX:
         menu.add_command(label=self.tr('tab.menu.copy_path', 'Copy Full Path'), command=lambda current=tab_id: self.run_tab_menu_action(current, lambda: self.copy_tab_file_path(current)))
         menu.add_command(label=self.tr('tab.menu.reveal', 'Reveal in File Explorer'), state='normal' if has_local_path else 'disabled', command=lambda current=tab_id: self.run_tab_menu_action(current, lambda: self.reveal_tab_in_file_manager(current)))
         menu.add_separator()
-        menu.add_command(label=self.tr('tab.menu.new_window', 'Open in New Notepad-X Window'), command=lambda current=tab_id: self.run_tab_menu_action(current, lambda: self.move_tab_to_new_window(current)))
+        menu.add_command(label=self.tr('tab.menu.new_window', 'Open in New Hex-X Window'), command=lambda current=tab_id: self.run_tab_menu_action(current, lambda: self.move_tab_to_new_window(current)))
         menu.add_separator()
         menu.add_command(label=self.tr('tab.menu.close', 'Close Tab'), command=lambda current=tab_id: self.run_tab_menu_action(current, lambda: self.close_tab_group(current, mode='single')))
         return menu
@@ -18005,9 +18482,7 @@ class NotepadX:
                             activebackground='#3a3a3a')
         self.menu.add_cascade(label=t('menu.file', 'File'), menu=file_menu)
         file_menu.add_command(label=t('menu.file.open', 'Open'), command=self.open_file, accelerator=hk('open'))
-        file_menu.add_command(label=t('menu.file.open_project', 'Open Project'), command=self.open_project, accelerator=hk('open_project'))
         file_menu.add_command(label=t('menu.file.open_remote', 'Open Remote (SSH)'), command=self.open_remote_file_dialog, accelerator=hk('open_remote'))
-        file_menu.add_command(label=t('menu.file.grab_git', 'Grab Git'), command=self.grab_git_project, accelerator=hk('grab_git'))
         self.recent_menu = tk.Menu(file_menu, tearoff=0, bg='#2d2d2d', fg=self.fg_color,
                                    activebackground='#3a3a3a')
         file_menu.add_cascade(label=t('menu.file.recent', 'Recent'), menu=self.recent_menu)
@@ -18018,8 +18493,6 @@ class NotepadX:
         file_menu.add_command(label=t('menu.file.save_all', 'Save All'), command=self.save_all, accelerator=hk('save_all'))
         file_menu.add_command(label=t('menu.file.save_as', 'Save As'), command=self.save_as, accelerator=hk('save_as'))
         file_menu.add_command(label=t('save.copy_title', 'Save Copy As'), command=self.save_copy_as, accelerator=hk('save_copy_as'))
-        file_menu.add_command(label=t('menu.file.save_and_run', 'Save and Run'), command=self.save_and_run, accelerator=hk('save_and_run'))
-        file_menu.add_command(label=t('menu.file.save_as_encrypted', 'Save As Encrypted'), command=self.save_encrypted_copy, accelerator=hk('save_as_encrypted'))
         file_menu.add_command(label=t('menu.file.print', 'Print'), command=self.print_file, accelerator=hk('print'))
         file_menu.add_command(label=t('menu.file.export_notes', 'Export Notes'), command=self.export_notes_report, accelerator=hk('export_notes'))
         file_menu.add_separator()
@@ -18039,21 +18512,9 @@ class NotepadX:
         edit_menu.add_command(label=t('menu.edit.find', 'Find'), command=self.show_find_panel, accelerator=hk('find'))
         edit_menu.add_command(label=t('menu.edit.find_next', 'Find Next'), command=self.find_next, accelerator=hk('find_next'))
         edit_menu.add_command(label=t('menu.edit.find_previous', 'Find Previous'), command=self.find_previous, accelerator=hk('find_previous'))
-        edit_menu.add_command(label=t('menu.edit.replace', 'Replace'), command=self.show_replace_panel, accelerator=hk('replace'))
         edit_menu.add_command(label=t('menu.edit.command_panel', 'Command Panel'), command=self.show_command_panel, accelerator=hk('command_panel'))
-        edit_menu.add_command(label=t('menu.edit.jump_symbol', 'Jump to Symbol'), command=self.show_symbol_navigator, accelerator=hk('jump_symbol'))
-        edit_menu.add_command(label=t('menu.edit.project_symbols', 'Project Symbols'), command=lambda: self.show_symbol_navigator(project_scope=True), accelerator=hk('project_symbols'))
-        edit_menu.add_separator()
-        edit_menu.add_command(label=t('menu.edit.toggle_fold', 'Toggle Fold'), command=self.toggle_fold_at_cursor, accelerator=hk('toggle_fold'))
-        edit_menu.add_command(label=t('menu.edit.collapse_all_folds', 'Collapse All Folds'), command=self.collapse_all_folds, accelerator=hk('collapse_all_folds'))
-        edit_menu.add_command(label=t('menu.edit.expand_all_folds', 'Expand All Folds'), command=self.expand_all_folds, accelerator=hk('expand_all_folds'))
-        edit_menu.add_separator()
-        edit_menu.add_command(label=t('menu.edit.date', 'Date'), command=self.insert_date, accelerator=hk('date'))
-        edit_menu.add_command(label=t('menu.edit.time_date', 'Time/Date'), command=self.insert_time_date, accelerator=hk('time_date'))
+        edit_menu.add_command(label=t('menu.edit.goto_line', 'Go To Offset'), command=self.goto_line_dialog, accelerator=hk('goto_line'))
         edit_menu.add_command(label=t('menu.edit.font', 'Font'), command=self.show_font_dialog, accelerator=hk('font'))
-        self.language_menu = tk.Menu(edit_menu, tearoff=0, bg='#2d2d2d', fg=self.fg_color, activebackground='#3a3a3a', postcommand=self.refresh_language_menu)
-        edit_menu.add_cascade(label=t('menu.edit.language', 'Language'), menu=self.language_menu)
-        self.refresh_language_menu()
         view_menu = tk.Menu(self.menu, tearoff=0, bg='#2d2d2d', fg=self.fg_color,
                             activebackground='#3a3a3a')
         self.menu.add_cascade(label=t('menu.view', 'View'), menu=view_menu)
@@ -18069,11 +18530,10 @@ class NotepadX:
         note_filter_menu.add_radiobutton(label=t('note.filter.green', 'Green'), variable=self.note_filter, value='green')
         note_filter_menu.add_radiobutton(label=t('note.filter.red', 'Red'), variable=self.note_filter, value='red')
         note_filter_menu.add_radiobutton(label=t('note.filter.blue', 'Light Blue'), variable=self.note_filter, value='blue')
-        view_menu.add_command(label=t('menu.edit.goto_line', 'Go To Line'), command=self.goto_line_dialog, accelerator=hk('goto_line'))
         view_menu.add_command(label=t('menu.edit.top_of_document', 'Top of Document'), command=self.goto_document_start, accelerator=hk('top_of_document'))
         view_menu.add_command(label=t('menu.edit.bottom_of_document', 'Bottom of Document'), command=self.goto_document_end, accelerator=hk('bottom_of_document'))
         syntax_theme_menu = tk.Menu(view_menu, tearoff=0, bg='#2d2d2d', fg=self.fg_color, activebackground='#3a3a3a')
-        view_menu.add_cascade(label=t('menu.view.syntax_theme', 'Syntax Theme'), menu=syntax_theme_menu)
+        view_menu.add_cascade(label=t('menu.view.syntax_theme', 'Color Theme'), menu=syntax_theme_menu)
         syntax_theme_menu.add_command(label=t('menu.view.create_theme', 'Create Theme'), command=self.show_create_theme_dialog, accelerator=hk('create_theme'))
         syntax_theme_menu.add_separator()
         for theme_name in self.get_available_syntax_theme_names():
@@ -18083,40 +18543,20 @@ class NotepadX:
                 value=theme_name,
                 command=lambda name=theme_name: self.set_syntax_theme(name)
             )
-        syntax_mode_menu = tk.Menu(view_menu, tearoff=0, bg='#2d2d2d', fg=self.fg_color, activebackground='#3a3a3a')
-        view_menu.add_cascade(label=t('menu.view.syntax_mode', 'Syntax Mode'), menu=syntax_mode_menu)
-        for mode_label, mode_value in (
-            (t('syntax.mode.auto', 'Auto'), 'auto'), (t('syntax.mode.plain', 'Plain Text'), 'plain'), (t('syntax.mode.python', 'Python'), 'python'), (t('syntax.mode.c', 'C'), 'c'),
-            (t('syntax.mode.cpp', 'C++'), 'cpp'), (t('syntax.mode.rust', 'Rust'), 'rust'), (t('syntax.mode.java', 'Java'), 'java'), (t('syntax.mode.javascript', 'JavaScript'), 'javascript'),
-            (t('syntax.mode.html', 'HTML'), 'html'), (t('syntax.mode.php', 'PHP'), 'php'), (t('syntax.mode.xml', 'XML'), 'xml'), (t('syntax.mode.sql', 'SQL'), 'sql')
-        ):
-            syntax_mode_menu.add_radiobutton(
-                label=mode_label,
-                variable=self.syntax_mode_selection,
-                value=mode_value,
-                command=lambda value=mode_value: self.set_current_syntax_override(value)
-            )
         view_menu.add_command(label=t('menu.view.compare_tabs', 'Compare Tabs'), command=self.show_split_compare, accelerator=hk('compare_tabs'))
         view_menu.add_command(label=t('menu.view.close_compare_tabs', 'Close Compare Tabs'), command=self.close_compare_panel, accelerator=hk('exit'))
 
         settings_menu = tk.Menu(self.menu, tearoff=0, bg='#2d2d2d', fg=self.fg_color,
                                 activebackground='#3a3a3a')
         self.menu.add_cascade(label=t('menu.settings', 'Settings'), menu=settings_menu)
-        settings_menu.add_checkbutton(label=t('menu.view.edit_with_notepadx', 'Edit with Notepad-X'), variable=self.edit_with_shell_enabled, command=self.toggle_edit_with_shell, accelerator=hk('edit_with_notepadx'))
+        settings_menu.add_checkbutton(label=t('menu.view.edit_with_hexx', 'Edit with Hex-X'), variable=self.edit_with_shell_enabled, command=self.toggle_edit_with_shell, accelerator=hk('edit_with_hexx'))
         settings_menu.add_checkbutton(label=t('menu.view.sound', 'Sound'), variable=self.sound_enabled, command=self.toggle_sound, accelerator=hk('sound'))
         settings_menu.add_separator()
         settings_menu.add_checkbutton(label=t('menu.view.status_bar', 'Status Bar'), variable=self.status_bar_enabled, command=self.toggle_status_bar, accelerator=hk('status_bar'))
-        settings_menu.add_checkbutton(label=t('menu.view.numbered_lines', 'Numbered Lines'), variable=self.numbered_lines_enabled, command=self.toggle_numbered_lines, accelerator=hk('numbered_lines'))
-        settings_menu.add_checkbutton(label=t('menu.view.autocomplete', 'Autocomplete'), variable=self.autocomplete_enabled, command=self.toggle_autocomplete, accelerator=hk('autocomplete'))
-        settings_menu.add_checkbutton(label=t('menu.view.spell_check', 'Spell Check'), variable=self.spell_check_enabled, command=self.toggle_spell_check, accelerator=hk('spell_check'))
-        settings_menu.add_checkbutton(label=t('menu.settings.auto_pair', 'Auto Pair Brackets/Quotes'), variable=self.auto_pair_enabled, command=self.save_session, accelerator=hk('auto_pair'))
-        settings_menu.add_checkbutton(label=t('menu.settings.compare_multi_edit', 'Compare Multi-Edit'), variable=self.compare_multi_edit_enabled, command=self.save_session, accelerator=hk('compare_multi_edit'))
+        settings_menu.add_checkbutton(label=t('menu.view.numbered_lines', 'Offset Gutter'), variable=self.numbered_lines_enabled, command=self.toggle_numbered_lines, accelerator=hk('numbered_lines'))
         settings_menu.add_checkbutton(label=t('menu.settings.minimap', 'Minimap'), variable=self.minimap_enabled, command=self.toggle_minimap, accelerator=hk('minimap'))
         settings_menu.add_checkbutton(label=t('menu.settings.breadcrumbs', 'Breadcrumbs'), variable=self.breadcrumbs_enabled, command=self.toggle_breadcrumbs, accelerator=hk('breadcrumbs'))
-        settings_menu.add_checkbutton(label=t('menu.settings.diagnostics', 'Diagnostics'), variable=self.diagnostics_enabled, command=self.toggle_diagnostics, accelerator=hk('diagnostics'))
         settings_menu.add_checkbutton(label=t('menu.settings.autosave', 'Auto Save'), variable=self.autosave_enabled, command=self.save_session, accelerator=hk('autosave'))
-        settings_menu.add_checkbutton(label=t('menu.view.word_wrap', 'Word Wrap'), variable=self.word_wrap_enabled, command=self.toggle_word_wrap, accelerator=hk('word_wrap'))
-        settings_menu.add_checkbutton(label=t('menu.view.preview_markdown', 'Preview Markdown'), variable=self.markdown_preview_enabled, command=self.toggle_markdown_preview, accelerator=hk('preview_markdown'))
         settings_menu.add_checkbutton(label=t('menu.edit.sync_page_navigation', 'Sync PgUp/PgDn in Compare'), variable=self.sync_page_navigation_enabled, command=self.save_session, accelerator=hk('sync_page_navigation'))
         settings_menu.add_separator()
         settings_menu.add_command(label=t('menu.settings.hotkeys', 'Hotkey Settings'), command=self.show_hotkey_config_dialog, accelerator=hk('hotkey_settings'))
@@ -18125,11 +18565,11 @@ class NotepadX:
                             activebackground='#3a3a3a')
         self.menu.add_cascade(label=t('menu.help', 'Help'), menu=help_menu)
         help_menu.add_command(label=t('menu.help.contents', 'Help Contents'), command=self.show_help_contents, accelerator=hk('help_contents'))
-        help_menu.add_command(label=t('menu.help.about', 'About Notepad-X'), command=self.show_about_dialog, accelerator=hk('about'))
+        help_menu.add_command(label=t('menu.help.about', 'About Hex-X'), command=self.show_about_dialog, accelerator=hk('about'))
 
     def show_help_contents(self):
         dialog = self.create_toplevel(self.root)
-        dialog.title(self.tr('app.help_title', 'Notepad-X Help'))
+        dialog.title(self.tr('app.help_title', 'Hex-X Help'))
         dialog.transient(self.root)
         dialog.configure(bg=self.bg_color)
         dialog.geometry("900x650")
@@ -18165,9 +18605,9 @@ class NotepadX:
                 with open(self.help_path, 'r', encoding='utf-8') as f:
                     content = f.read()
             except OSError:
-                content = self.tr('help.open_failed', 'Unable to open the Notepad-X help file.')
+                content = self.tr('help.open_failed', 'Unable to open the Hex-X help file.')
         else:
-            content = self.tr('help.not_found', 'Notepad-X help file not found.')
+            content = self.tr('help.not_found', 'Hex-X help file not found.')
 
         help_text.insert('1.0', content)
         help_text.configure(state='disabled')
@@ -18404,6 +18844,8 @@ class NotepadX:
         compare_doc['large_file_mode'] = False
         compare_doc['preview_mode'] = True
         compare_doc['virtual_mode'] = False
+        compare_doc['hex_mode'] = False
+        compare_doc['hex_bytes'] = bytearray()
         compare_doc['is_remote'] = False
         compare_doc['remote_spec'] = None
         compare_doc['remote_host'] = None
@@ -18514,6 +18956,8 @@ class NotepadX:
         compare_doc['large_file_mode'] = bool(doc.get('large_file_mode'))
         compare_doc['preview_mode'] = bool(doc.get('preview_mode'))
         compare_doc['virtual_mode'] = bool(doc.get('virtual_mode'))
+        compare_doc['hex_mode'] = bool(doc.get('hex_mode'))
+        compare_doc['hex_bytes'] = bytearray(doc.get('hex_bytes') or b'')
         compare_doc['is_remote'] = bool(doc.get('is_remote'))
         compare_doc['remote_spec'] = doc.get('remote_spec')
         compare_doc['remote_host'] = doc.get('remote_host')
@@ -18797,7 +19241,7 @@ class NotepadX:
                 self.tr('about.requirement.install_failed_title', 'Install Package'),
                 self.tr(
                     'about.requirement.install_failed',
-                    'Notepad-X could not open pip for {package}.\n\n{error_detail}',
+                    'Hex-X could not open pip for {package}.\n\n{error_detail}',
                     package=package_name,
                     error_detail=str(exc)
                 ),
@@ -18826,7 +19270,7 @@ class NotepadX:
 
     def show_about_dialog(self):
         dialog = self.create_toplevel(self.root)
-        dialog.title(self.tr('app.about_title', 'About Notepad-X'))
+        dialog.title(self.tr('app.about_title', 'About Hex-X'))
         dialog.transient(self.root)
         dialog.resizable(False, False)
         dialog.configure(bg=self.bg_color, padx=24, pady=20)
@@ -18855,7 +19299,7 @@ class NotepadX:
 
         tk.Label(
             content,
-            text=f"{self.tr('about.heading', 'Notepad-X')} {self.app_version}",
+            text=f"{self.tr('about.heading', 'Hex-X')} {self.app_version}",
             bg=self.bg_color,
             fg=self.fg_color,
             font=('Segoe UI', 16, 'bold')
@@ -18876,7 +19320,7 @@ class NotepadX:
 
         tk.Label(
             content,
-            text=self.tr('about.tagline', 'Built because Microsoft forgot what Notepad was supposed to be.'),
+            text=self.tr('about.tagline', 'A focused binary hex editor.'),
             bg=self.bg_color,
             fg='#9aa0a6',
             font=('Segoe UI', 9)
@@ -19223,7 +19667,7 @@ class NotepadX:
             )
         return self.tr(
             'grab_git.clone_failed',
-            'Notepad-X could not download that GitHub project.\n\n{error_detail}'
+            'Hex-X could not download that GitHub project.\n\n{error_detail}'
         ).format(error_detail=detail_text or self.tr('grab_git.unknown_failure', 'Unknown git clone failure.'))
 
     def prompt_grab_git_repository(self, parent=None):
@@ -19322,7 +19766,7 @@ class NotepadX:
             dir_names[:] = [name for name in dir_names if name.lower() not in {'.git', '.vs', '__pycache__'}]
             for file_name in sorted(file_names, key=str.lower):
                 lower_name = file_name.lower()
-                if self.is_notepadx_support_file(lower_name):
+                if self.is_hexx_support_file(lower_name):
                     continue
                 full_path = os.path.join(current_root, file_name)
                 extension = os.path.splitext(lower_name)[1]
@@ -19553,7 +19997,7 @@ class NotepadX:
             for selected_file in selected_files:
                 self.open_file_path(selected_file)
 
-        threading.Thread(target=worker, name='NotepadXGrabGitClone', daemon=True).start()
+        threading.Thread(target=worker, name='HexXGrabGitClone', daemon=True).start()
         finish_clone()
         return "break"
 
@@ -19581,7 +20025,7 @@ class NotepadX:
             if candidate_path == file_path:
                 continue
             candidate_name = entry.name.lower()
-            if self.is_notepadx_support_file(candidate_name):
+            if self.is_hexx_support_file(candidate_name):
                 continue
             candidate_extension = os.path.splitext(entry.name)[1].lower()
             if candidate_extension in source_extensions:
@@ -19697,7 +20141,7 @@ class NotepadX:
             except OSError:
                 target_mode = 0o664
         try:
-            fd, temp_path = tempfile.mkstemp(prefix='notepadx-save-', suffix='.tmp', dir=directory)
+            fd, temp_path = tempfile.mkstemp(prefix='hexx-save-', suffix='.tmp', dir=directory)
             with os.fdopen(fd, 'w', encoding='utf-8') as temp_file:
                 temp_file.write(content)
                 temp_file.flush()
@@ -19729,75 +20173,16 @@ class NotepadX:
     def get_save_filetypes(self, include_encrypted=False):
         t = self.tr
         filetypes = [
-            (t('filetype.all_supported', 'All Supported'), "*.txt *.md *.log .gitignore *.py *.pyw *.c *.cpp *.cxx *.cc *.h *.hpp *.hxx *.hh *.cs *.rs *.java *.js *.html *.htm *.php *.xml *.sql *.css *.json *.ini *.bat *.cmd *.ps1 *.psm1 *.psd1 *.ps1xml *.pssc *.psrc *.psc1 *.cdxml *.sh *.asm *.s *.tex *.vb *.vbs *.pas *.pl *.pm *.diff *.patch *.nsi *.nsh *.iss *.rc *.as *.mx *.asp *.aspx *.au3 *.ml *.mli *.sml *.thy *.for *.f *.f90 *.f95 *.f2k *.lsp *.lisp *.mak *.m *.nfo *.st *.xsd *.xsml *.xsl *.kml"),
-            (t('filetype.text_document', 'Text Document'), "*.txt"),
-            (t('filetype.markdown', 'Markdown'), "*.md"),
-            (t('filetype.log', 'Log File'), "*.log"),
-            (t('filetype.git_ignore', 'Git Ignore'), ".gitignore"),
-            (t('filetype.python', 'Python'), "*.py *.pyw"),
-            (t('filetype.c_headers', 'C / Headers'), "*.c *.h"),
-            (t('filetype.cpp_headers', 'C++ / Headers'), "*.cpp *.cxx *.cc *.hpp *.hxx *.hh"),
-            (t('filetype.csharp', 'C#'), "*.cs"),
-            (t('filetype.rust', 'Rust'), "*.rs"),
-            (t('filetype.java', 'Java'), "*.java"),
-            (t('filetype.javascript', 'JavaScript'), "*.js"),
-            (t('filetype.html', 'HTML'), "*.html *.htm"),
-            (t('filetype.php', 'PHP'), "*.php *.php3 *.phtml"),
-            (t('filetype.xml', 'XML'), "*.xml *.xsd *.xsml *.xsl *.kml"),
-            (t('filetype.sql', 'SQL'), "*.sql"),
-            (t('filetype.css', 'CSS'), "*.css"),
-            (t('filetype.json', 'JSON'), "*.json"),
-            (t('filetype.ini_config', 'INI / Config'), "*.ini *.inf *.reg *.url"),
-            (t('filetype.batch', 'Batch'), "*.bat *.cmd"),
-            (t('filetype.powershell', 'PowerShell'), "*.ps1 *.psm1 *.psd1 *.ps1xml *.pssc *.psrc *.psc1 *.cdxml"),
-            (t('filetype.shell', 'Shell'), "*.sh *.bsh"),
-            (t('filetype.assembly', 'Assembly'), "*.asm *.s"),
-            (t('filetype.pascal', 'Pascal'), "*.pas *.inc"),
-            (t('filetype.perl', 'Perl'), "*.pl *.pm *.plx"),
-            (t('filetype.diff_patch', 'Diff / Patch'), "*.diff *.patch"),
-            (t('filetype.vb_vbscript', 'VB / VBScript'), "*.vb *.vbs"),
-            (t('filetype.actionscript', 'ActionScript'), "*.as *.mx"),
-            (t('filetype.asp_aspx', 'ASP / ASPX'), "*.asp *.aspx"),
-            (t('filetype.autoit', 'AutoIt'), "*.au3"),
-            (t('filetype.caml', 'Caml'), "*.ml *.mli *.sml *.thy"),
-            (t('filetype.fortran', 'Fortran'), "*.f *.for *.f90 *.f95 *.f2k"),
-            (t('filetype.inno_setup', 'Inno Setup'), "*.iss"),
-            (t('filetype.lisp', 'Lisp'), "*.lsp *.lisp"),
-            (t('filetype.makefile', 'Makefile'), "*.mak"),
-            (t('filetype.matlab', 'Matlab'), "*.m"),
-            (t('filetype.nfo', 'NFO'), "*.nfo"),
-            (t('filetype.nsis', 'NSIS'), "*.nsi *.nsh"),
-            (t('filetype.resource', 'Resource'), "*.rc"),
-            (t('filetype.smalltalk', 'Smalltalk'), "*.st"),
-            (t('filetype.tex', 'TeX'), "*.tex"),
+            (t('filetype.all_supported', 'Binary / Hex Files'), "*.bin *.dat *.hex *.raw *.exe *.dll *.sys *.img *.iso *.rom *.pak *.sav"),
+            (t('filetype.text_document', 'Binary File'), "*.bin"),
+            (t('filetype.executables', 'Executables'), "*.exe *.dll *.sys"),
+            (t('filetype.images', 'Disk / ROM Images'), "*.img *.iso *.rom"),
             (t('filetype.all_files', 'All Files'), "*.*"),
         ]
-        if include_encrypted:
-            return [(t('filetype.encrypted', 'Notepad-X Encrypted'), "*.npxe"), *filetypes]
         return filetypes
 
     def get_open_filetypes(self):
-        t = self.tr
-        all_supported_label = t('filetype.all_supported', 'All Supported')
-        all_files_label = t('filetype.all_files', 'All Files')
-        encrypted_entry = (t('filetype.encrypted', 'Notepad-X Encrypted'), "*.npxe")
-        all_supported_pattern = ""
-        all_files_entry = (all_files_label, "*.*")
-        other_filetypes = []
-
-        for label, pattern in self.get_save_filetypes():
-            if label == all_supported_label:
-                all_supported_pattern = str(pattern)
-            elif label == all_files_label:
-                all_files_entry = (label, pattern)
-            else:
-                other_filetypes.append((label, pattern))
-
-        supported_patterns = list(dict.fromkeys(
-            token for token in f"{all_supported_pattern} {encrypted_entry[1]}".split() if token
-        ))
-        all_supported_entry = (all_supported_label, " ".join(supported_patterns))
-        return [all_supported_entry, encrypted_entry, *other_filetypes, all_files_entry]
+        return self.get_save_filetypes()
 
     def get_primary_save_extension(self, pattern):
         for token in str(pattern or '').split():
@@ -19853,7 +20238,7 @@ class NotepadX:
         dialog_options = {
             'parent': self.root,
             'title': title,
-            'defaultextension': '.txt',
+            'defaultextension': '.bin',
             'filetypes': filetypes,
         }
         if initialfile:
@@ -19872,7 +20257,7 @@ class NotepadX:
             file_path,
             selected_filetype=selected_value,
             filetypes=filetypes,
-            fallback_extension='.txt'
+            fallback_extension='.bin'
         )
 
     def get_save_and_run_language(self, doc, file_path):
@@ -19993,7 +20378,7 @@ class NotepadX:
                 self.log_exception("save and run html", exc)
                 messagebox.showerror(
                     self.tr('run.title', 'Save and Run'),
-                    self.tr('run.open_browser_failed', 'Notepad-X could not open this file in your browser.'),
+                    self.tr('run.open_browser_failed', 'Hex-X could not open this file in your browser.'),
                     parent=self.root
                 )
             return "break"
@@ -20017,7 +20402,7 @@ class NotepadX:
                 self.tr('run.title', 'Save and Run'),
                 self.tr(
                     'run.runtime_missing',
-                    'Notepad-X could not find a runtime for {language} on this system.',
+                    'Hex-X could not find a runtime for {language} on this system.',
                     language=self.get_save_and_run_language_name(language)
                 ),
                 parent=self.root
@@ -20112,6 +20497,10 @@ class NotepadX:
                 if not self.flush_virtual_window_edits(doc, force=True):
                     return "break"
                 self.write_virtual_document_atomically(doc, output_path)
+            elif doc.get('hex_mode'):
+                payload_bytes = self.get_hex_document_bytes_from_editor(doc)
+                if not self.write_binary_atomically(output_path, payload_bytes, 'hexx-copy-', 'save binary copy'):
+                    raise OSError(f"Could not write copy: {output_path}")
             else:
                 self.write_file_atomically(output_path, doc['text'].get('1.0', tk.END).rstrip('\n'))
             messagebox.showinfo(
@@ -20226,15 +20615,6 @@ class NotepadX:
             except OSError as exc:
                 print_error = exc
 
-            try:
-                subprocess.Popen(
-                    ['notepad.exe', '/p', doc['file_path']],
-                    creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0)
-                )
-                return "break"
-            except OSError as exc:
-                if print_error is None:
-                    print_error = exc
         elif self.is_linux:
             for command in (['lp', doc['file_path']], ['lpr', doc['file_path']]):
                 if shutil.which(command[0]):
@@ -20359,6 +20739,8 @@ class NotepadX:
         doc = self.get_doc_for_text_widget(target)
         if doc and self.is_doc_text_readonly(doc):
             return "break"
+        if doc and doc.get('hex_mode'):
+            return self.copy(event)
 
         try:
             selection = target.get('sel.first', 'sel.last')
@@ -20437,6 +20819,8 @@ class NotepadX:
         doc = self.get_doc_for_text_widget(target)
         if doc and self.is_doc_text_readonly(doc):
             return "break"
+        if doc and doc.get('hex_mode'):
+            return self.paste_hex_clipboard(doc, target)
 
         try:
             clipboard_text = self.root.clipboard_get()
@@ -20599,15 +20983,15 @@ class NotepadX:
         dialog.grab_set()
         return "break"
 
-    # ─── Goto Line ───────────────────────────────────────────────
+    # ─── Goto Offset ─────────────────────────────────────────────
     def goto_line_dialog(self, event=None):
         dialog = self.create_toplevel(self.root)
-        dialog.title(self.tr('goto_line.title', 'Go To Line'))
+        dialog.title(self.tr('goto_line.title', 'Go To Offset'))
         dialog.transient(self.root)
         dialog.resizable(False, False)
         dialog.configure(bg=self.bg_color)
 
-        tk.Label(dialog, text=self.tr('goto_line.prompt', 'Line Number:'), bg=self.bg_color, fg=self.fg_color)\
+        tk.Label(dialog, text=self.tr('goto_line.prompt', 'Offset (hex or decimal):'), bg=self.bg_color, fg=self.fg_color)\
             .grid(row=0, column=0, padx=6, pady=8)
 
         entry = tk.Entry(dialog, width=15)
@@ -20616,8 +21000,36 @@ class NotepadX:
 
         def goto():
             try:
-                line = int(entry.get())
+                raw_value = entry.get().strip()
                 current_doc = self.get_current_doc()
+                if current_doc and current_doc.get('hex_mode'):
+                    if raw_value.lower().startswith('0x'):
+                        offset = int(raw_value, 16)
+                    elif re.fullmatch(r'[0-9A-Fa-f]+h', raw_value):
+                        offset = int(raw_value[:-1], 16)
+                    elif re.search(r'[A-Fa-f]', raw_value):
+                        offset = int(raw_value, 16)
+                    else:
+                        offset = int(raw_value)
+                    total_bytes = max(len(self.get_hex_data_bytearray(current_doc)), int(current_doc.get('file_size_bytes', 0) or 0))
+                    if 0 <= offset < total_bytes and not current_doc.get('preview_mode'):
+                        self.set_hex_insert_for_offset(current_doc, offset)
+                        self.text.tag_remove('sel', '1.0', tk.END)
+                        self.update_status()
+                        dialog.destroy()
+                    elif current_doc.get('preview_mode') and 0 <= offset < len(self.get_hex_data_bytearray(current_doc)):
+                        self.set_hex_insert_for_offset(current_doc, offset)
+                        self.text.tag_remove('sel', '1.0', tk.END)
+                        self.update_status()
+                        dialog.destroy()
+                    else:
+                        messagebox.showwarning(
+                            self.tr('goto_line.invalid_title', 'Invalid'),
+                            self.tr('goto_line.invalid_range', 'Offset out of range.'),
+                            parent=dialog
+                        )
+                    return
+                line = int(raw_value)
                 if current_doc and current_doc.get('virtual_mode'):
                     last_line = current_doc['total_file_lines']
                 else:
@@ -20637,7 +21049,7 @@ class NotepadX:
                 else:
                     messagebox.showwarning(
                         self.tr('goto_line.invalid_title', 'Invalid'),
-                        self.tr('goto_line.invalid_range', 'Line number out of range.'),
+                            self.tr('goto_line.invalid_range', 'Offset out of range.'),
                         parent=dialog
                     )
             except ValueError:
@@ -20664,8 +21076,7 @@ if __name__ == "__main__":
     raw_args = get_process_launch_arguments()
     isolated_mode = '--isolated' in {arg.lower() for arg in raw_args}
     startup_files = [arg for arg in raw_args if arg.lower() != '--isolated']
-    app_dir = get_notepadx_app_dir()
-    if not isolated_mode and send_files_to_running_notepadx(app_dir, startup_files):
+    app_dir = get_hexx_app_dir()
+    if not isolated_mode and send_files_to_running_hexx(app_dir, startup_files):
         sys.exit(0)
-    NotepadX(isolated_session=isolated_mode, startup_files=startup_files)
-
+    HexX(isolated_session=isolated_mode, startup_files=startup_files)
