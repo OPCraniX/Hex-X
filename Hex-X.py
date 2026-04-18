@@ -72,11 +72,6 @@ except ImportError:
     ColorDelegator = None
     Percolator = None
 
-# Hex-X does not need a spell checker; keep the symbol defined so older
-# session/settings code can safely fall back without importing the package.
-SpellChecker = None
-
-
 class EncryptedFileOpenCancelled(OSError):
     pass
 
@@ -169,7 +164,6 @@ DEFAULT_LOCALE_STRINGS = {
     "menu.view.status_bar": "Status Bar",
     "menu.view.numbered_lines": "Offset Gutter",
     "menu.view.autocomplete": "Byte Suggestions",
-    "menu.view.spell_check": "Byte Check",
     "menu.view.edit_with_hexx": "Edit with Hex-X",
     "menu.view.word_wrap": "Wrap Rows",
     "menu.view.sound": "Sound",
@@ -305,8 +299,6 @@ DEFAULT_LOCALE_STRINGS = {
     "large_file.save_disabled": "This tab is a read-only preview of a large binary file. Editing and saving are disabled.",
     "large_file.save_as_disabled": "Save As is disabled for read-only preview tabs.",
     "large_file.encryption_disabled": "Saving is disabled for read-only preview tabs.",
-    "spellcheck.unavailable_title": "Spell Check Removed",
-    "spellcheck.unavailable_message": "Spell check is not available in Hex-X.",
     "file.open_failed_title": "Open Failed",
     "file.open_failed_message": "Hex-X could not open:\n{file_path}\n\n{error_detail}",
     "file.missing_title": "File Missing",
@@ -520,7 +512,6 @@ DEFAULT_LOCALE_STRINGS = {
     "accel.full_screen": "F11",
     "accel.switch_tab": "Ctrl+Tab",
     "accel.status_bar": "Ctrl+B",
-    "accel.spell_check": "F7",
     "accel.preview_markdown": "Ctrl+Shift+P",
     "accel.currently_editing": "Ctrl+Shift+C",
     "accel.compare_tabs": "Ctrl+Q",
@@ -1042,7 +1033,6 @@ class HexX:
         self.current_file = None
         self.find_matches_tag = 'find_match'
         self.find_current_tag = 'find_current'
-        self.spellcheck_tag = 'spellcheck_misspelled'
         self.documents = {}
         self.cpu_used_percent = 0.0
         self.memory_used_mb = 0
@@ -1155,20 +1145,6 @@ class HexX:
         self.hex_field_width = (self.hex_bytes_per_row * 3) - 1
         self.max_editable_hex_file_bytes = 32 * 1024 * 1024
         self.hex_preview_bytes = 4 * 1024 * 1024
-        self.spellcheck_delay_ms = 260
-        self.spellcheck_max_chars = 250000
-        self.spellcheck_max_words = 8000
-        self.spellcheck_token_pattern = re.compile(r"[A-Za-z]+(?:'[A-Za-z]+)?")
-        self.spellcheck_skip_neighbor_chars = set('_/\\.@#:-')
-        self.spellcheck_custom_words = {
-            'hexx', 'github', 'gitignore', 'gitattributes', 'grab',
-            'lolcat', 'codex', 'pyspellchecker', 'plaintext', 'utf', 'npxe', 'npx',
-            'json', 'yaml', 'toml', 'xml', 'html', 'css', 'javascript', 'typescript',
-            'python', 'java', 'powershell', 'markdown', 'autocomplete'
-        }
-        self.spellcheck_supported_modes = {None, 'ini', 'nfo', 'tex', 'markdown'}
-        self.spell_checker = None
-        self.spell_checker_ready = False
         self.recent_files = []
         self.find_history = []
         self.find_in_history = []
@@ -1228,7 +1204,6 @@ class HexX:
         self.status_bar_enabled = tk.BooleanVar(value=True)
         self.numbered_lines_enabled = tk.BooleanVar(value=False)
         self.autocomplete_enabled = tk.BooleanVar(value=False)
-        self.spell_check_enabled = tk.BooleanVar(value=SpellChecker is not None)
         self.edit_with_shell_enabled = tk.BooleanVar(value=False)
         self.auto_pair_enabled = tk.BooleanVar(value=False)
         self.compare_multi_edit_enabled = tk.BooleanVar(value=False)
@@ -5516,7 +5491,6 @@ class HexX:
             'status_bar_enabled': bool(session.get('status_bar_enabled', True)),
             'numbered_lines_enabled': bool(session.get('numbered_lines_enabled', True)),
             'autocomplete_enabled': bool(session.get('autocomplete_enabled', True)),
-            'spell_check_enabled': bool(session.get('spell_check_enabled', SpellChecker is not None)),
             'auto_pair_enabled': bool(session.get('auto_pair_enabled', True)),
             'compare_multi_edit_enabled': bool(session.get('compare_multi_edit_enabled', False)),
             'markdown_preview_enabled': bool(session.get('markdown_preview_enabled', False)),
@@ -7923,7 +7897,7 @@ class HexX:
             'project-symbols', 'fold', 'fold-all', 'collapse-all', 'unfold-all',
             'expand-all', 'lint', 'date', 'insert-date', 'time-date', 'datetime',
             'insert-time-date', 'language', 'syntax-mode', 'mode', 'preview',
-            'markdown-preview', 'autocomplete', 'spell-check', 'auto-pair',
+            'markdown-preview', 'autocomplete', 'auto-pair',
             'compare-multi-edit', 'diagnostics', 'word-wrap'
         }
         if command_name in unavailable_in_hex:
@@ -10718,7 +10692,6 @@ class HexX:
             ('status_bar', {'section': t('menu.settings', 'Settings'), 'label': t('menu.view.status_bar', 'Status Bar'), 'default': t('accel.status_bar', 'Ctrl+B'), 'handler': lambda event=None: self.toggle_boolean_hotkey(self.status_bar_enabled, self.toggle_status_bar)}),
             ('numbered_lines', {'section': t('menu.settings', 'Settings'), 'label': t('menu.view.numbered_lines', 'Numbered Lines'), 'default': t('accel.numbered_lines', 'Ctrl+Alt+L'), 'handler': lambda event=None: self.toggle_boolean_hotkey(self.numbered_lines_enabled, self.toggle_numbered_lines)}),
             ('autocomplete', {'section': t('menu.settings', 'Settings'), 'label': t('menu.view.autocomplete', 'Autocomplete'), 'default': t('accel.autocomplete', 'Ctrl+Alt+A'), 'handler': lambda event=None: self.toggle_boolean_hotkey(self.autocomplete_enabled, self.toggle_autocomplete)}),
-            ('spell_check', {'section': t('menu.settings', 'Settings'), 'label': t('menu.view.spell_check', 'Spell Check'), 'default': t('accel.spell_check', 'F7'), 'handler': lambda event=None: self.toggle_boolean_hotkey(self.spell_check_enabled, self.toggle_spell_check)}),
             ('auto_pair', {'section': t('menu.settings', 'Settings'), 'label': t('menu.settings.auto_pair', 'Auto Pair Brackets/Quotes'), 'default': t('accel.auto_pair', 'Ctrl+Alt+Shift+P'), 'handler': lambda event=None: self.toggle_boolean_hotkey(self.auto_pair_enabled, self.save_session)}),
             ('compare_multi_edit', {'section': t('menu.settings', 'Settings'), 'label': t('menu.settings.compare_multi_edit', 'Compare Multi-Edit'), 'default': t('accel.compare_multi_edit', 'Ctrl+Alt+M'), 'handler': lambda event=None: self.toggle_boolean_hotkey(self.compare_multi_edit_enabled, self.save_session)}),
             ('minimap', {'section': t('menu.settings', 'Settings'), 'label': t('menu.settings.minimap', 'Minimap'), 'default': t('accel.minimap', 'Ctrl+Alt+I'), 'handler': lambda event=None: self.toggle_boolean_hotkey(self.minimap_enabled, self.toggle_minimap)}),
@@ -11372,20 +11345,6 @@ class HexX:
     def toggle_autocomplete(self):
         if not self.autocomplete_enabled.get():
             self.hide_autocomplete_popup()
-        self.save_session()
-        return "break"
-
-    def toggle_spell_check(self, event=None):
-        if event is not None:
-            self.spell_check_enabled.set(not self.spell_check_enabled.get())
-        if self.spell_check_enabled.get() and not self.ensure_spellcheck_available(notify=True):
-            self.spell_check_enabled.set(False)
-            return "break"
-        for doc in self.documents.values():
-            if self.spell_check_enabled.get():
-                self.schedule_spellcheck(doc)
-            else:
-                self.clear_spellcheck(doc)
         self.save_session()
         return "break"
 
@@ -12433,8 +12392,6 @@ class HexX:
         text.tag_config(self.find_matches_tag, background=self.match_bg, foreground='black')
         text.tag_config(self.find_current_tag, background='#ff8c42', foreground='black')
         text.tag_config(self.bracket_match_tag, background='#2f81f7', foreground='white')
-        spellcheck_fg, spellcheck_bg = self.get_spellcheck_tag_colors()
-        text.tag_config(self.spellcheck_tag, underline=1, foreground=spellcheck_fg, background=spellcheck_bg)
         self.raise_find_tags(text)
 
         if content:
@@ -12478,7 +12435,6 @@ class HexX:
             'last_note_cycle_tag': None,
             'theme_effect_job': None,
             'syntax_job': None,
-            'spellcheck_job': None,
             'syntax_mode': None,
             'syntax_override': None,
             'last_insert_index': '1.0',
@@ -13672,7 +13628,6 @@ class HexX:
             self.clear_custom_syntax_tags(doc)
 
         self.apply_text_theme_effect(doc)
-        self.schedule_spellcheck(doc)
 
     def build_rainbow_theme_palette(self, color_count=28):
         palette = []
@@ -13703,22 +13658,6 @@ class HexX:
     def get_syntax_palette(self):
         selected = self.get_current_syntax_theme_definition()
         return dict(selected['syntax'])
-
-    def get_spellcheck_tag_colors(self):
-        surface = self.get_syntax_surface_palette()
-        bg_value = str(surface.get('text_bg') or '#0d1117').lstrip('#')
-        if len(bg_value) != 6:
-            bg_value = '0d1117'
-        try:
-            red = int(bg_value[0:2], 16)
-            green = int(bg_value[2:4], 16)
-            blue = int(bg_value[4:6], 16)
-        except ValueError:
-            red, green, blue = (13, 17, 23)
-        luminance = (0.2126 * red) + (0.7152 * green) + (0.0722 * blue)
-        if luminance < 140:
-            return '#ff7b8f', '#35141a'
-        return '#9f1239', '#ffd7df'
 
     def get_rainbow_theme_tag_name(self, palette_index):
         return f"{self.rainbow_theme_tag_prefix}{int(palette_index)}"
@@ -13767,209 +13706,10 @@ class HexX:
                     text_widget.tag_raise(tag_name)
             text_widget.tag_raise('diagnostic_warning')
             text_widget.tag_raise('diagnostic_error')
-            text_widget.tag_raise(self.spellcheck_tag)
             text_widget.tag_raise(self.bracket_match_tag)
             self.raise_find_tags(text_widget)
         except tk.TclError:
             return
-
-    def get_spell_checker(self):
-        if self.spell_checker_ready:
-            return self.spell_checker
-        self.spell_checker_ready = True
-        if SpellChecker is None:
-            self.spell_checker = None
-            return None
-        try:
-            dictionary_path = self.get_spellcheck_dictionary_path()
-            if dictionary_path:
-                checker = SpellChecker(language=None, local_dictionary=dictionary_path)
-            else:
-                checker = SpellChecker(language='en')
-            checker.word_frequency.load_words(sorted(self.spellcheck_custom_words))
-            self.spell_checker = checker
-        except Exception as exc:
-            self.log_exception("initialize spell checker", exc)
-            self.spell_checker = None
-        return self.spell_checker
-
-    def get_spellcheck_dictionary_path(self):
-        candidates = []
-        for base_dir in (self.app_dir, self.resource_dir):
-            if not base_dir:
-                continue
-            candidates.append(os.path.join(base_dir, 'cfg', 'spellcheck', 'en.json.gz'))
-        seen = set()
-        for candidate in candidates:
-            normalized = os.path.normcase(os.path.abspath(candidate))
-            if normalized in seen:
-                continue
-            seen.add(normalized)
-            if os.path.isfile(candidate):
-                return candidate
-        return None
-
-    def ensure_spellcheck_available(self, notify=False):
-        checker = self.get_spell_checker()
-        if checker is not None:
-            return True
-        if notify:
-            messagebox.showinfo(
-                self.tr('spellcheck.unavailable_title', 'Spell Check Unavailable'),
-                self.tr('spellcheck.unavailable_message', 'Spell check needs pyspellchecker and the bundled English dictionary. Rebuild Hex-X if the menu shows enabled but no words are marked.'),
-                parent=self.root
-            )
-        return False
-
-    def cancel_spellcheck_job(self, doc):
-        if not doc:
-            return
-        job = doc.get('spellcheck_job')
-        if not job:
-            return
-        try:
-            self.root.after_cancel(job)
-        except tk.TclError:
-            pass
-        doc['spellcheck_job'] = None
-
-    def clear_spellcheck(self, doc_or_widget):
-        if isinstance(doc_or_widget, dict):
-            doc = doc_or_widget
-            self.cancel_spellcheck_job(doc)
-            text_widget = doc.get('text')
-        else:
-            doc = None
-            text_widget = doc_or_widget
-        if not isinstance(text_widget, tk.Text):
-            return
-        try:
-            if text_widget.winfo_exists():
-                text_widget.tag_remove(self.spellcheck_tag, '1.0', tk.END)
-        except tk.TclError:
-            pass
-
-    def doc_supports_spellcheck(self, doc):
-        if not doc or not self.spell_check_enabled.get():
-            return False
-        if doc.get('hex_mode'):
-            return False
-        if doc.get('virtual_mode') or doc.get('preview_mode') or doc.get('large_file_mode'):
-            return False
-        if doc.get('syntax_mode') not in self.spellcheck_supported_modes:
-            return False
-        text_widget = doc.get('text')
-        if not isinstance(text_widget, tk.Text):
-            return False
-        try:
-            if not text_widget.winfo_exists():
-                return False
-        except tk.TclError:
-            return False
-        return self.get_spell_checker() is not None
-
-    def is_spellcheck_candidate_word(self, content, match):
-        token = match.group(0)
-        normalized = token.lower()
-        if len(normalized) < 2 or len(normalized) > 32:
-            return False
-        if normalized in self.spellcheck_custom_words:
-            return False
-        if token.isupper():
-            return False
-        if re.search(r'[a-z][A-Z]|[A-Z]{2,}[a-z]', token):
-            return False
-        start = match.start()
-        end = match.end()
-        before_char = content[start - 1] if start > 0 else ''
-        after_char = content[end] if end < len(content) else ''
-        skip_chars = self.spellcheck_skip_neighbor_chars - {'.'}
-        if before_char in skip_chars or after_char in skip_chars:
-            return False
-        if before_char == '.':
-            prior_char = content[start - 2] if start > 1 else ''
-            if prior_char and (prior_char.isalnum() or prior_char in {'_', '-', '@'}):
-                return False
-        if after_char == '.':
-            next_char = content[end + 1] if end + 1 < len(content) else ''
-            if next_char and (next_char.isalnum() or next_char in {'_', '-', '@'}):
-                return False
-        if before_char == '.' and after_char == '.':
-            return False
-        return True
-
-    def iter_misspelled_word_ranges(self, content):
-        checker = self.get_spell_checker()
-        if checker is None or not content or len(content) > self.spellcheck_max_chars:
-            return []
-
-        pending = []
-        unique_words = set()
-        for match in self.spellcheck_token_pattern.finditer(content):
-            if len(pending) >= self.spellcheck_max_words:
-                break
-            if not self.is_spellcheck_candidate_word(content, match):
-                continue
-            normalized = match.group(0).lower()
-            pending.append((match.start(), match.end(), normalized))
-            unique_words.add(normalized)
-
-        if not pending:
-            return []
-
-        try:
-            unknown_words = checker.unknown(unique_words)
-        except Exception as exc:
-            self.log_exception("spellcheck scan", exc)
-            return []
-
-        return [
-            (start, end)
-            for start, end, normalized in pending
-            if normalized in unknown_words
-        ]
-
-    def apply_spellcheck(self, doc):
-        if not doc:
-            return
-        doc['spellcheck_job'] = None
-        text_widget = doc.get('text')
-        self.clear_spellcheck(text_widget)
-        if not self.doc_supports_spellcheck(doc):
-            return
-        try:
-            content = text_widget.get('1.0', 'end-1c')
-        except tk.TclError:
-            return
-        misspelled_ranges = self.iter_misspelled_word_ranges(content)
-        if not misspelled_ranges:
-            return
-        for start_offset, end_offset in misspelled_ranges:
-            start_index = self.text_index_from_offset(text_widget, start_offset, content=content)
-            end_index = self.text_index_from_offset(text_widget, end_offset, content=content)
-            if not start_index or not end_index:
-                continue
-            try:
-                text_widget.tag_add(self.spellcheck_tag, start_index, end_index)
-            except tk.TclError:
-                continue
-        self.raise_editor_overlay_tags(text_widget)
-
-    def schedule_spellcheck(self, doc):
-        if not doc:
-            return
-        if not self.doc_supports_spellcheck(doc):
-            self.clear_spellcheck(doc)
-            return
-        self.cancel_spellcheck_job(doc)
-        try:
-            doc['spellcheck_job'] = self.root.after(
-                self.spellcheck_delay_ms,
-                lambda current=doc: self.apply_spellcheck(current)
-            )
-        except tk.TclError:
-            doc['spellcheck_job'] = None
-            self.apply_spellcheck(doc)
 
     def apply_rainbow_theme_to_widget(self, text_widget):
         if not text_widget:
@@ -14077,7 +13817,6 @@ class HexX:
     def apply_syntax_tag_colors(self, text_widget):
         surface = self.get_syntax_surface_palette()
         palette = self.get_syntax_palette()
-        spellcheck_fg, spellcheck_bg = self.get_spellcheck_tag_colors()
         text_widget.configure(
             bg=surface['text_bg'],
             fg=surface['text_fg'],
@@ -14092,7 +13831,6 @@ class HexX:
         text_widget.tag_config('syntax_number', foreground=palette['number'])
         text_widget.tag_config('syntax_preprocessor', foreground=palette['preprocessor'])
         text_widget.tag_config('syntax_tag', foreground=palette['tag'])
-        text_widget.tag_config(self.spellcheck_tag, underline=1, foreground=spellcheck_fg, background=spellcheck_bg)
 
     def set_syntax_theme(self, theme_name):
         if theme_name not in self.get_available_syntax_theme_names():
@@ -14615,7 +14353,6 @@ class HexX:
             self.update_autocomplete_popup(doc)
         if event_type in {'3', 'KeyRelease'} and not doc.get('virtual_mode') and not doc.get('preview_mode'):
             self.schedule_text_theme_effect(doc)
-            self.schedule_spellcheck(doc)
         self.update_bracket_match_highlight(doc)
         self.update_line_number_gutter(doc)
         self.schedule_minimap_refresh(doc)
@@ -15204,7 +14941,6 @@ class HexX:
             self.update_autocomplete_popup(compare_doc)
         if event_type in {'3', 'KeyRelease'}:
             self.schedule_text_theme_effect(compare_doc)
-            self.schedule_spellcheck(compare_doc)
             self.schedule_diagnostics(compare_doc)
         self.update_bracket_match_highlight(compare_doc)
         self.update_line_number_gutter(compare_doc)
@@ -15433,32 +15169,6 @@ class HexX:
             return
         menu.delete(0, tk.END)
 
-        target_widget = doc.get('context_target_widget') or doc.get('text')
-        word_info = None
-        if not is_readonly_target and not doc.get('hex_mode') and isinstance(target_widget, tk.Text):
-            word_info = self.get_misspelled_word_info_at_index(target_widget, word_index, doc=doc)
-
-        if word_info:
-            suggestions = self.get_spellcheck_suggestions(word_info['word'])
-            suggestions = self.format_spellcheck_suggestions(suggestions, word_info)
-            if suggestions:
-                for suggestion in suggestions:
-                    menu.add_command(
-                        label=suggestion,
-                        command=lambda frame=action_target, start=word_info['start'], end=word_info['end'], replacement=suggestion:
-                            self.run_context_menu_action(lambda current_frame=frame, current_start=start, current_end=end, current_replacement=replacement:
-                                self.replace_word_in_widget(current_frame, current_start, current_end, current_replacement))
-                    )
-            else:
-                menu.add_command(label=self.tr('context.no_suggestions', 'No suggestions'), state='disabled')
-            menu.add_command(
-                label=self.tr('context.add_to_dictionary', 'Add to Dictionary'),
-                command=lambda word=word_info['normalized']: self.run_context_menu_action(
-                    lambda current_word=word: self.add_word_to_spellcheck_dictionary(current_word)
-                )
-            )
-            menu.add_separator()
-
         cut_state = 'disabled' if is_readonly_target or doc.get('hex_mode') else 'normal'
         menu.add_command(label=self.tr('context.cut', 'Cut'), state=cut_state, command=lambda frame=action_target: self.run_context_menu_widget_action(frame, self.cut))
         menu.add_command(label=self.tr('context.copy', 'Copy'), command=lambda frame=action_target: self.run_context_menu_widget_action(frame, self.copy))
@@ -15468,143 +15178,6 @@ class HexX:
         menu.add_command(label=self.tr('context.add_note', 'Add note'), state=note_state, command=lambda frame=action_target: self.run_context_menu_action(lambda: self.add_note_to_selection(frame)))
         menu.add_command(label=self.tr('context.respond', 'Respond'), state=note_action_state, command=lambda frame=action_target: self.run_context_menu_action(lambda: self.respond_to_note(frame)))
         menu.add_command(label=self.tr('context.remove_note', 'Remove note'), state=note_action_state, command=lambda frame=action_target: self.run_context_menu_action(lambda: self.remove_note(frame)))
-
-    def replace_word_in_widget(self, action_target, start, end, replacement):
-        target_widget = self.get_context_action_target_widget(action_target)
-        if target_widget is None:
-            return "break"
-        try:
-            target_widget.focus_force()
-        except tk.TclError:
-            pass
-        self.set_last_active_editor_widget(target_widget)
-        try:
-            target_widget.delete(start, end)
-            target_widget.insert(start, replacement)
-            target_widget.mark_set(tk.INSERT, f"{start}+{len(replacement)}c")
-            target_widget.tag_remove('sel', '1.0', tk.END)
-        except tk.TclError:
-            return "break"
-        doc = self.get_doc_for_text_widget(target_widget)
-        if doc:
-            self.schedule_spellcheck(doc)
-            self.update_status()
-        return "break"
-
-    def add_word_to_spellcheck_dictionary(self, word):
-        checker = self.get_spell_checker()
-        normalized = str(word or '').strip().lower()
-        if not checker or not normalized:
-            return "break"
-        self.spellcheck_custom_words.add(normalized)
-        try:
-            checker.word_frequency.load_words([normalized])
-        except Exception as exc:
-            self.log_exception("add spellcheck dictionary word", exc)
-            return "break"
-        for doc in self.documents.values():
-            self.schedule_spellcheck(doc)
-        return "break"
-
-    def get_spellcheck_suggestions(self, word):
-        checker = self.get_spell_checker()
-        normalized = str(word or '').strip().lower()
-        if not checker or not normalized:
-            return []
-        try:
-            candidates = checker.candidates(normalized) or set()
-            correction = checker.correction(normalized)
-        except Exception as exc:
-            self.log_exception("spellcheck suggestions", exc)
-            return []
-        ordered = []
-        if correction:
-            ordered.append(correction)
-        for candidate in sorted(candidates):
-            if candidate not in ordered:
-                ordered.append(candidate)
-            if len(ordered) >= 6:
-                break
-        return ordered[:6]
-
-    def should_capitalize_spellcheck_suggestion(self, text_widget, start_index):
-        if not isinstance(text_widget, tk.Text):
-            return False
-        try:
-            leading_text = text_widget.get('1.0', start_index)
-        except tk.TclError:
-            return False
-        if not leading_text:
-            return True
-        skip_chars = set('\'"`“”‘’()[]{}')
-        for char in reversed(leading_text):
-            if char.isspace():
-                continue
-            if char in skip_chars:
-                continue
-            return char in '.!?'
-        return True
-
-    def format_spellcheck_suggestions(self, suggestions, word_info=None):
-        if not suggestions:
-            return []
-        capitalize_first = bool(word_info and word_info.get('capitalize_suggestions'))
-        formatted = []
-        seen = set()
-        for suggestion in suggestions:
-            display_value = str(suggestion or '')
-            if capitalize_first and display_value:
-                display_value = display_value[0].upper() + display_value[1:]
-            dedupe_key = display_value.lower()
-            if dedupe_key in seen:
-                continue
-            seen.add(dedupe_key)
-            formatted.append(display_value)
-        return formatted
-
-    def get_misspelled_word_info_at_index(self, text_widget, index, doc=None):
-        if not isinstance(text_widget, tk.Text):
-            return None
-        doc = doc or self.get_doc_for_text_widget(text_widget)
-        if not self.doc_supports_spellcheck(doc):
-            return None
-        try:
-            resolved_index = text_widget.index(index or tk.INSERT)
-            line_start = text_widget.index(f"{resolved_index} linestart")
-            line_text = text_widget.get(line_start, f"{resolved_index} lineend")
-            line_column = int(resolved_index.split('.', 1)[1])
-        except (tk.TclError, ValueError, IndexError):
-            return None
-
-        checker = self.get_spell_checker()
-        if checker is None:
-            return None
-
-        for match in self.spellcheck_token_pattern.finditer(line_text):
-            if not (match.start() <= line_column < match.end()):
-                continue
-            if not self.is_spellcheck_candidate_word(line_text, match):
-                return None
-            normalized = match.group(0).lower()
-            if normalized in self.spellcheck_custom_words:
-                return None
-            try:
-                if normalized not in checker.unknown([normalized]):
-                    return None
-            except Exception as exc:
-                self.log_exception("spellcheck word lookup", exc)
-                return None
-            return {
-                'word': match.group(0),
-                'normalized': normalized,
-                'start': f"{line_start}+{match.start()}c",
-                'end': f"{line_start}+{match.end()}c",
-                'capitalize_suggestions': self.should_capitalize_spellcheck_suggestion(
-                    text_widget,
-                    f"{line_start}+{match.start()}c"
-                )
-            }
-        return None
 
     def run_context_menu_action(self, callback):
         self.dismiss_context_menu()
@@ -17411,7 +16984,6 @@ class HexX:
             'status_bar_enabled': bool(self.status_bar_enabled.get()),
             'numbered_lines_enabled': bool(self.numbered_lines_enabled.get()),
             'autocomplete_enabled': bool(self.autocomplete_enabled.get()),
-            'spell_check_enabled': bool(self.spell_check_enabled.get()),
             'auto_pair_enabled': bool(self.auto_pair_enabled.get()),
             'compare_multi_edit_enabled': bool(self.compare_multi_edit_enabled.get()),
             'markdown_preview_enabled': bool(self.markdown_preview_enabled.get()),
@@ -17772,7 +17344,6 @@ class HexX:
         self.status_bar_enabled.set(bool(session.get('status_bar_enabled', True)))
         self.numbered_lines_enabled.set(bool(session.get('numbered_lines_enabled', True)))
         self.autocomplete_enabled.set(bool(session.get('autocomplete_enabled', True)))
-        self.spell_check_enabled.set(False)
         self.autocomplete_enabled.set(False)
         self.auto_pair_enabled.set(False)
         self.diagnostics_enabled.set(False)
@@ -18044,7 +17615,6 @@ class HexX:
         if doc.get('syntax_mode') and doc.get('syntax_mode') != 'python':
             self.schedule_syntax_highlight(doc)
         self.schedule_text_theme_effect(doc)
-        self.schedule_spellcheck(doc)
         self.schedule_diagnostics(doc)
         self.schedule_doc_autosave(doc)
         if self.markdown_preview_enabled.get() and self.markdown_preview_source_tab == str(tab_id):
@@ -18424,19 +17994,10 @@ class HexX:
             except tk.TclError:
                 pass
             doc['minimap_job'] = None
-        spellcheck_job = doc.get('spellcheck_job')
-        if spellcheck_job:
-            try:
-                self.root.after_cancel(spellcheck_job)
-            except tk.TclError:
-                pass
-            doc['spellcheck_job'] = None
-
         text_widget = doc.get('text')
         if text_widget:
             try:
                 if text_widget.winfo_exists():
-                    text_widget.tag_remove(self.spellcheck_tag, '1.0', tk.END)
                     text_widget.configure(undo=False, autoseparators=False)
                     text_widget.edit_reset()
                     text_widget.delete('1.0', tk.END)
