@@ -1,7 +1,7 @@
 Hex-X Help
 
 Overview
-Hex-X is a tabbed desktop hex editor for inspecting and editing binary files. Each tab shows an offset column, sixteen hexadecimal bytes per row, and an ASCII preview pane.
+Hex-X is a tabbed desktop hex editor for inspecting and editing binary files. Each tab shows offsets in the gutter, sixteen hexadecimal bytes per row, and an ASCII preview pane.
 
 Quick Start
 - Ctrl+W opens a file.
@@ -15,7 +15,7 @@ Quick Start
 - Ctrl+Shift+X closes panels before exiting the app.
 
 Hex Grid
-- The left column shows offsets ending in `h`.
+- The gutter shows offsets ending in `h`.
 - The middle grid shows hexadecimal bytes.
 - The right pane shows printable ASCII characters; non-printable bytes appear as dots.
 - Typing a hex digit in the byte grid edits the selected nibble.
@@ -40,7 +40,6 @@ Navigation
 - Go To Offset accepts decimal offsets, `0x` hex offsets, and offsets ending in `h`.
 - Top and Bottom jump to the first and last loaded byte.
 - The optional offset gutter mirrors the row offsets beside the editor.
-- The minimap gives a compact overview of the loaded bytes.
 
 Find
 - Find searches the visible hex dump text, so you can search offsets, hex byte sequences, or ASCII text.
@@ -76,7 +75,8 @@ Command Panel
   `:compare`
   `:close-compare`
   `:theme [list|create|name]`
-  `:minimap on|off`
+  `:offset-gutter on|off`
+  `:language [list|code]`
   `:breadcrumbs on|off`
   `:autosave on|off`
   `:help`
@@ -84,7 +84,7 @@ Command Panel
 
 Settings
 - Offset Gutter shows or hides the row offset gutter.
-- Minimap shows or hides the right-side overview.
+- Language opens the language selector from Settings or via `:language [list|code]`.
 - Breadcrumbs show or hide file/location context.
 - Auto Save controls automatic recovery snapshots.
 - Edit with Hex-X registers or removes OS shell integration for supported binary file types.

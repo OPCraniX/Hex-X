@@ -111,6 +111,7 @@ DEFAULT_LOCALE_STRINGS = {
     "context.paste": "Paste",
     "context.select_all": "Select All",
     "context.add_note": "Add note",
+    "context.add_nop": "Add NOP",
     "context.respond": "Respond",
     "context.remove_note": "Remove note",
     "context.add_to_dictionary": "Add Byte Note",
@@ -179,7 +180,6 @@ DEFAULT_LOCALE_STRINGS = {
     "menu.settings": "Settings",
     "menu.settings.auto_pair": "Auto Pair Brackets/Quotes",
     "menu.settings.compare_multi_edit": "Compare Multi-Edit",
-    "menu.settings.minimap": "Minimap",
     "menu.settings.breadcrumbs": "Breadcrumbs",
     "menu.settings.diagnostics": "Diagnostics",
     "menu.settings.autosave": "Auto Save",
@@ -525,7 +525,6 @@ DEFAULT_LOCALE_STRINGS = {
     "accel.autocomplete": "Ctrl+Alt+A",
     "accel.auto_pair": "Ctrl+Alt+Shift+P",
     "accel.compare_multi_edit": "Ctrl+Alt+M",
-    "accel.minimap": "Ctrl+Alt+I",
     "accel.breadcrumbs": "Ctrl+Alt+B",
     "accel.diagnostics": "Ctrl+Alt+D",
     "accel.autosave": "Ctrl+Alt+Shift+A",
@@ -989,7 +988,7 @@ class HexX:
         self.is_windows = os.name == 'nt'
         self.is_linux = sys.platform.startswith('linux')
         self.is_running_as_administrator = self.detect_running_as_administrator()
-        self.app_version = "v1.0.8"
+        self.app_version = "v1.0.0"
         self.resource_dir = self.get_resource_dir()
         self.app_dir = self.get_app_dir()
         self.machine_profile_slug = self.get_machine_profile_slug()
@@ -1153,8 +1152,6 @@ class HexX:
         self.note_editor_heartbeat_interval_ms = 1500
         self.markdown_preview_delay_ms = 45
         self.command_output_max_chars = 50000
-        self.minimap_width = 64
-        self.minimap_max_segments = 240
         self.diagnostics_delay_ms = 500
         self.diagnostic_tooltip_delay_ms = 350
         self.autosave_delay_ms = 12000
@@ -1202,13 +1199,12 @@ class HexX:
         self.word_wrap_enabled = tk.BooleanVar(value=False)
         self.sound_enabled = tk.BooleanVar(value=True)
         self.status_bar_enabled = tk.BooleanVar(value=True)
-        self.numbered_lines_enabled = tk.BooleanVar(value=False)
+        self.numbered_lines_enabled = tk.BooleanVar(value=True)
         self.autocomplete_enabled = tk.BooleanVar(value=False)
         self.edit_with_shell_enabled = tk.BooleanVar(value=False)
         self.auto_pair_enabled = tk.BooleanVar(value=False)
         self.compare_multi_edit_enabled = tk.BooleanVar(value=False)
         self.command_panel_enabled = tk.BooleanVar(value=True)
-        self.minimap_enabled = tk.BooleanVar(value=True)
         self.breadcrumbs_enabled = tk.BooleanVar(value=True)
         self.diagnostics_enabled = tk.BooleanVar(value=False)
         self.autosave_enabled = tk.BooleanVar(value=True)
@@ -1573,21 +1569,8 @@ class HexX:
                 except TypeError:
                     continue
             total_lines = max(1, total_lines)
-            sample_step = max(1, total_lines // self.minimap_max_segments)
-            segment_count = max(1, (total_lines + sample_step - 1) // sample_step)
-            segment_max_lengths = [0] * segment_count
-            current_line_index = 0
-            for item in partial_results:
-                for raw_length in (item.get('line_lengths') or []):
-                    safe_length = max(0, int(raw_length or 0))
-                    segment_index = min(segment_count - 1, current_line_index // sample_step)
-                    if safe_length > segment_max_lengths[segment_index]:
-                        segment_max_lengths[segment_index] = safe_length
-                    current_line_index += 1
             payload = {
                 'total_lines': total_lines,
-                'sample_step': sample_step,
-                'segment_max_lengths': segment_max_lengths,
                 'file_size_bytes': current_file_size,
                 'kind': 'text_index',
                 'tab_id': current_tab_id,
@@ -3358,21 +3341,20 @@ class HexX:
         doc['window_end_line'] = doc['total_file_lines']
 
     def get_hex_data_start_col(self):
-        return len(f"{0:08X}h:  ")
+        return 0
 
     def get_hex_ascii_start_col(self):
         return self.get_hex_data_start_col() + self.hex_field_width + len("  ; ")
 
     def get_hex_header_text(self):
         byte_columns = ' '.join(f"{index:02X}" for index in range(self.hex_bytes_per_row))
-        return f"Offset(h)   {byte_columns}   ASCII"
+        return f"{byte_columns}    ASCII"
 
     def format_hex_dump_row(self, offset, chunk):
-        safe_offset = max(0, int(offset or 0))
         safe_chunk = bytes(chunk or b'')
         hex_field = ' '.join(f"{byte:02X}" for byte in safe_chunk).ljust(self.hex_field_width)
         ascii_field = ''.join(chr(byte) if 32 <= byte <= 126 else '.' for byte in safe_chunk)
-        return f"{safe_offset:08X}h:  {hex_field}  ; {ascii_field}"
+        return f"{hex_field}  ; {ascii_field}"
 
     def format_hex_dump(self, payload_bytes, preview_notice=None):
         data = bytes(payload_bytes or b'')
@@ -3390,8 +3372,11 @@ class HexX:
             stripped = line.strip()
             if not stripped:
                 continue
-            if line_number == 1 and 'offset' in stripped.lower() and 'ascii' in stripped.lower():
-                continue
+            if line_number == 1 and 'ascii' in stripped.lower():
+                header_tokens = [token.upper() for token in re.findall(r'(?<![0-9A-Fa-f])([0-9A-Fa-f]{2})(?![0-9A-Fa-f])', stripped)]
+                expected_header_tokens = [f"{index:02X}" for index in range(self.hex_bytes_per_row)]
+                if 'offset' in stripped.lower() or header_tokens[:self.hex_bytes_per_row] == expected_header_tokens:
+                    continue
             if stripped.startswith(';'):
                 continue
 
@@ -3539,6 +3524,144 @@ class HexX:
             return ascii_location[1]
         data = self.get_hex_data_bytearray(doc)
         return len(data) if default_to_end else None
+
+    def text_ranges_overlap(self, text_widget, start_a, end_a, start_b, end_b):
+        try:
+            return text_widget.compare(start_a, '<', end_b) and text_widget.compare(end_a, '>', start_b)
+        except tk.TclError:
+            return False
+
+    def get_hex_selection_boundary_offset(self, doc, text_widget, index, is_end=False):
+        if not doc or not doc.get('hex_mode'):
+            return None
+        data_length = len(self.get_hex_data_bytearray(doc))
+        if data_length <= 0:
+            return None
+        total_rows = (data_length + self.hex_bytes_per_row - 1) // self.hex_bytes_per_row
+        try:
+            resolved = text_widget.index(index)
+            line_text, col_text = resolved.split('.', 1)
+            line_number = int(line_text)
+            col = int(col_text)
+        except (tk.TclError, ValueError, IndexError):
+            return None
+
+        if line_number <= self.hex_header_lines:
+            return 0
+
+        row_index = line_number - self.hex_header_lines - 1
+        if row_index < 0:
+            return 0
+        if row_index >= total_rows:
+            return data_length
+
+        row_offset = row_index * self.hex_bytes_per_row
+        bytes_in_row = min(self.hex_bytes_per_row, data_length - row_offset)
+        hex_start = self.get_hex_data_start_col()
+        last_hex_col = hex_start + ((bytes_in_row - 1) * 3) + 2
+        ascii_start = self.get_hex_ascii_start_col()
+        ascii_end = ascii_start + bytes_in_row
+
+        if col <= hex_start:
+            return row_offset
+        if col <= last_hex_col:
+            relative = max(0, col - hex_start)
+            byte_in_row = min(bytes_in_row - 1, relative // 3)
+            position_in_cell = relative % 3
+            if is_end:
+                return row_offset + byte_in_row + (0 if position_in_cell == 0 else 1)
+            return row_offset + min(bytes_in_row, byte_in_row + (1 if position_in_cell == 2 else 0))
+        if col < ascii_start:
+            return row_offset + bytes_in_row
+        if col <= ascii_end:
+            return row_offset + max(0, min(bytes_in_row, col - ascii_start))
+        return row_offset + bytes_in_row
+
+    def get_selected_hex_byte_ranges(self, doc, text_widget=None):
+        if not doc or not doc.get('hex_mode'):
+            return []
+        text = text_widget or doc.get('text')
+        if not text:
+            return []
+        try:
+            selection_ranges = text.tag_ranges('sel')
+        except tk.TclError:
+            return []
+        if len(selection_ranges) < 2:
+            return []
+
+        data = self.get_hex_data_bytearray(doc)
+        data_length = len(data)
+        if data_length <= 0:
+            return []
+
+        selected_ranges = []
+        for range_index in range(0, len(selection_ranges), 2):
+            try:
+                selection_start = str(selection_ranges[range_index])
+                selection_end = str(selection_ranges[range_index + 1])
+            except IndexError:
+                break
+            try:
+                has_selection = text.compare(selection_start, '<', selection_end)
+            except tk.TclError:
+                has_selection = False
+            if not has_selection:
+                continue
+            start_offset = self.get_hex_selection_boundary_offset(doc, text, selection_start, is_end=False)
+            end_offset = self.get_hex_selection_boundary_offset(doc, text, selection_end, is_end=True)
+            if start_offset is None or end_offset is None:
+                continue
+            safe_start = max(0, min(data_length, min(start_offset, end_offset)))
+            safe_end = max(safe_start, min(data_length, max(start_offset, end_offset)))
+            if safe_start < safe_end:
+                selected_ranges.append((safe_start, safe_end))
+
+        if not selected_ranges:
+            return []
+
+        selected_ranges.sort()
+        merged_ranges = [selected_ranges[0]]
+        for start_offset, end_offset in selected_ranges[1:]:
+            previous_start, previous_end = merged_ranges[-1]
+            if start_offset <= previous_end:
+                merged_ranges[-1] = (previous_start, max(previous_end, end_offset))
+                continue
+            merged_ranges.append((start_offset, end_offset))
+        return merged_ranges
+
+    def add_nop_to_selection(self, action_target=None):
+        if action_target is not None:
+            target_widget = self.get_context_action_target_widget(action_target)
+        else:
+            focused_widget = self.safe_focus_get()
+            target_widget = focused_widget if isinstance(focused_widget, tk.Text) else self.text
+        doc = self.get_doc_for_text_widget(target_widget) if isinstance(target_widget, tk.Text) else self.get_current_doc()
+        if not doc or not doc.get('hex_mode') or self.is_doc_text_readonly(doc):
+            return "break"
+
+        selected_ranges = self.get_selected_hex_byte_ranges(doc, target_widget)
+        if not selected_ranges:
+            return "break"
+
+        data = self.get_hex_data_bytearray(doc)
+        for start_offset, end_offset in selected_ranges:
+            safe_start = max(0, min(len(data), int(start_offset)))
+            safe_end = max(safe_start, min(len(data), int(end_offset)))
+            if safe_start < safe_end:
+                data[safe_start:safe_end] = b'\x90' * (safe_end - safe_start)
+
+        first_offset = selected_ranges[0][0]
+        self.render_hex_document(doc, data, mark_modified=True)
+        if data:
+            self.set_hex_insert_for_offset(doc, first_offset, nibble=0)
+        self.refresh_tab_title(doc['frame'])
+        self.update_line_number_gutter(doc)
+        self.update_status()
+        self.schedule_recovery_save()
+        if self.compare_active and self.compare_source_tab == str(doc.get('frame')):
+            self.schedule_compare_refresh()
+        return "break"
 
     def set_hex_insert_for_offset(self, doc, byte_offset, nibble=0, ascii_pane=False):
         if not doc:
@@ -3769,15 +3892,7 @@ class HexX:
         text.mark_set(tk.INSERT, '1.0')
         text.tag_remove('sel', '1.0', tk.END)
         text.see('1.0')
-        self.invalidate_minimap_cache(doc)
-        process_index_started = self.start_background_text_index(doc, file_path)
-        if process_index_started:
-            doc['minimap_progressive_state'] = None
-            doc['minimap_model'] = self.create_minimap_model(1, 1, [0], complete=False)
-            doc['minimap_model_dirty'] = False
-        else:
-            self.start_progressive_minimap_build(doc, None)
-        self.refresh_minimap(doc)
+        self.start_background_text_index(doc, file_path)
         self.ensure_doc_load_progress(doc, file_path=file_path, total_bytes=doc.get('background_bytes_total', 0))
         frame_id = str(doc['frame'])
         load_token = str(doc.get('background_load_token') or '')
@@ -3892,13 +4007,9 @@ class HexX:
         if safe_chunk:
             text.insert(tk.END, safe_chunk)
             text.edit_modified(False)
-            if not doc.get('background_index_active'):
-                self.append_progressive_minimap_chunk(doc, safe_chunk, finalize=False)
             doc['pending_insert_batch_count'] = int(doc.get('pending_insert_batch_count', 0) or 0) + 1
             batch_count = int(doc.get('pending_insert_batch_count', 0) or 0)
             update_status_now = batch_count == 1 or batch_count % 8 == 0
-            if not doc.get('background_index_active') and (batch_count == 1 or batch_count % 16 == 0):
-                self.refresh_minimap(doc)
         self.update_doc_load_progress(doc)
         if update_status_now and str(doc['frame']) == self.notebook.select():
             self.update_status()
@@ -3923,13 +4034,6 @@ class HexX:
             except (TypeError, ValueError):
                 pass
 
-        if doc.get('background_index_active'):
-            if doc.get('minimap_model') is None:
-                doc['minimap_model'] = self.create_minimap_model(max(1, int(doc.get('background_lines_loaded', 1) or 1)), 1, [0], complete=False)
-                doc['minimap_model_dirty'] = False
-        else:
-            self.append_progressive_minimap_chunk(doc, '', finalize=True)
-            self.refresh_minimap(doc)
         try:
             doc['total_file_lines'] = max(1, int(text.index('end-1c').split('.')[0]))
         except (tk.TclError, TypeError, ValueError):
@@ -3960,7 +4064,6 @@ class HexX:
         self.invalidate_fold_regions(doc)
         self.schedule_diagnostics(doc)
         self.update_line_number_gutter(doc)
-        self.schedule_minimap_refresh(doc)
         self.refresh_tab_title(doc['frame'])
         if self.compare_active and self.compare_source_tab == str(doc['frame']):
             self.refresh_compare_panel()
@@ -3997,7 +4100,6 @@ class HexX:
             def worker():
                 try:
                     line_starts, indexed_file_size = self.build_line_index_background(file_path)
-                    minimap_model = self.build_minimap_model_from_line_starts(line_starts, indexed_file_size)
                     self.queue_background_file_result({
                         'kind': 'virtual',
                         'tab_id': frame_id,
@@ -4005,7 +4107,6 @@ class HexX:
                         'file_path': file_path,
                         'line_starts': line_starts,
                         'file_size_bytes': indexed_file_size,
-                        'minimap_model': minimap_model,
                     })
                 except Exception as exc:
                     self.queue_background_file_result({
@@ -4043,7 +4144,6 @@ class HexX:
             def fallback_worker():
                 try:
                     line_starts, indexed_file_size = self.build_line_index_background(file_path)
-                    minimap_model = self.build_minimap_model_from_line_starts(line_starts, indexed_file_size)
                     self.queue_background_file_result({
                         'kind': 'virtual',
                         'tab_id': frame_id,
@@ -4051,7 +4151,6 @@ class HexX:
                         'file_path': file_path,
                         'line_starts': line_starts,
                         'file_size_bytes': indexed_file_size,
-                        'minimap_model': minimap_model,
                     })
                 except Exception as inner_exc:
                     self.queue_background_file_result({
@@ -4095,7 +4194,6 @@ class HexX:
                     line_starts.extend(completed_results.get(range_index, []))
                 if not line_starts:
                     line_starts = [0]
-                minimap_model = self.build_minimap_model_from_line_starts(line_starts, current_file_size)
                 self.queue_background_file_result({
                     'kind': 'virtual',
                     'tab_id': current_tab_id,
@@ -4103,7 +4201,6 @@ class HexX:
                     'file_path': current_file_path,
                     'line_starts': line_starts,
                     'file_size_bytes': current_file_size,
-                    'minimap_model': minimap_model,
                 })
             except Exception as exc:
                 self.queue_background_file_result({
@@ -4120,12 +4217,9 @@ class HexX:
         doc['pending_insert_content'] = content
         doc['pending_insert_offset'] = 0
         doc['pending_insert_batch_count'] = 0
-        self.invalidate_minimap_cache(doc)
-        self.start_progressive_minimap_build(doc, total_lines_hint)
         doc['diagnostics'] = []
         doc['text'].configure(state='normal')
         doc['text'].delete('1.0', tk.END)
-        self.refresh_minimap(doc)
         self.continue_background_text_insert(doc)
 
     def continue_background_text_insert(self, doc):
@@ -4139,15 +4233,8 @@ class HexX:
         if next_offset > offset:
             chunk_text = content[offset:next_offset]
             text.insert(tk.END, chunk_text)
-            self.append_progressive_minimap_chunk(doc, chunk_text, finalize=(next_offset >= len(content)))
             doc['pending_insert_offset'] = next_offset
             doc['pending_insert_batch_count'] = int(doc.get('pending_insert_batch_count', 0) or 0) + 1
-            batch_count = int(doc.get('pending_insert_batch_count', 0) or 0)
-            if batch_count == 1 or batch_count % 4 == 0 or next_offset >= len(content):
-                self.refresh_minimap(doc)
-        elif next_offset >= len(content):
-            self.append_progressive_minimap_chunk(doc, '', finalize=True)
-            self.refresh_minimap(doc)
         if next_offset < len(content):
             self.root.after(1, lambda current=doc: self.continue_background_text_insert(current))
             return
@@ -4177,7 +4264,6 @@ class HexX:
         self.invalidate_fold_regions(doc)
         self.schedule_diagnostics(doc)
         self.update_line_number_gutter(doc)
-        self.schedule_minimap_refresh(doc)
         self.refresh_tab_title(doc['frame'])
         if self.compare_active and self.compare_source_tab == str(doc['frame']):
             self.refresh_compare_panel()
@@ -4215,7 +4301,6 @@ class HexX:
         )
         self.cancel_doc_background_index(doc)
         self.reset_virtual_backing_store(doc, remove_files=True)
-        self.invalidate_minimap_cache(doc)
         if doc.get('background_open_new_tab'):
             try:
                 self.notebook.forget(doc['frame'])
@@ -4313,16 +4398,10 @@ class HexX:
                 doc['background_index_token'] = None
             total_lines = max(1, int(result.get('total_lines') or doc.get('background_lines_loaded', 1) or 1))
             doc['background_lines_loaded'] = max(total_lines, int(doc.get('background_lines_loaded', 1) or 1))
-            sample_step = max(1, int(result.get('sample_step') or max(1, total_lines // self.minimap_max_segments)))
-            segment_max_lengths = list(result.get('segment_max_lengths') or [0])
-            doc['minimap_progressive_state'] = None
-            doc['minimap_model'] = self.create_minimap_model(total_lines, sample_step, segment_max_lengths, complete=True)
-            doc['minimap_model_dirty'] = False
             if not doc.get('background_loading'):
                 doc['total_file_lines'] = total_lines
                 doc['window_end_line'] = max(int(doc.get('window_end_line', 1) or 1), total_lines)
             self.update_doc_load_progress(doc, line_count=doc.get('background_lines_loaded'))
-            self.schedule_minimap_refresh(doc)
             if str(doc['frame']) == self.notebook.select():
                 self.update_status()
             return
@@ -4335,9 +4414,6 @@ class HexX:
             doc['file_size_bytes'] = int(result.get('file_size_bytes') or 0)
             doc['total_file_lines'] = max(1, len(doc['line_starts']))
             self.initialize_virtual_backing_store(doc)
-            doc['minimap_model'] = result.get('minimap_model')
-            doc['minimap_model_dirty'] = not bool(doc.get('minimap_model'))
-            doc['minimap_progressive_state'] = None
             doc['background_loading'] = False
             doc['background_load_kind'] = None
             doc['background_load_file_path'] = None
@@ -4870,8 +4946,6 @@ class HexX:
             self.build_virtual_window_cache_key(doc, start_byte, new_end_byte),
             replacement_text
         )
-        doc['minimap_model'] = None
-        doc['minimap_model_dirty'] = True
         doc['symbol_cache_signature'] = None
         doc['symbol_cache'] = None
         try:
@@ -5496,7 +5570,6 @@ class HexX:
             'markdown_preview_enabled': bool(session.get('markdown_preview_enabled', False)),
             'sync_page_navigation_enabled': bool(session.get('sync_page_navigation_enabled', False)),
             'edit_with_shell_enabled': bool(session.get('edit_with_shell_enabled', False)),
-            'minimap_enabled': bool(session.get('minimap_enabled', True)),
             'breadcrumbs_enabled': bool(session.get('breadcrumbs_enabled', True)),
             'diagnostics_enabled': bool(session.get('diagnostics_enabled', True)),
             'autosave_enabled': bool(session.get('autosave_enabled', True)),
@@ -6031,11 +6104,9 @@ class HexX:
         for doc in self.documents.values():
             doc['text'].configure(font=font_tuple)
             self.update_line_number_gutter(doc)
-            self.schedule_minimap_refresh(doc)
         if self.compare_view:
             self.compare_view['text'].configure(font=font_tuple)
             self.update_line_number_gutter(self.compare_view)
-            self.schedule_minimap_refresh(self.compare_view)
         if self.markdown_preview_enabled.get():
             self.schedule_markdown_preview_refresh()
 
@@ -6065,10 +6136,8 @@ class HexX:
         wrap_mode = tk.WORD if self.word_wrap_enabled.get() else tk.NONE
         for doc in self.documents.values():
             doc['text'].configure(wrap=wrap_mode)
-            self.schedule_minimap_refresh(doc)
         if self.compare_view:
             self.compare_view['text'].configure(wrap=wrap_mode)
-            self.schedule_minimap_refresh(self.compare_view)
         if self.markdown_preview_enabled.get():
             self.schedule_markdown_preview_refresh()
 
@@ -6752,7 +6821,13 @@ class HexX:
 
         try:
             gutter_font = self.get_gutter_font()
-            desired_gutter_width = max(72, gutter_font.measure('9' * len(str(max_line_number))) + 48)
+            if doc.get('hex_mode'):
+                data_length = max(0, len(self.get_hex_data_bytearray(doc)))
+                max_offset = max(0, ((max(1, data_length) - 1) // self.hex_bytes_per_row) * self.hex_bytes_per_row)
+                gutter_sample = f"{max_offset:08X}h"
+            else:
+                gutter_sample = str(max_line_number)
+            desired_gutter_width = max(72, gutter_font.measure(gutter_sample) + 48)
             current_gutter_width = int(gutter.cget('width'))
             if current_gutter_width != desired_gutter_width:
                 gutter.configure(width=desired_gutter_width)
@@ -7439,10 +7514,10 @@ class HexX:
                     ':edit-with-hex-x on|off',
                     ':sound on|off',
                     ':status-bar on|off',
-                    ':numbered-lines on|off',
-                    ':minimap on|off',
+                    ':offset-gutter on|off',
                     ':breadcrumbs on|off',
                     ':autosave on|off',
+                    ':language [list|code]',
                     ':sync-page-navigation on|off',
                 ],
             ),
@@ -7896,7 +7971,7 @@ class HexX:
             'save-encrypted', 'save-as-encrypted', 'replace', 'symbols',
             'project-symbols', 'fold', 'fold-all', 'collapse-all', 'unfold-all',
             'expand-all', 'lint', 'date', 'insert-date', 'time-date', 'datetime',
-            'insert-time-date', 'language', 'syntax-mode', 'mode', 'preview',
+            'insert-time-date', 'syntax-mode', 'mode', 'preview',
             'markdown-preview', 'autocomplete', 'auto-pair',
             'compare-multi-edit', 'diagnostics', 'word-wrap'
         }
@@ -8069,12 +8144,12 @@ class HexX:
             return "No compare panel is open.\n"
         toggle_commands = {
             'autosave': (self.autosave_enabled, self.save_session, self.tr('menu.settings.autosave', 'Auto Save')),
-            'minimap': (self.minimap_enabled, self.toggle_minimap, self.tr('menu.settings.minimap', 'Minimap')),
             'edit-with-hex-x': (self.edit_with_shell_enabled, self.toggle_edit_with_shell, self.tr('menu.view.edit_with_hexx', 'Edit with Hex-X')),
             'edit-with-shell': (self.edit_with_shell_enabled, self.toggle_edit_with_shell, self.tr('menu.view.edit_with_hexx', 'Edit with Hex-X')),
             'sound': (self.sound_enabled, self.toggle_sound, self.tr('menu.view.sound', 'Sound')),
             'status-bar': (self.status_bar_enabled, self.toggle_status_bar, self.tr('menu.view.status_bar', 'Status Bar')),
-            'numbered-lines': (self.numbered_lines_enabled, self.toggle_numbered_lines, self.tr('menu.view.numbered_lines', 'Numbered Lines')),
+            'offset-gutter': (self.numbered_lines_enabled, self.toggle_numbered_lines, self.tr('menu.view.numbered_lines', 'Offset Gutter')),
+            'numbered-lines': (self.numbered_lines_enabled, self.toggle_numbered_lines, self.tr('menu.view.numbered_lines', 'Offset Gutter')),
             'breadcrumbs': (self.breadcrumbs_enabled, self.toggle_breadcrumbs, self.tr('menu.settings.breadcrumbs', 'Breadcrumbs')),
             'sync-page-navigation': (self.sync_page_navigation_enabled, self.save_session, self.tr('menu.edit.sync_page_navigation', 'Sync PgUp/PgDn in Compare')),
         }
@@ -8170,286 +8245,6 @@ class HexX:
         self.command_runner_thread = threading.Thread(target=worker, name='HexXCommandPanel', daemon=True)
         self.command_runner_thread.start()
         self.append_command_output(f"$ {command_text}\n[running in {cwd}]\n")
-        return "break"
-
-    def toggle_minimap(self):
-        show_minimap = self.minimap_enabled.get()
-        for doc in self.documents.values():
-            minimap = doc.get('minimap')
-            if not minimap:
-                continue
-            if show_minimap:
-                minimap.grid()
-                self.schedule_minimap_refresh(doc)
-            else:
-                minimap.grid_remove()
-        if self.compare_view:
-            minimap = self.compare_view.get('minimap')
-            if minimap:
-                if show_minimap:
-                    minimap.grid()
-                    self.schedule_minimap_refresh(self.compare_view)
-                else:
-                    minimap.grid_remove()
-        self.save_session()
-        return "break"
-
-    def schedule_minimap_refresh(self, doc):
-        if not doc:
-            return
-        existing_job = doc.get('minimap_job')
-        if existing_job:
-            try:
-                self.root.after_cancel(existing_job)
-            except tk.TclError:
-                pass
-        try:
-            doc['minimap_job'] = self.root.after(80, lambda current=doc: self.refresh_minimap(current))
-        except tk.TclError:
-            doc['minimap_job'] = None
-
-    def invalidate_minimap_cache(self, doc, clear_progress=True):
-        if not doc:
-            return
-        doc['minimap_model'] = None
-        doc['minimap_model_dirty'] = True
-        if clear_progress:
-            doc['minimap_progressive_state'] = None
-
-    def create_minimap_model(self, total_lines, sample_step, segment_max_lengths, complete=True):
-        total_lines = max(1, int(total_lines or 1))
-        sample_step = max(1, int(sample_step or 1))
-        segment_count = max(1, (total_lines + sample_step - 1) // sample_step)
-        segments = []
-        normalized_lengths = []
-        for index in range(segment_count):
-            start_line = (index * sample_step) + 1
-            end_line = min(total_lines, start_line + sample_step - 1)
-            segment_length = 0
-            if index < len(segment_max_lengths):
-                try:
-                    segment_length = max(0, int(segment_max_lengths[index] or 0))
-                except (TypeError, ValueError):
-                    segment_length = 0
-            normalized_lengths.append(segment_length)
-            segments.append({
-                'start_line': start_line,
-                'end_line': end_line,
-                'length': segment_length,
-            })
-        return {
-            'total_lines': total_lines,
-            'sample_step': sample_step,
-            'segments': segments,
-            'max_length': max(1, max(normalized_lengths or [0])),
-            'complete': bool(complete),
-        }
-
-    def build_minimap_model_from_content(self, content, total_lines=None):
-        content = content if isinstance(content, str) else ''
-        line_lengths = [len(line) for line in content.split('\n')]
-        total_lines = max(1, int(total_lines or len(line_lengths) or 1))
-        if len(line_lengths) < total_lines:
-            line_lengths.extend([0] * (total_lines - len(line_lengths)))
-        elif len(line_lengths) > total_lines:
-            total_lines = len(line_lengths)
-        sample_step = max(1, total_lines // self.minimap_max_segments)
-        segment_count = max(1, (total_lines + sample_step - 1) // sample_step)
-        segment_max_lengths = [0] * segment_count
-        for line_number in range(1, total_lines + 1):
-            segment_index = min(segment_count - 1, (line_number - 1) // sample_step)
-            segment_max_lengths[segment_index] = max(segment_max_lengths[segment_index], line_lengths[line_number - 1])
-        return self.create_minimap_model(total_lines, sample_step, segment_max_lengths, complete=True)
-
-    def build_minimap_model_from_line_starts(self, line_starts, file_size):
-        normalized_starts = list(line_starts or [0])
-        total_lines = max(1, len(normalized_starts))
-        sample_step = max(1, total_lines // self.minimap_max_segments)
-        segment_count = max(1, (total_lines + sample_step - 1) // sample_step)
-        segment_max_lengths = [0] * segment_count
-        safe_file_size = max(0, int(file_size or 0))
-        for line_index in range(total_lines):
-            start_byte = normalized_starts[line_index]
-            if line_index + 1 < len(normalized_starts):
-                end_byte = normalized_starts[line_index + 1]
-            else:
-                end_byte = safe_file_size
-            line_length = max(0, int(end_byte - start_byte))
-            segment_index = min(segment_count - 1, line_index // sample_step)
-            segment_max_lengths[segment_index] = max(segment_max_lengths[segment_index], line_length)
-        return self.create_minimap_model(total_lines, sample_step, segment_max_lengths, complete=True)
-
-    def start_progressive_minimap_build(self, doc, total_lines_hint=None):
-        if not doc:
-            return
-        total_lines = max(1, int(total_lines_hint or 1))
-        sample_step = max(1, total_lines // self.minimap_max_segments)
-        segment_count = max(1, (total_lines + sample_step - 1) // sample_step)
-        doc['minimap_progressive_state'] = {
-            'total_lines': total_lines,
-            'sample_step': sample_step,
-            'segment_max_lengths': [0] * segment_count,
-            'processed_lines': 0,
-            'remainder': '',
-            'max_length': 1,
-        }
-        doc['minimap_model'] = self.create_minimap_model(total_lines, sample_step, [0] * segment_count, complete=False)
-        doc['minimap_model_dirty'] = False
-
-    def append_progressive_minimap_chunk(self, doc, chunk_text, finalize=False):
-        if not doc:
-            return
-        state = doc.get('minimap_progressive_state')
-        if not state:
-            return
-        buffer = f"{state.get('remainder', '')}{chunk_text or ''}"
-        if finalize:
-            lines = buffer.split('\n')
-            state['remainder'] = ''
-        else:
-            lines = buffer.split('\n')
-            state['remainder'] = lines.pop() if lines else ''
-        total_lines = max(1, int(state.get('total_lines', 1) or 1))
-        sample_step = max(1, int(state.get('sample_step', 1) or 1))
-        segment_max_lengths = state.get('segment_max_lengths') or []
-        processed_lines = int(state.get('processed_lines', 0) or 0)
-        max_length = max(1, int(state.get('max_length', 1) or 1))
-        for line in lines:
-            if processed_lines >= total_lines:
-                break
-            processed_lines += 1
-            segment_index = min(len(segment_max_lengths) - 1, (processed_lines - 1) // sample_step)
-            line_length = len(line)
-            if segment_index >= 0:
-                segment_max_lengths[segment_index] = max(segment_max_lengths[segment_index], line_length)
-            max_length = max(max_length, line_length)
-        if finalize and processed_lines < total_lines:
-            processed_lines = total_lines
-        state['processed_lines'] = processed_lines
-        state['max_length'] = max_length
-        doc['minimap_model'] = self.create_minimap_model(total_lines, sample_step, segment_max_lengths, complete=finalize)
-        doc['minimap_model_dirty'] = False
-        if finalize:
-            doc['minimap_progressive_state'] = None
-
-    def draw_minimap_segments(self, minimap, width, height, model):
-        if not model:
-            return
-        total_lines = max(1, int(model.get('total_lines', 1) or 1))
-        max_length = max(1, int(model.get('max_length', 1) or 1))
-        for segment in model.get('segments', []):
-            segment_length = max(0, int(segment.get('length', 0) or 0))
-            if segment_length <= 0:
-                continue
-            start_line = max(1, int(segment.get('start_line', 1) or 1))
-            end_line = max(start_line, min(total_lines, int(segment.get('end_line', start_line) or start_line)))
-            y0 = int((start_line - 1) / total_lines * height)
-            y1 = max(y0 + 1, int(end_line / total_lines * height))
-            bar_width = max(2, int((segment_length / max_length) * max(4, width - 6)))
-            minimap.create_rectangle(2, y0, min(width - 2, 2 + bar_width), y1, fill='#4f708f', outline='')
-
-    def draw_minimap_overlays(self, doc, minimap, text, width, height, total_lines):
-        diagnostics = doc.get('diagnostics', [])
-        for diagnostic in diagnostics:
-            line_number = max(1, int(diagnostic.get('line', 1)))
-            y = int((line_number - 1) / total_lines * height)
-            marker_color = '#ff6b6b' if diagnostic.get('severity') == 'error' else '#ffcc66'
-            minimap.create_rectangle(width - 4, y, width - 1, min(height, y + 3), fill=marker_color, outline='')
-
-        try:
-            top_line = int(text.index('@0,0').split('.')[0])
-            bottom_line = int(text.index(f'@0,{max(1, text.winfo_height())}').split('.')[0])
-        except (tk.TclError, ValueError):
-            top_line = 1
-            bottom_line = min(total_lines, max(1, total_lines // 5))
-        if doc.get('virtual_mode'):
-            window_start_line = max(1, int(doc.get('window_start_line', 1) or 1))
-            top_line = max(1, min(total_lines, window_start_line + top_line - 1))
-            bottom_line = max(top_line, min(total_lines, window_start_line + bottom_line - 1))
-        view_y0 = int((top_line - 1) / total_lines * height)
-        view_y1 = max(view_y0 + 6, int(bottom_line / total_lines * height))
-        minimap.create_rectangle(0, view_y0, width, view_y1, outline='#9ecbff', width=1)
-
-    def refresh_minimap(self, doc):
-        if not doc:
-            return
-        doc['minimap_job'] = None
-        if not self.minimap_enabled.get():
-            return
-        minimap = doc.get('minimap')
-        text = doc.get('text')
-        if not minimap or not text:
-            return
-        try:
-            if not minimap.winfo_exists() or not text.winfo_exists() or not minimap.winfo_ismapped():
-                return
-        except tk.TclError:
-            return
-
-        minimap.delete('all')
-
-        width = max(1, minimap.winfo_width())
-        height = max(1, minimap.winfo_height())
-        if height <= 2:
-            height = max(120, minimap.winfo_reqheight())
-        model = doc.get('minimap_model')
-        if not model or doc.get('minimap_model_dirty', True):
-            if doc.get('virtual_mode') and self.is_virtual_index_ready(doc):
-                model = self.build_minimap_model_from_line_starts(
-                    doc.get('line_starts'),
-                    doc.get('file_size_bytes', 0)
-                )
-            else:
-                try:
-                    content = text.get('1.0', 'end-1c')
-                    total_lines = max(1, int(text.index('end-1c').split('.')[0]))
-                except tk.TclError:
-                    return
-                model = self.build_minimap_model_from_content(content, total_lines=total_lines)
-            doc['minimap_model'] = model
-            doc['minimap_model_dirty'] = False
-        self.draw_minimap_segments(minimap, width, height, model)
-        if model.get('complete', True):
-            self.draw_minimap_overlays(
-                doc,
-                minimap,
-                text,
-                width,
-                height,
-                max(1, int(model.get('total_lines', 1) or 1))
-            )
-
-    def on_minimap_click(self, event, doc):
-        if not self.minimap_enabled.get() or not doc:
-            return "break"
-        text = doc.get('text')
-        minimap = doc.get('minimap')
-        if not text or not minimap:
-            return "break"
-        try:
-            if doc.get('virtual_mode') and self.is_virtual_index_ready(doc):
-                total_lines = max(1, int(doc.get('total_file_lines', 1) or 1))
-            else:
-                total_lines = max(1, int(text.index('end-1c').split('.')[0]))
-            height = max(1, minimap.winfo_height())
-            target_ratio = min(1.0, max(0.0, float(event.y) / float(height)))
-            target_line = max(1, min(total_lines, int(target_ratio * total_lines) + 1))
-            if doc.get('virtual_mode') and self.is_virtual_index_ready(doc):
-                self.load_virtual_window(doc, target_line)
-            else:
-                text.mark_set(tk.INSERT, f'{target_line}.0')
-                text.see(f'{target_line}.0')
-            self.set_last_active_editor_widget(text)
-        except (tk.TclError, ValueError, ZeroDivisionError):
-            return "break"
-        target_doc = self.get_doc_for_text_widget(text)
-        if target_doc:
-            self.remember_doc_view_state(target_doc)
-            self.update_line_number_gutter(target_doc)
-        elif doc is self.compare_view:
-            self.update_line_number_gutter(doc)
-        self.schedule_minimap_refresh(doc)
-        self.update_status()
         return "break"
 
     def build_breadcrumb_text(self, doc, text_widget=None):
@@ -9185,7 +8980,6 @@ class HexX:
             if doc:
                 self.remember_doc_view_state(doc)
                 self.update_line_number_gutter(doc)
-                self.schedule_minimap_refresh(doc)
         self.update_status()
         return "break"
 
@@ -9220,7 +9014,6 @@ class HexX:
             if doc:
                 self.remember_doc_view_state(doc)
                 self.update_line_number_gutter(doc)
-                self.schedule_minimap_refresh(doc)
         self.update_status()
         return "break"
 
@@ -9556,7 +9349,6 @@ class HexX:
             if doc:
                 self.remember_doc_view_state(doc)
                 self.update_line_number_gutter(doc)
-                self.schedule_minimap_refresh(doc)
         self.update_status()
         return "break"
 
@@ -9572,7 +9364,6 @@ class HexX:
             if doc:
                 self.remember_doc_view_state(doc)
                 self.update_line_number_gutter(doc)
-                self.schedule_minimap_refresh(doc)
         self.update_status()
         return "break"
 
@@ -10690,11 +10481,10 @@ class HexX:
             ('edit_with_hexx', {'section': t('menu.settings', 'Settings'), 'label': t('menu.view.edit_with_hexx', 'Edit with Hex-X'), 'default': t('accel.edit_with_hexx', 'Ctrl+Alt+X'), 'handler': lambda event=None: self.toggle_boolean_hotkey(self.edit_with_shell_enabled, self.toggle_edit_with_shell)}),
             ('sound', {'section': t('menu.settings', 'Settings'), 'label': t('menu.view.sound', 'Sound'), 'default': t('accel.sound', 'Ctrl+Alt+Shift+M'), 'handler': lambda event=None: self.toggle_boolean_hotkey(self.sound_enabled, self.toggle_sound)}),
             ('status_bar', {'section': t('menu.settings', 'Settings'), 'label': t('menu.view.status_bar', 'Status Bar'), 'default': t('accel.status_bar', 'Ctrl+B'), 'handler': lambda event=None: self.toggle_boolean_hotkey(self.status_bar_enabled, self.toggle_status_bar)}),
-            ('numbered_lines', {'section': t('menu.settings', 'Settings'), 'label': t('menu.view.numbered_lines', 'Numbered Lines'), 'default': t('accel.numbered_lines', 'Ctrl+Alt+L'), 'handler': lambda event=None: self.toggle_boolean_hotkey(self.numbered_lines_enabled, self.toggle_numbered_lines)}),
+            ('numbered_lines', {'section': t('menu.settings', 'Settings'), 'label': t('menu.view.numbered_lines', 'Offset Gutter'), 'default': t('accel.numbered_lines', 'Ctrl+Alt+L'), 'handler': lambda event=None: self.toggle_boolean_hotkey(self.numbered_lines_enabled, self.toggle_numbered_lines)}),
             ('autocomplete', {'section': t('menu.settings', 'Settings'), 'label': t('menu.view.autocomplete', 'Autocomplete'), 'default': t('accel.autocomplete', 'Ctrl+Alt+A'), 'handler': lambda event=None: self.toggle_boolean_hotkey(self.autocomplete_enabled, self.toggle_autocomplete)}),
             ('auto_pair', {'section': t('menu.settings', 'Settings'), 'label': t('menu.settings.auto_pair', 'Auto Pair Brackets/Quotes'), 'default': t('accel.auto_pair', 'Ctrl+Alt+Shift+P'), 'handler': lambda event=None: self.toggle_boolean_hotkey(self.auto_pair_enabled, self.save_session)}),
             ('compare_multi_edit', {'section': t('menu.settings', 'Settings'), 'label': t('menu.settings.compare_multi_edit', 'Compare Multi-Edit'), 'default': t('accel.compare_multi_edit', 'Ctrl+Alt+M'), 'handler': lambda event=None: self.toggle_boolean_hotkey(self.compare_multi_edit_enabled, self.save_session)}),
-            ('minimap', {'section': t('menu.settings', 'Settings'), 'label': t('menu.settings.minimap', 'Minimap'), 'default': t('accel.minimap', 'Ctrl+Alt+I'), 'handler': lambda event=None: self.toggle_boolean_hotkey(self.minimap_enabled, self.toggle_minimap)}),
             ('breadcrumbs', {'section': t('menu.settings', 'Settings'), 'label': t('menu.settings.breadcrumbs', 'Breadcrumbs'), 'default': t('accel.breadcrumbs', 'Ctrl+Alt+B'), 'handler': lambda event=None: self.toggle_boolean_hotkey(self.breadcrumbs_enabled, self.toggle_breadcrumbs)}),
             ('diagnostics', {'section': t('menu.settings', 'Settings'), 'label': t('menu.settings.diagnostics', 'Diagnostics'), 'default': t('accel.diagnostics', 'Ctrl+Alt+D'), 'handler': lambda event=None: self.toggle_boolean_hotkey(self.diagnostics_enabled, self.toggle_diagnostics)}),
             ('autosave', {'section': t('menu.settings', 'Settings'), 'label': t('menu.settings.autosave', 'Auto Save'), 'default': t('accel.autosave', 'Ctrl+Alt+Shift+A'), 'handler': lambda event=None: self.toggle_boolean_hotkey(self.autosave_enabled, self.save_session)}),
@@ -10711,7 +10501,7 @@ class HexX:
                 'find_previous', 'command_panel', 'font', 'fullscreen', 'switch_tab',
                 'currently_editing', 'cycle_notes', 'goto_line', 'top_of_document',
                 'bottom_of_document', 'create_theme', 'compare_tabs', 'zoom_in', 'zoom_out',
-                'edit_with_hexx', 'sound', 'status_bar', 'numbered_lines', 'minimap',
+                'edit_with_hexx', 'sound', 'status_bar', 'numbered_lines',
                 'breadcrumbs', 'autosave', 'sync_page_navigation', 'hotkey_settings',
                 'help_contents', 'about'
             }
@@ -12130,21 +11920,8 @@ class HexX:
         )
         self.compare_text.grid(row=0, column=1, sticky='nsew')
 
-        self.compare_minimap = tk.Canvas(
-            compare_body,
-            width=self.minimap_width,
-            bg='#11161d',
-            highlightthickness=0,
-            borderwidth=0,
-            relief='flat',
-            cursor='hand2'
-        )
-        self.compare_minimap.grid(row=0, column=2, sticky='ns')
-        if not self.minimap_enabled.get():
-            self.compare_minimap.grid_remove()
-
         compare_v_scroll = ttk.Scrollbar(compare_body, orient='vertical', command=self.on_compare_vertical_scroll)
-        compare_v_scroll.grid(row=0, column=3, sticky='ns')
+        compare_v_scroll.grid(row=0, column=2, sticky='ns')
         compare_h_scroll = ttk.Scrollbar(compare_body, orient='horizontal', command=self.compare_text.xview)
         compare_h_scroll.grid(row=1, column=1, sticky='ew')
         self.compare_text.config(
@@ -12183,7 +11960,6 @@ class HexX:
             'frame': self.compare_container,
             'text': self.compare_text,
             'line_numbers': self.compare_line_numbers,
-            'minimap': self.compare_minimap,
             'notes': {},
             'percolator': None,
             'colorizer': None,
@@ -12212,10 +11988,6 @@ class HexX:
             'gutter_fold_hitboxes': [],
             'diagnostic_job': None,
             'diagnostics': [],
-            'minimap_job': None,
-            'minimap_model': None,
-            'minimap_model_dirty': True,
-            'minimap_progressive_state': None,
             'symbol_cache': None,
             'symbol_cache_signature': None,
             'mirror_guard': False,
@@ -12237,8 +12009,6 @@ class HexX:
             'virtual_hot_chunk_cache': OrderedDict(),
             'virtual_cold_chunk_cache': OrderedDict(),
         }
-        self.compare_minimap.bind('<Button-1>', lambda e: self.on_minimap_click(e, self.compare_view))
-        self.compare_minimap.bind('<B1-Motion>', lambda e: self.on_minimap_click(e, self.compare_view))
         self.compare_line_numbers.bind('<Button-1>', lambda e: self.handle_gutter_click(e, target_doc=self.compare_view))
         self.compare_line_numbers.bind('<Motion>', lambda e: self.update_gutter_cursor(e, target_doc=self.compare_view))
         self.compare_line_numbers.bind('<Leave>', self.clear_gutter_cursor)
@@ -12313,7 +12083,6 @@ class HexX:
         tab_frame.grid_rowconfigure(0, weight=1)
         tab_frame.grid_columnconfigure(1, weight=1)
         tab_frame.grid_columnconfigure(2, weight=0)
-        tab_frame.grid_columnconfigure(3, weight=0)
 
         line_numbers = self.create_line_number_gutter(tab_frame, tab_id=tab_frame)
         line_numbers.grid(row=0, column=0, sticky='ns')
@@ -12333,23 +12102,8 @@ class HexX:
         )
         text.grid(row=0, column=1, sticky='nsew')
 
-        minimap = tk.Canvas(
-            tab_frame,
-            width=self.minimap_width,
-            bg='#11161d',
-            highlightthickness=0,
-            borderwidth=0,
-            relief='flat',
-            cursor='hand2'
-        )
-        minimap.grid(row=0, column=2, sticky='ns')
-        minimap.bind('<Button-1>', lambda e, frame=tab_frame: self.on_minimap_click(e, self.documents.get(str(frame))))
-        minimap.bind('<B1-Motion>', lambda e, frame=tab_frame: self.on_minimap_click(e, self.documents.get(str(frame))))
-        if not self.minimap_enabled.get():
-            minimap.grid_remove()
-
         v_scroll = ttk.Scrollbar(tab_frame, orient='vertical')
-        v_scroll.grid(row=0, column=3, sticky='ns')
+        v_scroll.grid(row=0, column=2, sticky='ns')
         h_scroll = ttk.Scrollbar(tab_frame, orient='horizontal', command=text.xview)
         h_scroll.grid(row=1, column=1, sticky='ew')
         v_scroll.configure(command=lambda *args, frame=tab_frame: self.on_vertical_scroll(frame, *args))
@@ -12402,7 +12156,6 @@ class HexX:
             'frame': tab_frame,
             'text': text,
             'line_numbers': line_numbers,
-            'minimap': minimap,
             'v_scroll': v_scroll,
             'file_path': file_path,
             'untitled_name': self.next_untitled_name(),
@@ -12469,10 +12222,6 @@ class HexX:
             'gutter_fold_hitboxes': [],
             'diagnostic_job': None,
             'diagnostics': [],
-            'minimap_job': None,
-            'minimap_model': None,
-            'minimap_model_dirty': True,
-            'minimap_progressive_state': None,
             'autosave_job': None,
             'symbol_cache': None,
             'symbol_cache_signature': None,
@@ -13333,7 +13082,6 @@ class HexX:
         else:
             self.apply_fold_region(doc, region)
         self.update_line_number_gutter(doc)
-        self.schedule_minimap_refresh(doc)
         self.update_status()
         return True
 
@@ -13343,7 +13091,6 @@ class HexX:
             return "break"
         self.clear_fold_tags(target_doc)
         self.update_line_number_gutter(target_doc)
-        self.schedule_minimap_refresh(target_doc)
         return "break"
 
     def collapse_all_folds(self, event=None, doc=None):
@@ -13355,7 +13102,6 @@ class HexX:
         for region in regions:
             self.apply_fold_region(target_doc, region)
         self.update_line_number_gutter(target_doc)
-        self.schedule_minimap_refresh(target_doc)
         return "break"
 
     def toggle_fold_at_cursor(self, event=None):
@@ -13457,7 +13203,6 @@ class HexX:
         except tk.TclError:
             return
         doc['diagnostics'] = []
-        self.schedule_minimap_refresh(doc)
 
     def toggle_diagnostics(self):
         if not self.diagnostics_enabled.get():
@@ -13499,10 +13244,8 @@ class HexX:
             return []
         self.clear_diagnostics(doc)
         if not self.diagnostics_enabled.get() and not force:
-            self.schedule_minimap_refresh(doc)
             return []
         if doc.get('hex_mode') or doc.get('preview_mode') or doc.get('virtual_mode') or doc.get('large_file_mode'):
-            self.schedule_minimap_refresh(doc)
             return []
 
         try:
@@ -13570,7 +13313,6 @@ class HexX:
             except tk.TclError:
                 continue
         self.raise_editor_overlay_tags(text_widget)
-        self.schedule_minimap_refresh(doc)
         return doc['diagnostics']
 
     def set_large_file_mode(self, doc, enabled):
@@ -14263,7 +14005,6 @@ class HexX:
             doc['last_virtual_col'] = max(0, min(current_col, line_length))
             self.update_vertical_scrollbar(doc['frame'], None, None, None)
             self.update_line_number_gutter(doc)
-            self.schedule_minimap_refresh(doc)
             return True
 
         content = self.read_virtual_line_window(doc, start_line, end_line)
@@ -14292,7 +14033,6 @@ class HexX:
         doc['last_virtual_col'] = max(0, min(current_col, line_length))
         self.update_vertical_scrollbar(doc['frame'], None, None, None)
         self.update_line_number_gutter(doc)
-        self.schedule_minimap_refresh(doc)
         return True
 
     def ensure_virtual_line_visible(self, doc, target_line=None):
@@ -14342,7 +14082,6 @@ class HexX:
             if event_type in {'4', '5', '6', 'Motion', 'ButtonPress', 'ButtonRelease'}:
                 self.hide_autocomplete_popup()
             self.update_line_number_gutter(doc)
-            self.schedule_minimap_refresh(doc)
             self.update_status()
             return
         if self.is_shift_selection_navigation(event):
@@ -14355,7 +14094,6 @@ class HexX:
             self.schedule_text_theme_effect(doc)
         self.update_bracket_match_highlight(doc)
         self.update_line_number_gutter(doc)
-        self.schedule_minimap_refresh(doc)
         self.update_status()
 
     def get_auto_indent_unit(self, line_prefix):
@@ -14944,7 +14682,6 @@ class HexX:
             self.schedule_diagnostics(compare_doc)
         self.update_bracket_match_highlight(compare_doc)
         self.update_line_number_gutter(compare_doc)
-        self.schedule_minimap_refresh(compare_doc)
         self.update_status()
 
     def on_compare_modified(self, event=None):
@@ -14984,7 +14721,6 @@ class HexX:
             compare_text.edit_modified(False)
             self.invalidate_collapsed_fold_regions(compare_doc)
             self.update_line_number_gutter(compare_doc)
-            self.schedule_minimap_refresh(compare_doc)
             self.update_status()
             return
 
@@ -15010,10 +14746,8 @@ class HexX:
         compare_doc['symbol_cache_signature'] = None
         compare_doc['symbol_cache'] = None
         self.invalidate_fold_regions(compare_doc)
-        self.invalidate_minimap_cache(compare_doc)
         self.schedule_diagnostics(compare_doc)
         self.update_line_number_gutter(compare_doc)
-        self.schedule_minimap_refresh(compare_doc)
         self.update_status()
         compare_text.edit_modified(False)
 
@@ -15178,6 +14912,14 @@ class HexX:
         menu.add_command(label=self.tr('context.add_note', 'Add note'), state=note_state, command=lambda frame=action_target: self.run_context_menu_action(lambda: self.add_note_to_selection(frame)))
         menu.add_command(label=self.tr('context.respond', 'Respond'), state=note_action_state, command=lambda frame=action_target: self.run_context_menu_action(lambda: self.respond_to_note(frame)))
         menu.add_command(label=self.tr('context.remove_note', 'Remove note'), state=note_action_state, command=lambda frame=action_target: self.run_context_menu_action(lambda: self.remove_note(frame)))
+        nop_target_widget = self.get_context_action_target_widget(action_target)
+        nop_state = (
+            'normal'
+            if doc.get('hex_mode') and not is_readonly_target and self.get_selected_hex_byte_ranges(doc, nop_target_widget)
+            else 'disabled'
+        )
+        menu.add_separator()
+        menu.add_command(label=self.tr('context.add_nop', 'Add NOP'), state=nop_state, command=lambda frame=action_target: self.run_context_menu_action(lambda: self.add_nop_to_selection(frame)))
 
     def run_context_menu_action(self, callback):
         self.dismiss_context_menu()
@@ -16823,7 +16565,6 @@ class HexX:
             self.cancel_doc_background_index(doc)
             self.close_doc_load_progress(doc)
             self.reset_virtual_backing_store(doc, remove_files=True)
-            self.invalidate_minimap_cache(doc)
             self.clear_fold_tags(doc)
             doc['diagnostics'] = []
             doc['encrypted_file'] = False
@@ -16899,7 +16640,6 @@ class HexX:
             self.invalidate_fold_regions(doc)
             self.schedule_diagnostics(doc)
             self.update_line_number_gutter(doc)
-            self.schedule_minimap_refresh(doc)
             self.refresh_tab_title(doc['frame'])
             if self.compare_active and self.compare_source_tab == str(doc['frame']):
                 self.refresh_compare_panel()
@@ -16989,7 +16729,6 @@ class HexX:
             'markdown_preview_enabled': bool(self.markdown_preview_enabled.get()),
             'sync_page_navigation_enabled': bool(self.sync_page_navigation_enabled.get()),
             'edit_with_shell_enabled': bool(self.edit_with_shell_enabled.get()),
-            'minimap_enabled': bool(self.minimap_enabled.get()),
             'breadcrumbs_enabled': bool(self.breadcrumbs_enabled.get()),
             'diagnostics_enabled': bool(self.diagnostics_enabled.get()),
             'autosave_enabled': bool(self.autosave_enabled.get()),
@@ -17070,7 +16809,6 @@ class HexX:
         text = doc.get('text')
         if not text:
             return
-        self.invalidate_minimap_cache(doc)
         doc['diagnostics'] = []
         if doc.get('hex_mode'):
             recovered_bytes = self.parse_hex_dump_text(content, strict=False)
@@ -17078,7 +16816,6 @@ class HexX:
             self.refresh_tab_title(doc['frame'])
             self.update_doc_file_signature(doc)
             self.update_line_number_gutter(doc)
-            self.schedule_minimap_refresh(doc)
             return
         doc['suspend_modified_events'] = True
         try:
@@ -17092,7 +16829,6 @@ class HexX:
         self.invalidate_fold_regions(doc)
         self.schedule_diagnostics(doc)
         self.update_line_number_gutter(doc)
-        self.schedule_minimap_refresh(doc)
 
     def persist_recovery_state(self):
         self.recovery_job = None
@@ -17352,7 +17088,6 @@ class HexX:
         self.compare_multi_edit_enabled.set(bool(session.get('compare_multi_edit_enabled', False)))
         self.markdown_preview_enabled.set(bool(session.get('markdown_preview_enabled', False)))
         self.sync_page_navigation_enabled.set(bool(session.get('sync_page_navigation_enabled', False)))
-        self.minimap_enabled.set(bool(session.get('minimap_enabled', True)))
         self.breadcrumbs_enabled.set(bool(session.get('breadcrumbs_enabled', True)))
         self.diagnostics_enabled.set(bool(session.get('diagnostics_enabled', True)))
         self.autosave_enabled.set(bool(session.get('autosave_enabled', True)))
@@ -17385,7 +17120,6 @@ class HexX:
         else:
             self.status_frame.grid_remove()
         self.toggle_numbered_lines()
-        self.toggle_minimap()
         self.toggle_breadcrumbs()
         self.set_command_panel_height(self.command_panel_height, persist=False)
         self.refresh_command_history_list()
@@ -17499,7 +17233,6 @@ class HexX:
         self.syntax_mode_selection.set(doc.get('syntax_override') or 'auto')
         self.restore_doc_view_state(doc)
         self.update_line_number_gutter(doc)
-        self.schedule_minimap_refresh(doc)
         self.schedule_diagnostics(doc)
         self.update_window_title()
         if self.markdown_preview_enabled.get():
@@ -17586,7 +17319,6 @@ class HexX:
             doc['hex_bytes_dirty'] = True
             self.schedule_doc_autosave(doc)
             self.update_line_number_gutter(doc)
-            self.schedule_minimap_refresh(doc)
             self.refresh_tab_title(tab_id)
             self.schedule_recovery_save()
             if self.compare_active and self.compare_source_tab == str(tab_id) and not self.compare_view.get('pushing_to_source'):
@@ -17609,7 +17341,6 @@ class HexX:
         else:
             self.invalidate_fold_regions(doc)
             self.invalidate_collapsed_fold_regions(doc)
-            self.invalidate_minimap_cache(doc)
         if not doc.get('file_path'):
             self.configure_syntax_highlighting(tab_id)
         if doc.get('syntax_mode') and doc.get('syntax_mode') != 'python':
@@ -17620,7 +17351,6 @@ class HexX:
         if self.markdown_preview_enabled.get() and self.markdown_preview_source_tab == str(tab_id):
             self.schedule_markdown_preview_refresh()
         self.update_line_number_gutter(doc)
-        self.schedule_minimap_refresh(doc)
         self.refresh_tab_title(tab_id)
         self.schedule_recovery_save()
         if self.compare_active and self.compare_source_tab == str(tab_id) and not self.compare_view.get('pushing_to_source'):
@@ -17987,13 +17717,6 @@ class HexX:
             except tk.TclError:
                 pass
             doc['diagnostic_job'] = None
-        minimap_job = doc.get('minimap_job')
-        if minimap_job:
-            try:
-                self.root.after_cancel(minimap_job)
-            except tk.TclError:
-                pass
-            doc['minimap_job'] = None
         text_widget = doc.get('text')
         if text_widget:
             try:
@@ -18115,10 +17838,13 @@ class HexX:
         settings_menu.add_separator()
         settings_menu.add_checkbutton(label=t('menu.view.status_bar', 'Status Bar'), variable=self.status_bar_enabled, command=self.toggle_status_bar, accelerator=hk('status_bar'))
         settings_menu.add_checkbutton(label=t('menu.view.numbered_lines', 'Offset Gutter'), variable=self.numbered_lines_enabled, command=self.toggle_numbered_lines, accelerator=hk('numbered_lines'))
-        settings_menu.add_checkbutton(label=t('menu.settings.minimap', 'Minimap'), variable=self.minimap_enabled, command=self.toggle_minimap, accelerator=hk('minimap'))
         settings_menu.add_checkbutton(label=t('menu.settings.breadcrumbs', 'Breadcrumbs'), variable=self.breadcrumbs_enabled, command=self.toggle_breadcrumbs, accelerator=hk('breadcrumbs'))
         settings_menu.add_checkbutton(label=t('menu.settings.autosave', 'Auto Save'), variable=self.autosave_enabled, command=self.save_session, accelerator=hk('autosave'))
         settings_menu.add_checkbutton(label=t('menu.edit.sync_page_navigation', 'Sync PgUp/PgDn in Compare'), variable=self.sync_page_navigation_enabled, command=self.save_session, accelerator=hk('sync_page_navigation'))
+        settings_menu.add_separator()
+        self.language_menu = tk.Menu(settings_menu, tearoff=0, bg='#2d2d2d', fg=self.fg_color, activebackground='#3a3a3a')
+        settings_menu.add_cascade(label=t('menu.edit.language', 'Language'), menu=self.language_menu)
+        self.refresh_language_menu()
         settings_menu.add_separator()
         settings_menu.add_command(label=t('menu.settings.hotkeys', 'Hotkey Settings'), command=self.show_hotkey_config_dialog, accelerator=hk('hotkey_settings'))
 
@@ -18415,7 +18141,6 @@ class HexX:
         compare_doc['window_start_line'] = 1
         compare_doc['window_end_line'] = 1
         compare_doc['total_file_lines'] = 1
-        self.invalidate_minimap_cache(compare_doc)
         compare_doc['diagnostics'] = []
 
         compare_text = compare_doc['text']
@@ -18448,7 +18173,6 @@ class HexX:
         compare_doc['total_file_lines'] = max(1, int(compare_text.index('end-1c').split('.')[0]))
         compare_doc['window_end_line'] = compare_doc['total_file_lines']
         self.update_line_number_gutter(compare_doc)
-        self.schedule_minimap_refresh(compare_doc)
         self.schedule_diagnostics(compare_doc)
         if not compare_container_visible:
             self.schedule_compare_layout_refresh()
@@ -18527,7 +18251,6 @@ class HexX:
         compare_doc['window_start_line'] = doc.get('window_start_line', 1)
         compare_doc['window_end_line'] = doc.get('window_end_line', 1)
         compare_doc['total_file_lines'] = doc.get('total_file_lines', 1)
-        self.invalidate_minimap_cache(compare_doc)
         compare_doc['diagnostics'] = []
 
         self.refresh_compare_header()
@@ -18567,7 +18290,6 @@ class HexX:
         self.schedule_diagnostics(compare_doc)
         self.sync_compare_note_tags(doc)
         self.update_line_number_gutter(compare_doc)
-        self.schedule_minimap_refresh(compare_doc)
         self.update_status()
 
     def set_compare_sash_position(self):
